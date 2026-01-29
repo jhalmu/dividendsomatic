@@ -1,334 +1,395 @@
 # Deployment Guide - Dividendsomatic
 
-## 🚀 Quick Deploy Options
+Guide for deploying to production (Hetzner Cloud + Docker + Caddy).
 
-### Option 1: Fly.io (Recommended)
+## Prerequisites
+
+- Hetzner Cloud account
+- Domain name (optional but recommended)
+- PostgreSQL database
+- Gmail account for CSV imports
+
+## Option 1: Docker Compose (Recommended)
+
+### 1. Server Setup
+
 ```bash
-# Install flyctl
-brew install flyctl  # or: curl -L https://fly.io/install.sh | sh
+# On your Hetzner server
+apt update && apt upgrade -y
+apt install -y docker.io docker-compose git
 
-# Login
-fly auth login
-
-# Initialize app
-fly launch
-
-# Set secrets
-fly secrets set DATABASE_URL=postgres://...
-fly secrets set SECRET_KEY_BASE=$(mix phx.gen.secret)
-
-# Deploy
-fly deploy
-
-# Check status
-fly status
-fly logs
+# Clone repo
+git clone https://github.com/jhalmu/dividendsomatic.git
+cd dividendsomatic
 ```
 
-### Option 2: Railway.app
-```bash
-# Install Railway CLI
-npm install -g @railway/cli
+### 2. Create docker-compose.yml
 
-# Login
-railway login
+```yaml
+version: '3.8'
 
-# Initialize
-railway init
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: dividendsomatic
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: dividendsomatic_prod
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
 
-# Add PostgreSQL
-railway add -d postgres
+  app:
+    build: .
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://dividendsomatic:${DB_PASSWORD}@db/dividendsomatic_prod
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      PHX_HOST: ${DOMAIN}
+      PORT: 4000
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
 
-# Deploy
-railway up
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
 
-# Set environment
-railway variables set SECRET_KEY_BASE=$(mix phx.gen.secret)
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
 ```
 
-### Option 3: Gigalixir
-```bash
-# Install CLI
-pip install gigalixir
+### 3. Create Dockerfile
 
-# Login
-gigalixir login
-
-# Create app
-gigalixir create
-
-# Add PostgreSQL
-gigalixir pg:create --free
-
-# Deploy
-git push gigalixir main
-```
-
-## 🐘 PostgreSQL Setup
-
-### Migration from SQLite
-
-**1. Update mix.exs:**
-```elixir
-# Replace:
-{:ecto_sqlite3, "~> 0.18"}
-
-# With:
-{:postgrex, "~> 0.19"}
-```
-
-**2. Update config/runtime.exs:**
-```elixir
-config :dividendsomatic, Dividendsomatic.Repo,
-  url: database_url,
-  pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
-  socket_options: maybe_ipv6
-```
-
-**3. Run migration:**
-```bash
-mix deps.get
-MIX_ENV=prod mix ecto.create
-MIX_ENV=prod mix ecto.migrate
-```
-
-## 🔐 Environment Variables
-
-**Required:**
-```bash
-SECRET_KEY_BASE=        # Generate with: mix phx.gen.secret
-DATABASE_URL=           # PostgreSQL connection string
-PHX_HOST=              # Your domain (e.g., dividendsomatic.fly.dev)
-```
-
-**Optional:**
-```bash
-PORT=4000              # Server port
-POOL_SIZE=10           # Database pool size
-```
-
-## 📦 Build & Release
-
-### Local Production Build
-```bash
-# Install dependencies
-mix deps.get --only prod
-
-# Compile assets
-mix assets.deploy
-
-# Create release
-MIX_ENV=prod mix release
-
-# Run
-_build/prod/rel/dividendsomatic/bin/dividendsomatic start
-```
-
-### Docker (Alternative)
 ```dockerfile
-# Dockerfile
-FROM hexpm/elixir:1.15-erlang-26-alpine AS build
+FROM hexpm/elixir:1.15.0-erlang-26.0-alpine-3.18.0 AS build
+
+# Install build dependencies
+RUN apk add --no-cache build-base git nodejs npm
 
 WORKDIR /app
 
-RUN apk add --no-cache build-base git nodejs npm
+# Install hex + rebar
+RUN mix local.hex --force && \
+    mix local.rebar --force
 
+# Set build ENV
+ENV MIX_ENV=prod
+
+# Install dependencies
 COPY mix.exs mix.lock ./
 RUN mix deps.get --only prod
+RUN mix deps.compile
 
+# Copy assets
+COPY assets assets
+RUN cd assets && npm install
+
+# Copy rest of application
 COPY config config
 COPY lib lib
 COPY priv priv
-COPY assets assets
 
+# Compile assets
 RUN mix assets.deploy
-RUN MIX_ENV=prod mix release
 
-FROM alpine:3.18
-RUN apk add --no-cache libstdc++ openssl ncurses-libs
+# Compile application
+RUN mix compile
+
+# Build release
+RUN mix release
+
+# Runtime stage
+FROM alpine:3.18 AS app
+
+RUN apk add --no-cache openssl ncurses-libs libstdc++
 
 WORKDIR /app
+
+# Copy release from build stage
 COPY --from=build /app/_build/prod/rel/dividendsomatic ./
 
-CMD ["/app/bin/dividendsomatic", "start"]
+ENV HOME=/app
+
+CMD ["bin/dividendsomatic", "start"]
 ```
+
+### 4. Create Caddyfile
+
+```
+{$DOMAIN:localhost} {
+    reverse_proxy app:4000
+}
+```
+
+### 5. Environment Variables
+
+Create `.env` file:
 
 ```bash
-# Build
-docker build -t dividendsomatic .
+# Generate with: mix phx.gen.secret
+SECRET_KEY_BASE=your_secret_key_here
 
-# Run
-docker run -p 4000:4000 \
-  -e DATABASE_URL=$DATABASE_URL \
-  -e SECRET_KEY_BASE=$SECRET_KEY_BASE \
-  dividendsomatic
+# Your domain or IP
+DOMAIN=dividendsomatic.example.com
+
+# Database password
+DB_PASSWORD=your_secure_password_here
 ```
 
-## 🔧 Production Checklist
+### 6. Deploy
 
-**Before deploying:**
-- [ ] PostgreSQL database ready
-- [ ] SECRET_KEY_BASE generated
-- [ ] Environment variables set
-- [ ] Assets compiled (`mix assets.deploy`)
-- [ ] Database migrated
-- [ ] Health check endpoint working
+```bash
+# Load environment variables
+set -a; source .env; set +a
 
-**After deploying:**
-- [ ] SSL/TLS certificate active
-- [ ] Database backed up regularly
-- [ ] Monitoring configured
-- [ ] Log aggregation set up
-- [ ] Error tracking enabled (e.g., Sentry)
+# Build and start
+docker-compose up -d
 
-## 📊 Monitoring
-
-### Application Metrics
-```elixir
-# Add to mix.exs
-{:telemetry_metrics_prometheus, "~> 1.1"}
-
-# Phoenix Dashboard already included
-# Visit: /dev/dashboard (dev) or /admin/dashboard (prod)
+# Run migrations
+docker-compose exec app bin/dividendsomatic eval "Dividendsomatic.Release.migrate"
 ```
 
-### Health Check Endpoint
-```elixir
-# Add to router.ex
-get "/health", HealthController, :check
+## Option 2: Manual Deployment
 
-# lib/dividendsomatic_web/controllers/health_controller.ex
-defmodule DividendsomaticWeb.HealthController do
-  use DividendsomaticWeb, :controller
+### 1. PostgreSQL Setup
 
-  def check(conn, _params) do
-    # Check database
-    case Repo.query("SELECT 1") do
-      {:ok, _} -> json(conn, %{status: "ok"})
-      {:error, _} -> 
-        conn
-        |> put_status(503)
-        |> json(%{status: "error", message: "database unavailable"})
-    end
-  end
-end
+```bash
+# On Ubuntu/Debian
+apt install postgresql postgresql-contrib
+
+sudo -u postgres psql
+CREATE DATABASE dividendsomatic_prod;
+CREATE USER dividendsomatic WITH PASSWORD 'your_password';
+GRANT ALL PRIVILEGES ON DATABASE dividendsomatic_prod TO dividendsomatic;
+\q
 ```
 
-## 🔄 CI/CD
+### 2. Application Setup
 
-### GitHub Actions
-```yaml
-# .github/workflows/ci.yml
-name: CI
+```bash
+# Install Elixir
+wget https://packages.erlang-solutions.com/erlang-solutions_2.0_all.deb
+dpkg -i erlang-solutions_2.0_all.deb
+apt update
+apt install esl-erlang elixir
 
-on: [push, pull_request]
+# Clone and build
+git clone https://github.com/jhalmu/dividendsomatic.git
+cd dividendsomatic
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+# Setup
+mix deps.get --only prod
+MIX_ENV=prod mix compile
+MIX_ENV=prod mix assets.deploy
+MIX_ENV=prod mix release
 
-    steps:
-      - uses: actions/checkout@v3
-      
-      - uses: erlef/setup-beam@v1
-        with:
-          elixir-version: 1.15
-          otp-version: 26
-      
-      - run: mix deps.get
-      - run: mix test
-      - run: mix format --check-formatted
+# Run migrations
+_build/prod/rel/dividendsomatic/bin/dividendsomatic eval "Dividendsomatic.Release.migrate"
+
+# Start
+_build/prod/rel/dividendsomatic/bin/dividendsomatic start
 ```
 
-## 🚨 Troubleshooting
+### 3. Systemd Service
 
-**Common Issues:**
+Create `/etc/systemd/system/dividendsomatic.service`:
 
-1. **Port already in use:**
+```ini
+[Unit]
+Description=Dividendsomatic Phoenix App
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=dividendsomatic
+WorkingDirectory=/opt/dividendsomatic
+Environment=PORT=4000
+Environment=MIX_ENV=prod
+Environment=DATABASE_URL=postgresql://dividendsomatic:password@localhost/dividendsomatic_prod
+Environment=SECRET_KEY_BASE=your_secret_key
+ExecStart=/opt/dividendsomatic/_build/prod/rel/dividendsomatic/bin/dividendsomatic start
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+systemctl daemon-reload
+systemctl enable dividendsomatic
+systemctl start dividendsomatic
+```
+
+## Configuration
+
+### Environment Variables
+
+Required:
+- `DATABASE_URL` - PostgreSQL connection string
+- `SECRET_KEY_BASE` - Phoenix secret (generate with `mix phx.gen.secret`)
+- `PHX_HOST` - Your domain name
+
+Optional:
+- `PORT` - Port to listen on (default: 4000)
+- `POOL_SIZE` - Database pool size (default: 10)
+
+### Release Configuration
+
+Update `config/runtime.exs` for production settings.
+
+## Gmail Integration
+
+After deployment, configure Gmail MCP:
+
+1. Enable Gmail API in Google Cloud Console
+2. Create OAuth credentials
+3. Set environment variables:
    ```bash
-   PORT=4001 mix phx.server
+   GMAIL_CLIENT_ID=your_client_id
+   GMAIL_CLIENT_SECRET=your_client_secret
    ```
 
-2. **Database connection failed:**
-   - Check DATABASE_URL format
-   - Verify PostgreSQL is running
-   - Test connection: `psql $DATABASE_URL`
+## Monitoring
 
-3. **Assets not compiling:**
-   ```bash
-   cd assets && npm install && cd ..
-   mix assets.deploy
-   ```
+### Health Check
 
-4. **Secret key error:**
-   ```bash
-   export SECRET_KEY_BASE=$(mix phx.gen.secret)
-   ```
-
-## 📈 Performance Tips
-
-1. **Database Connection Pool:**
-   ```elixir
-   # config/runtime.exs
-   pool_size: 10  # Adjust based on load
-   ```
-
-2. **Asset CDN:**
-   - Use CloudFlare or similar
-   - Configure in `config/prod.exs`
-
-3. **Caching:**
-   - Add Redis for session storage
-   - Cache expensive queries
-
-4. **Background Jobs:**
-   - Use Oban for CSV imports
-   - Schedule during low-traffic hours
-
-## 🛡️ Security
-
-**Production Security:**
-- [ ] Force SSL (already configured in endpoint.ex)
-- [ ] Rate limiting (add with PlugAttack)
-- [ ] CSRF protection (enabled by default)
-- [ ] SQL injection protection (Ecto parameterizes)
-- [ ] XSS protection (Phoenix.HTML escapes)
-
-**Add rate limiting:**
-```elixir
-# mix.exs
-{:plug_attack, "~> 0.4"}
-
-# endpoint.ex
-plug PlugAttack.Storage.Ets,
-  clean_period: 60_000
-
-plug PlugAttack,
-  throttle: ["by_ip", [period: 60_000, limit: 100]]
+```bash
+curl https://your-domain.com/
 ```
 
-## 📞 Support
+### Logs
 
-If deployment fails:
-1. Check logs: `fly logs` / `railway logs` / `gigalixir logs`
-2. Verify environment variables
-3. Test locally: `MIX_ENV=prod mix phx.server`
-4. Check database connectivity
-5. Review Phoenix deployment docs: https://hexdocs.pm/phoenix/deployment.html
+```bash
+# Docker
+docker-compose logs -f app
+
+# Systemd
+journalctl -u dividendsomatic -f
+
+# Application logs
+tail -f /app/log/prod.log
+```
+
+### Database
+
+```bash
+# Docker
+docker-compose exec db psql -U dividendsomatic dividendsomatic_prod
+
+# Manual
+sudo -u postgres psql dividendsomatic_prod
+```
+
+## Backup
+
+### Database Backup
+
+```bash
+# Docker
+docker-compose exec db pg_dump -U dividendsomatic dividendsomatic_prod > backup.sql
+
+# Manual
+pg_dump -U dividendsomatic dividendsomatic_prod > backup.sql
+```
+
+### Restore
+
+```bash
+# Docker
+docker-compose exec -T db psql -U dividendsomatic dividendsomatic_prod < backup.sql
+
+# Manual
+psql -U dividendsomatic dividendsomatic_prod < backup.sql
+```
+
+## Updating
+
+```bash
+# Pull latest code
+git pull origin main
+
+# Docker
+docker-compose down
+docker-compose build
+docker-compose up -d
+docker-compose exec app bin/dividendsomatic eval "Dividendsomatic.Release.migrate"
+
+# Manual
+mix deps.get --only prod
+MIX_ENV=prod mix compile
+MIX_ENV=prod mix assets.deploy
+MIX_ENV=prod mix release
+_build/prod/rel/dividendsomatic/bin/dividendsomatic eval "Dividendsomatic.Release.migrate"
+systemctl restart dividendsomatic
+```
+
+## SSL/HTTPS
+
+Caddy handles SSL automatically with Let's Encrypt. Just:
+1. Point your domain to the server IP
+2. Wait for DNS propagation
+3. Caddy will automatically get SSL certificate
+
+## Troubleshooting
+
+### Port conflicts
+```bash
+lsof -i :4000
+kill -9 <PID>
+```
+
+### Database connection issues
+```bash
+# Check PostgreSQL is running
+systemctl status postgresql
+
+# Check connectivity
+psql $DATABASE_URL
+```
+
+### Oban jobs not running
+```bash
+# Check Oban status in IEx
+bin/dividendsomatic remote
+Oban.check_queue(queue: :default)
+```
+
+## Security Checklist
+
+- [ ] Change default passwords
+- [ ] Use environment variables for secrets
+- [ ] Enable firewall (ufw)
+- [ ] Set up SSL/HTTPS
+- [ ] Regular backups
+- [ ] Keep dependencies updated
+- [ ] Monitor logs
+
+## Performance Tuning
+
+- Increase database pool size for high traffic
+- Add Redis for caching (optional)
+- Use CDN for assets
+- Enable gzip compression in Caddy
+- Optimize database indexes
 
 ---
 
-**Version:** 1.0  
-**Last Updated:** 2026-01-29  
-**Tested On:** Fly.io, Railway
+For more details, see:
+- [Phoenix Deployment Guide](https://hexdocs.pm/phoenix/deployment.html)
+- [Oban Deployment](https://hexdocs.pm/oban/Oban.html#module-deployment)
