@@ -1,141 +1,107 @@
 defmodule DividendsomaticWeb.PortfolioLive do
   use DividendsomaticWeb, :live_view
-  
   alias Dividendsomatic.Portfolio
 
   @impl true
   def mount(_params, _session, socket) do
     snapshot = Portfolio.get_latest_snapshot()
-    chart_data = Portfolio.get_chart_data(30)
     
     socket =
       socket
       |> assign(:snapshot, snapshot)
-      |> assign(:chart_data, chart_data)
-      |> assign(:sort_by, :symbol)
-      |> assign(:sort_order, :asc)
-      |> assign(:page_title, "Portfolio")
+      |> assign(:loading, false)
     
     {:ok, socket}
   end
 
   @impl true
-  def handle_event("sort", %{"field" => field}, socket) do
-    field_atom = String.to_existing_atom(field)
-    current_sort = socket.assigns.sort_by
-    
-    new_order = 
-      if current_sort == field_atom do
-        case socket.assigns.sort_order do
-          :asc -> :desc
-          :desc -> :asc
-        end
-      else
-        :asc
+  def handle_event("navigate", %{"direction" => "prev"}, socket) do
+    if snapshot = socket.assigns.snapshot do
+      case Portfolio.get_previous_snapshot(snapshot.report_date) do
+        nil -> {:noreply, socket}
+        prev_snapshot -> {:noreply, assign(socket, :snapshot, prev_snapshot)}
       end
-    
-    {:noreply, socket |> assign(:sort_by, field_atom) |> assign(:sort_order, new_order)}
-  end
-
-  @impl true
-  def handle_event("navigate_previous", _params, socket) do
-    current_date = socket.assigns.snapshot.report_date
-    
-    case Portfolio.get_previous_snapshot(current_date) do
-      nil -> {:noreply, socket}
-      snapshot -> {:noreply, assign(socket, :snapshot, snapshot)}
+    else
+      {:noreply, socket}
     end
   end
 
-  @impl true
-  def handle_event("navigate_next", _params, socket) do
-    current_date = socket.assigns.snapshot.report_date
-    
-    case Portfolio.get_next_snapshot(current_date) do
-      nil -> {:noreply, socket}
-      snapshot -> {:noreply, assign(socket, :snapshot, snapshot)}
+  def handle_event("navigate", %{"direction" => "next"}, socket) do
+    if snapshot = socket.assigns.snapshot do
+      case Portfolio.get_next_snapshot(snapshot.report_date) do
+        nil -> {:noreply, socket}
+        next_snapshot -> {:noreply, assign(socket, :snapshot, next_snapshot)}
+      end
+    else
+      {:noreply, socket}
     end
-  end
-
-  @impl true
-  def handle_event("key_down", %{"key" => "ArrowLeft"}, socket) do
-    handle_event("navigate_previous", %{}, socket)
-  end
-
-  def handle_event("key_down", %{"key" => "ArrowRight"}, socket) do
-    handle_event("navigate_next", %{}, socket)
-  end
-
-  def handle_event("key_down", _params, socket) do
-    {:noreply, socket}
   end
 
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen" phx-window-keydown="key_down">
-      <.header>
-        Portfolio Snapshot
-        <:subtitle>
-          <%= if @snapshot do %>
-            <%= Calendar.strftime(@snapshot.report_date, "%B %d, %Y") %>
-          <% else %>
-            No data available
-          <% end %>
-        </:subtitle>
-      </.header>
-
-      <%= if @snapshot do %>
-        <div class="mt-[var(--space-lg)]">
-          <!-- Navigation -->
-          <div class="flex justify-center gap-[var(--space-md)] mb-[var(--space-lg)]">
-            <button 
-              phx-click="navigate_previous" 
-              class="btn btn-circle btn-primary"
-              title="Previous day (←)"
-            >
-              <.icon name="hero-arrow-left" class="w-6 h-6" />
-            </button>
-            
-            <div class="flex items-center gap-[var(--space-sm)] px-[var(--space-md)]">
-              <.icon name="hero-calendar" class="w-5 h-5" />
-              <span class="font-semibold text-[var(--text-lg)]">
-                <%= Calendar.strftime(@snapshot.report_date, "%Y-%m-%d") %>
-              </span>
+    <div class="min-h-screen bg-base-200 p-[var(--space-md)]">
+      <div class="max-w-7xl mx-auto">
+        <%= if @snapshot do %>
+          <!-- Header with Navigation -->
+          <div class="card bg-base-100 shadow-xl mb-[var(--space-md)]">
+            <div class="card-body">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h1 class="text-[var(--text-2xl)] font-bold">Portfolio Snapshot</h1>
+                  <p class="text-[var(--text-lg)] text-base-content/70">
+                    <%= Calendar.strftime(@snapshot.report_date, "%B %d, %Y") %>
+                  </p>
+                </div>
+                
+                <div class="flex gap-[var(--space-sm)]">
+                  <button 
+                    phx-click="navigate" 
+                    phx-value-direction="prev"
+                    class="btn btn-circle btn-primary"
+                    title="Previous day (←)"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  
+                  <button 
+                    phx-click="navigate" 
+                    phx-value-direction="next"
+                    class="btn btn-circle btn-primary"
+                    title="Next day (→)"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
             </div>
-            
-            <button 
-              phx-click="navigate_next" 
-              class="btn btn-circle btn-primary"
-              title="Next day (→)"
-            >
-              <.icon name="hero-arrow-right" class="w-6 h-6" />
-            </button>
           </div>
 
           <!-- Summary Cards -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-[var(--space-md)] mb-[var(--space-lg)]">
-            <div class="card card-bordered bg-base-100">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-[var(--space-md)] mb-[var(--space-md)]">
+            <div class="card bg-base-100 shadow-xl">
               <div class="card-body">
-                <h3 class="card-title text-[var(--text-base)]">Total Holdings</h3>
-                <p class="text-[var(--text-2xl)] font-bold">
-                  <%= length(@snapshot.holdings) %>
-                </p>
+                <h2 class="card-title text-[var(--text-base)]">Total Holdings</h2>
+                <p class="text-[var(--text-2xl)] font-bold"><%= length(@snapshot.holdings) %></p>
               </div>
             </div>
-
-            <div class="card card-bordered bg-base-100">
+            
+            <div class="card bg-base-100 shadow-xl">
               <div class="card-body">
-                <h3 class="card-title text-[var(--text-base)]">Total Value</h3>
+                <h2 class="card-title text-[var(--text-base)]">Total Value</h2>
                 <p class="text-[var(--text-2xl)] font-bold">
                   <%= format_total_value(@snapshot.holdings) %>
                 </p>
               </div>
             </div>
-
-            <div class="card card-bordered bg-base-100">
+            
+            <div class="card bg-base-100 shadow-xl">
               <div class="card-body">
-                <h3 class="card-title text-[var(--text-base)]">Total P&L</h3>
+                <h2 class="card-title text-[var(--text-base)]">Unrealized P&L</h2>
                 <p class={[
                   "text-[var(--text-2xl)] font-bold",
                   pnl_color(@snapshot.holdings)
@@ -146,70 +112,46 @@ defmodule DividendsomaticWeb.PortfolioLive do
             </div>
           </div>
 
-          <!-- Portfolio Value Chart -->
-          <%= if length(@chart_data) > 1 do %>
-            <div class="card card-bordered bg-base-100 mb-[var(--space-lg)]">
-              <div class="card-body">
-                <h2 class="card-title text-[var(--text-xl)]">Portfolio Value Over Time</h2>
-                <%= render_chart(@chart_data) %>
-              </div>
-            </div>
-          <% end %>
-
           <!-- Holdings Table -->
-          <div class="card card-bordered bg-base-100">
+          <div class="card bg-base-100 shadow-xl">
             <div class="card-body">
-              <h2 class="card-title text-[var(--text-xl)]">Holdings</h2>
+              <h2 class="card-title mb-[var(--space-sm)]">Holdings</h2>
               
               <div class="overflow-x-auto">
                 <table class="table table-zebra">
                   <thead>
                     <tr>
-                      <th>
-                        <button phx-click="sort" phx-value-field="symbol" class="flex items-center gap-1">
-                          Symbol <%= sort_icon(@sort_by, @sort_order, :symbol) %>
-                        </button>
-                      </th>
+                      <th>Symbol</th>
                       <th>Description</th>
-                      <th class="text-right">
-                        <button phx-click="sort" phx-value-field="quantity" class="flex items-center gap-1 ml-auto">
-                          Quantity <%= sort_icon(@sort_by, @sort_order, :quantity) %>
-                        </button>
-                      </th>
+                      <th class="text-right">Quantity</th>
                       <th class="text-right">Price</th>
-                      <th class="text-right">
-                        <button phx-click="sort" phx-value-field="position_value" class="flex items-center gap-1 ml-auto">
-                          Value <%= sort_icon(@sort_by, @sort_order, :position_value) %>
-                        </button>
-                      </th>
+                      <th class="text-right">Value</th>
                       <th class="text-right">Cost Basis</th>
-                      <th class="text-right">
-                        <button phx-click="sort" phx-value-field="fifo_pnl_unrealized" class="flex items-center gap-1 ml-auto">
-                          P&L <%= sort_icon(@sort_by, @sort_order, :fifo_pnl_unrealized) %>
-                        </button>
-                      </th>
+                      <th class="text-right">P&L</th>
                       <th class="text-right">% of NAV</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <%= for holding <- sorted_holdings(@snapshot.holdings, @sort_by, @sort_order) do %>
+                    <%= for holding <- @snapshot.holdings do %>
                       <tr>
-                        <td class="font-semibold"><%= holding.symbol %></td>
+                        <td class="font-mono font-bold"><%= holding.symbol %></td>
                         <td><%= holding.description %></td>
-                        <td class="text-right"><%= Decimal.to_string(holding.quantity) %></td>
-                        <td class="text-right">
-                          <%= holding.currency_primary %> <%= format_decimal(holding.mark_price, 2) %>
+                        <td class="text-right font-mono"><%= format_number(holding.quantity) %></td>
+                        <td class="text-right font-mono">
+                          <%= holding.currency_primary %> <%= format_decimal(holding.mark_price) %>
                         </td>
-                        <td class="text-right font-semibold">
-                          <%= holding.currency_primary %> <%= format_decimal(holding.position_value, 2) %>
+                        <td class="text-right font-mono font-bold">
+                          <%= holding.currency_primary %> <%= format_decimal(holding.position_value) %>
                         </td>
-                        <td class="text-right">
-                          <%= holding.currency_primary %> <%= format_decimal(holding.cost_basis_money, 2) %>
+                        <td class="text-right font-mono">
+                          <%= holding.currency_primary %> <%= format_decimal(holding.cost_basis_money) %>
                         </td>
-                        <td class={["text-right font-semibold", pnl_text_color(holding.fifo_pnl_unrealized)]}>
-                          <%= holding.currency_primary %> <%= format_decimal(holding.fifo_pnl_unrealized, 2) %>
+                        <td class={["text-right font-mono font-bold", pnl_color_single(holding.fifo_pnl_unrealized)]}>
+                          <%= format_pnl(holding.fifo_pnl_unrealized) %>
                         </td>
-                        <td class="text-right"><%= format_decimal(holding.percent_of_nav, 2) %>%</td>
+                        <td class="text-right font-mono">
+                          <%= format_decimal(holding.percent_of_nav) %>%
+                        </td>
                       </tr>
                     <% end %>
                   </tbody>
@@ -217,118 +159,96 @@ defmodule DividendsomaticWeb.PortfolioLive do
               </div>
             </div>
           </div>
-
-          <!-- Keyboard shortcuts help -->
-          <div class="alert alert-info mt-[var(--space-lg)]">
-            <.icon name="hero-information-circle" class="w-6 h-6" />
-            <span>Use <kbd class="kbd kbd-sm">←</kbd> and <kbd class="kbd kbd-sm">→</kbd> arrow keys to navigate between dates</span>
+        <% else %>
+          <!-- Empty State -->
+          <div class="card bg-base-100 shadow-xl">
+            <div class="card-body items-center text-center">
+              <h2 class="card-title">No Portfolio Data</h2>
+              <p>Import a CSV file to get started:</p>
+              <code class="bg-base-200 p-[var(--space-sm)] rounded mt-[var(--space-sm)]">
+                mix import.csv path/to/file.csv
+              </code>
+            </div>
           </div>
-        </div>
-      <% else %>
-        <div class="alert alert-warning mt-[var(--space-lg)]">
-          <.icon name="hero-exclamation-triangle" class="w-6 h-6" />
-          <span>No portfolio data available. Import CSV files to get started.</span>
-        </div>
-      <% end %>
+        <% end %>
+      </div>
     </div>
+
+    <!-- Keyboard Navigation -->
+    <div 
+      phx-window-keydown="navigate"
+      phx-key="ArrowLeft"
+      phx-value-direction="prev"
+      style="display: none;"
+    ></div>
+    <div 
+      phx-window-keydown="navigate"
+      phx-key="ArrowRight"
+      phx-value-direction="next"
+      style="display: none;"
+    ></div>
     """
   end
 
-  # Helper functions
-  
-  defp sorted_holdings(holdings, sort_by, sort_order) do
-    sorted = Enum.sort_by(holdings, fn holding ->
-      case Map.get(holding, sort_by) do
-        %Decimal{} = val -> Decimal.to_float(val)
-        val -> val
-      end
-    end)
-    
-    case sort_order do
-      :asc -> sorted
-      :desc -> Enum.reverse(sorted)
-    end
-  end
-  
-  defp sort_icon(current_sort, sort_order, field) when current_sort == field do
-    case sort_order do
-      :asc -> Phoenix.HTML.raw("▲")
-      :desc -> Phoenix.HTML.raw("▼")
-    end
-  end
-  
-  defp sort_icon(_, _, _), do: Phoenix.HTML.raw("⬍")
-  
-  defp render_chart(data) when length(data) < 2 do
-    Phoenix.HTML.raw("""
-    <div class="text-center py-8 text-base-content/70">
-      Not enough data to display chart (need at least 2 snapshots)
-    </div>
-    """)
-  end
-  
-  defp render_chart(data) do
-    dataset = Contex.Dataset.new(data, ["Date", "Value"])
-    
-    chart =
-      Contex.Plot.new(600, 300, dataset)
-      |> Contex.Plot.plot(Contex.PointPlot, mapping: %{x_col: "Date", y_cols: ["Value"]})
-      |> Contex.Plot.axis_labels("Date", "Total Value")
-    
-    chart
-    |> Contex.Plot.to_svg()
-    |> Phoenix.HTML.raw()
-  end
-  
-  defp format_decimal(nil, _precision), do: "0.00"
-  defp format_decimal(decimal, precision) do
+  ## Helpers
+
+  defp format_decimal(nil), do: "0.00"
+  defp format_decimal(decimal) do
     decimal
-    |> Decimal.round(precision)
     |> Decimal.to_string(:normal)
-    |> String.replace(~r/\.?0+$/, "")
-    |> then(fn s ->
-      if String.contains?(s, ".") do
-        s
-      else
-        s <> ".00"
-      end
-    end)
+    |> String.replace(~r/(\.\d{2})\d+$/, "\\1")
+  end
+
+  defp format_number(nil), do: "0"
+  defp format_number(decimal) do
+    Decimal.to_string(decimal, :normal)
+  end
+
+  defp format_pnl(nil), do: "0.00"
+  defp format_pnl(decimal) do
+    value = Decimal.to_float(decimal)
+    sign = if value >= 0, do: "+", else: ""
+    "#{sign}#{:erlang.float_to_binary(abs(value), decimals: 2)}"
   end
 
   defp format_total_value(holdings) do
-    total =
-      Enum.reduce(holdings, Decimal.new("0"), fn holding, acc ->
-        Decimal.add(acc, holding.position_value || Decimal.new("0"))
-      end)
-    
-    # Simplified - just show total (mixed currencies)
-    format_decimal(total, 2)
+    # Group by currency and sum
+    holdings
+    |> Enum.group_by(& &1.currency_primary)
+    |> Enum.map(fn {currency, items} ->
+      total = 
+        items
+        |> Enum.map(& &1.position_value)
+        |> Enum.reduce(Decimal.new("0"), &Decimal.add/2)
+      
+      "#{currency} #{format_decimal(total)}"
+    end)
+    |> Enum.join(" | ")
   end
 
   defp format_total_pnl(holdings) do
     total =
-      Enum.reduce(holdings, Decimal.new("0"), fn holding, acc ->
-        Decimal.add(acc, holding.fifo_pnl_unrealized || Decimal.new("0"))
-      end)
+      holdings
+      |> Enum.map(& &1.fifo_pnl_unrealized)
+      |> Enum.reduce(Decimal.new("0"), &Decimal.add/2)
     
-    format_decimal(total, 2)
+    format_pnl(total)
   end
 
   defp pnl_color(holdings) do
     total =
-      Enum.reduce(holdings, Decimal.new("0"), fn holding, acc ->
-        Decimal.add(acc, holding.fifo_pnl_unrealized || Decimal.new("0"))
-      end)
+      holdings
+      |> Enum.map(& &1.fifo_pnl_unrealized)
+      |> Enum.reduce(Decimal.new("0"), &Decimal.add/2)
     
-    pnl_text_color(total)
+    pnl_color_single(total)
   end
 
-  defp pnl_text_color(nil), do: ""
-  defp pnl_text_color(pnl) do
-    case Decimal.compare(pnl, Decimal.new("0")) do
-      :gt -> "text-success"
-      :lt -> "text-error"
-      :eq -> "text-base-content"
+  defp pnl_color_single(decimal) do
+    if Decimal.negative?(decimal) do
+      "text-error"
+    else
+      "text-success"
     end
   end
 end

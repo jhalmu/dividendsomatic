@@ -4,7 +4,7 @@
 
 - [x] Phoenix projekti + LiveView
 - [x] SQLite tietokanta
-- [x] Portfolio snapshot + holdings schemat
+- [x] Portfolio snapshot + holdings schemat  
 - [x] CSV parser (NimbleCSV)
 - [x] Mix task: `mix import.csv`
 - [x] LiveView portfolio viewer
@@ -12,6 +12,8 @@
 - [x] Yhteenveto-kortit (Holdings, Value, P&L)
 - [x] Nuolinäppäin navigointi (← →)
 - [x] P&L värikoodaus
+- [x] **Portfolio value chart (Contex)**
+- [x] **Sortable columns (Symbol, Quantity, Value, P&L)**
 - [x] Dokumentaatio (README, CLAUDE.md, SESSION_REPORT.md)
 - [x] Git repo
 
