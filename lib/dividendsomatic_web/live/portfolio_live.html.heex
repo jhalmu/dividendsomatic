@@ -1,86 +1,126 @@
-<div class="container mx-auto p-4" phx-window-keydown="key">
+<div class="container mx-auto p-[var(--space-lg)]" phx-window-keydown="key_down">
   <%= if @snapshot do %>
-    <!-- Header -->
-    <div class="flex justify-between items-center mb-6">
-      <div>
-        <h1 class="text-3xl font-bold">Portfolio</h1>
-        <p class="text-gray-600"><%= format_date(@snapshot.report_date) %></p>
-      </div>
-
-      <!-- Navigation -->
-      <div class="flex gap-2">
-        <button
-          phx-click="navigate"
+    <!-- Header with navigation -->
+    <div class="flex items-center justify-between mb-[var(--space-lg)]">
+      <h1 class="text-[var(--text-2xl)] font-bold">
+        Portfolio - <%= Calendar.strftime(@snapshot.report_date, "%B %d, %Y") %>
+      </h1>
+      
+      <div class="flex gap-[var(--space-sm)]">
+        <button 
+          phx-click="navigate" 
           phx-value-direction="prev"
           class="btn btn-circle btn-outline"
+          title="Previous day (←)"
         >
-          ←
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+          </svg>
         </button>
-        <button
-          phx-click="navigate"
+        
+        <button 
+          phx-click="navigate" 
           phx-value-direction="next"
           class="btn btn-circle btn-outline"
+          title="Next day (→)"
         >
-          →
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+          </svg>
         </button>
       </div>
     </div>
 
-    <!-- Summary Card -->
-    <div class="card bg-base-200 mb-6">
+    <!-- Summary cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-[var(--space-md)] mb-[var(--space-lg)]">
+      <%= for {currency, holdings} <- Enum.group_by(@snapshot.holdings, & &1.currency_primary) do %>
+        <div class="card card-bordered bg-base-100">
+          <div class="card-body">
+            <h2 class="card-title text-[var(--text-lg)]"><%= currency %></h2>
+            <div class="space-y-2">
+              <div>
+                <div class="text-sm opacity-70">Total Value</div>
+                <div class="text-[var(--text-xl)] font-bold">
+                  <%= format_currency(
+                    Enum.reduce(holdings, Decimal.new("0"), fn h, acc -> 
+                      Decimal.add(acc, h.position_value) 
+                    end),
+                    currency
+                  ) %>
+                </div>
+              </div>
+              <div>
+                <div class="text-sm opacity-70">Unrealized P&L</div>
+                <div class={"text-[var(--text-lg)] font-semibold #{pnl_class(Enum.reduce(holdings, Decimal.new("0"), fn h, acc -> Decimal.add(acc, h.fifo_pnl_unrealized) end))}"}>
+                  <%= format_currency(
+                    Enum.reduce(holdings, Decimal.new("0"), fn h, acc -> 
+                      Decimal.add(acc, h.fifo_pnl_unrealized) 
+                    end),
+                    currency
+                  ) %>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% end %>
+    </div>
+
+    <!-- Holdings table -->
+    <div class="card card-bordered bg-base-100">
       <div class="card-body">
-        <h2 class="card-title">Total Value</h2>
-        <p class="text-4xl font-bold"><%= format_currency(@total_value) %></p>
-        <p class="text-sm text-gray-600"><%= length(@snapshot.holdings) %> holdings</p>
+        <h2 class="card-title text-[var(--text-xl)] mb-[var(--space-md)]">Holdings</h2>
+        
+        <div class="overflow-x-auto">
+          <table class="table table-zebra">
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Description</th>
+                <th class="text-right">Quantity</th>
+                <th class="text-right">Price</th>
+                <th class="text-right">Value</th>
+                <th class="text-right">Cost Basis</th>
+                <th class="text-right">P&L</th>
+                <th class="text-right">% of NAV</th>
+              </tr>
+            </thead>
+            <tbody>
+              <%= for holding <- Enum.sort_by(@snapshot.holdings, & Decimal.to_float(&1.position_value), :desc) do %>
+                <tr>
+                  <td class="font-bold"><%= holding.symbol %></td>
+                  <td class="text-sm opacity-80"><%= holding.description %></td>
+                  <td class="text-right"><%= Decimal.to_string(holding.quantity, :normal) %></td>
+                  <td class="text-right"><%= format_currency(holding.mark_price, holding.currency_primary) %></td>
+                  <td class="text-right font-semibold"><%= format_currency(holding.position_value, holding.currency_primary) %></td>
+                  <td class="text-right text-sm opacity-70"><%= format_currency(holding.cost_basis_money, holding.currency_primary) %></td>
+                  <td class={"text-right font-semibold #{pnl_class(holding.fifo_pnl_unrealized)}"}>
+                    <%= format_currency(holding.fifo_pnl_unrealized, holding.currency_primary) %>
+                  </td>
+                  <td class="text-right"><%= format_percent(holding.percent_of_nav) %></td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
-    <!-- Holdings Table -->
-    <div class="overflow-x-auto">
-      <table class="table table-zebra">
-        <thead>
-          <tr>
-            <th>Symbol</th>
-            <th>Description</th>
-            <th class="text-right">Quantity</th>
-            <th class="text-right">Price</th>
-            <th class="text-right">Value</th>
-            <th class="text-right">P&L</th>
-          </tr>
-        </thead>
-        <tbody>
-          <%= for holding <- @snapshot.holdings do %>
-            <tr>
-              <td class="font-bold"><%= holding.symbol %></td>
-              <td><%= holding.description %></td>
-              <td class="text-right"><%= format_currency(holding.quantity) %></td>
-              <td class="text-right"><%= format_currency(holding.mark_price) %></td>
-              <td class="text-right"><%= format_currency(holding.position_value) %></td>
-              <td class={[
-                "text-right font-semibold",
-                if(holding.fifo_pnl_unrealized && Decimal.positive?(holding.fifo_pnl_unrealized),
-                  do: "text-success",
-                  else: "text-error"
-                )
-              ]}>
-                <%= format_currency(holding.fifo_pnl_unrealized) %>
-              </td>
-            </tr>
-          <% end %>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="text-center mt-4 text-sm text-gray-500">
-      Use arrow keys (← →) to navigate between dates
-    </div>
   <% else %>
-    <div class="hero min-h-screen">
-      <div class="hero-content text-center">
-        <div class="max-w-md">
-          <h1 class="text-5xl font-bold">No Data</h1>
-          <p class="py-6">Import your first CSV file to get started</p>
-          <code class="bg-base-200 p-4 rounded">mix import.csv path/to/file.csv</code>
+    <!-- Empty state -->
+    <div class="flex flex-col items-center justify-center min-h-[60vh] gap-[var(--space-lg)]">
+      <div class="text-center">
+        <h1 class="text-[var(--text-3xl)] font-bold mb-[var(--space-sm)]">No Portfolio Data</h1>
+        <p class="text-[var(--text-lg)] opacity-70">Import a CSV file to get started</p>
+      </div>
+      
+      <div class="card card-bordered bg-base-200 max-w-xl">
+        <div class="card-body">
+          <h2 class="card-title">Import CSV</h2>
+          <p class="text-sm opacity-80">Run the following command to import your Interactive Brokers CSV:</p>
+          <div class="mockup-code text-sm mt-[var(--space-sm)]">
+            <pre><code>mix import.csv path/to/flex.csv</code></pre>
+          </div>
         </div>
       </div>
     </div>
