@@ -64,6 +64,26 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   @doc """
+  Returns snapshot data for charting (date and total value).
+  """
+  def get_chart_data(limit \\ 30) do
+    PortfolioSnapshot
+    |> order_by([s], desc: s.report_date)
+    |> limit(^limit)
+    |> preload(:holdings)
+    |> Repo.all()
+    |> Enum.reverse()
+    |> Enum.map(fn snapshot ->
+      total_value =
+        Enum.reduce(snapshot.holdings, Decimal.new("0"), fn holding, acc ->
+          Decimal.add(acc, holding.position_value || Decimal.new("0"))
+        end)
+      
+      {Date.to_string(snapshot.report_date), Decimal.to_float(total_value)}
+    end)
+  end
+
+  @doc """
   Creates a portfolio snapshot with holdings from CSV data.
   """
   def create_snapshot_from_csv(csv_data, report_date) do

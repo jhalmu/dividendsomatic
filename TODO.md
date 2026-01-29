@@ -1,101 +1,175 @@
 # TODO - Dividendsomatic
 
-## ✅ Completed
+## ✅ Tehty
 
-- [x] Phoenix 1.8.1 + LiveView 1.1.0 setup
-- [x] Database schema (portfolio_snapshots + holdings)
-- [x] All 18 CSV fields stored
-- [x] NimbleCSV parser
-- [x] Mix task for CSV import (`mix import.csv`)
-- [x] Portfolio context with navigation functions
-- [x] LiveView viewer with DaisyUI
-- [x] Arrow key navigation (← →)
-- [x] Currency-grouped summary cards
-- [x] P&L color coding
-- [x] Responsive layout
-- [x] Empty state
-- [x] Git repo + GitHub
+- [x] Phoenix projekti + LiveView
+- [x] SQLite tietokanta
+- [x] Portfolio snapshot + holdings schemat
+- [x] CSV parser (NimbleCSV)
+- [x] Mix task: `mix import.csv`
+- [x] LiveView portfolio viewer
+- [x] DaisyUI taulukko
+- [x] Yhteenveto-kortit (Holdings, Value, P&L)
+- [x] Nuolinäppäin navigointi (← →)
+- [x] P&L värikoodaus
+- [x] Dokumentaatio (README, CLAUDE.md, SESSION_REPORT.md)
+- [x] Git repo
 
-## 🚧 High Priority (MVP+)
+## 🚧 Käynnissä
 
-- [ ] **Automated Gmail CSV import**
-  - Gmail MCP integration
-  - Oban worker for daily schedule
-  - Search for "Activity Flex" emails
-  - Download and import attachments
-  - Error handling
+- [ ] GitHub repo luonti
+- [ ] GitHub issueita
 
-- [ ] **Charts (Contex)**
-  - Portfolio value over time
-  - Per-currency breakdown
-  - Individual holding performance
-  - Date range selection
+## 📋 Suunniteltu
 
-- [ ] **Dividend tracking**
-  - Dividends table
-  - Import dividend history
-  - Projected annual dividends
-  - Dividend yield calculations
-  - Payment schedule
+### HIGH Priority
 
-## 📋 Medium Priority
+#### Gmail Automaatio
+- [ ] Konfiguroi Oban SQLite:lle
+  - [ ] Vaihda Postgres notifier → SQLite-yhteensopiva
+  - [ ] Testaa Oban käynnistyy
+- [ ] Aktivoi GmailImportWorker
+  - [ ] Testaa Gmail MCP
+  - [ ] Lataa CSV liitteet
+  - [ ] Parsoi ja tallenna
+- [ ] Cron schedule (klo 8 joka aamu)
+- [ ] Error handling
+- [ ] Email notifikaatiot virheistä
 
-- [ ] **Testing suite**
-  - Context tests
-  - LiveView tests
-  - CSV import tests
-  - Navigation tests
-  - Target: >80% coverage
+### MEDIUM Priority
 
-- [ ] **Performance optimization**
-  - Query optimization
-  - Proper preloading
-  - Database indexes
-  - Caching summaries
+#### Grafiikat (Contex)
+- [ ] Lisää Contex dependency
+- [ ] Portfolio arvo ajan yli (line chart)
+  - [ ] Hae kaikki snapshots
+  - [ ] Laske total value per päivä
+  - [ ] Renderöi chart
+- [ ] Holdings jakautuminen (pie chart)
+  - [ ] Symboleittain
+  - [ ] Valuutoittain
+- [ ] P&L trendit (bar chart)
+- [ ] Export chartit PNG:nä
 
-- [ ] **Error handling**
-  - CSV import errors
-  - Data validation
-  - User feedback
-  - Error logging
+#### Osingot
+- [ ] Luo `dividends` taulu
+  - [ ] holding_id, date, amount, currency
+- [ ] Dividend entry form
+- [ ] Linkitä dividendit holdingseihin
+- [ ] Laske total dividend income
+- [ ] Projektoi tulevat osingot
+  - [ ] Keskiarvo per osake
+  - [ ] Kertaa nykyisellä määrällä
+- [ ] Dividend calendar
+- [ ] Export dividend reports
 
-## 🚀 Deployment
+#### Deployment
+- [ ] Vaihda PostgreSQL tuotantoon
+- [ ] Valitse palvelu (Hetzner/Fly.io/Railway)
+- [ ] Luo tuotanto-konffi
+- [ ] CI/CD pipeline
+- [ ] Health checks
+- [ ] Database backups
+- [ ] SSL/TLS
+- [ ] Monitoring (Sentry?)
+- [ ] Logging
 
-- [ ] PostgreSQL setup (replace SQLite)
-- [ ] Hetzner Cloud configuration
-- [ ] Docker + Caddy
-- [ ] Environment variables
-- [ ] GitHub Actions CI/CD
-- [ ] Migration strategy
+### LOW Priority
 
-## 💡 Nice to Have
+#### UI/UX Parannus
+- [ ] DaisyUI theme selector
+  - [ ] Light/Dark/Corporate/etc
+  - [ ] Tallenna preferenssi
+- [ ] Mobiili-responsiivisuus
+  - [ ] Taulukko scroll
+  - [ ] Stack kortit pystyyn
+- [ ] Loading states
+  - [ ] Skeleton loaders
+  - [ ] Spinner navigoinnissa
+- [ ] Better error messages
+- [ ] Tooltips sarakkeille
+- [ ] Sorting holdings
+  - [ ] Symbol, Value, P&L
+- [ ] Filtering
+  - [ ] Currency
+  - [ ] Asset class
+- [ ] Search holdings
+- [ ] Export CSV/Excel
+- [ ] Print-friendly view
 
-- [ ] Multiple portfolios/accounts
-- [ ] Export to CSV/Excel
-- [ ] Custom reports
-- [ ] Email notifications
-- [ ] Mobile app
-- [ ] Tax reporting helper
-- [ ] Benchmarking vs indexes
+#### Testit
+- [ ] ExMachina factory setup
+- [ ] Context testit
+  - [ ] Portfolio.get_latest_snapshot
+  - [ ] Portfolio navigation
+  - [ ] Portfolio.create_snapshot_from_csv
+- [ ] LiveView testit
+  - [ ] Render snapshot
+  - [ ] Navigation events
+  - [ ] Keyboard shortcuts
+- [ ] CSV parser testit
+  - [ ] Valid CSV
+  - [ ] Invalid/malformed CSV
+  - [ ] Empty CSV
+- [ ] Integration testit
+  - [ ] End-to-end CSV import
+- [ ] Property-based testit
+  - [ ] StreamData
+  - [ ] P&L calculations
+- [ ] Target: 80%+ coverage
 
-## 📝 Documentation
+#### Optimoinnit
+- [ ] Cache latest snapshot
+- [ ] Preload holdings eager
+- [ ] Index optimointi
+- [ ] DB query profilointi
+- [ ] Add pagination (jos >100 holdings)
 
-- [x] README.md
-- [x] CLAUDE.md
-- [x] SESSION_REPORT.md
-- [x] GITHUB_ISSUES.md
-- [ ] API documentation
-- [ ] Deployment guide
-- [ ] Contributing guide
+#### Security
+- [ ] Add authentication
+  - [ ] Phx.Gen.Auth?
+  - [ ] Auth0?
+- [ ] Rate limiting
+- [ ] CSRF protection (on jo)
+- [ ] SQL injection prevention (Ecto hoitaa)
+- [ ] XSS prevention
 
-## 🐛 Known Issues
+## 💡 Ideoita (Backlog)
 
-None yet!
+- [ ] Multi-user support
+- [ ] Portfolio comparison (vs benchmarks)
+- [ ] Tax reporting
+- [ ] Transaction history
+- [ ] Real-time quotes integration
+- [ ] Email alerts (big gains/losses)
+- [ ] Mobile app (Phoenix LiveView Native?)
+- [ ] API endpoints
+- [ ] Webhooks
+- [ ] Portfolio goals & tracking
+- [ ] Risk analysis
+- [ ] Sector allocation
+- [ ] Currency conversion rates
+- [ ] Import from other brokers
+- [ ] PDF reports
 
-## 📊 Current Status
+## 🐛 Bugit
 
-**Lines of Code:** ~1500
-**Test Coverage:** 0%
-**Features:** 40% MVP complete
-**Ready for:** Local development ✅
-**Ready for:** Production ❌
+Ei tunnettuja bugeja tällä hetkellä.
+
+## 📝 Muistiinpanot
+
+### Tekninen velka
+- Oban disabled (vaatii SQLite notifier)
+- Gmail/Worker-tiedostot olemassa mutta ei käytössä
+- Ei testejä vielä
+- Design tokens vain osittain käytössä
+
+### Päätökset
+- SQLite devissä, PostgreSQL tuotannossa
+- DaisyUI komponentit (ei custom CSS)
+- Kaikki 18 CSV-kenttää tallennettu
+- NimbleCSV parseriksi
+
+### Seuraava istunto
+1. Luo GitHub repo
+2. Kopioi issueita
+3. Valitse: Oban konffi TAI Contex grafiikat

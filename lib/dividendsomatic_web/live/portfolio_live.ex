@@ -6,10 +6,12 @@ defmodule DividendsomaticWeb.PortfolioLive do
   @impl true
   def mount(_params, _session, socket) do
     snapshot = Portfolio.get_latest_snapshot()
+    chart_data = Portfolio.get_chart_data(30)
     
     socket =
       socket
       |> assign(:snapshot, snapshot)
+      |> assign(:chart_data, chart_data)
       |> assign(:page_title, "Portfolio")
     
     {:ok, socket}
@@ -124,6 +126,16 @@ defmodule DividendsomaticWeb.PortfolioLive do
             </div>
           </div>
 
+          <!-- Portfolio Value Chart -->
+          <%= if length(@chart_data) > 1 do %>
+            <div class="card card-bordered bg-base-100 mb-[var(--space-lg)]">
+              <div class="card-body">
+                <h2 class="card-title text-[var(--text-xl)]">Portfolio Value Over Time</h2>
+                <%= render_chart(@chart_data) %>
+              </div>
+            </div>
+          <% end %>
+
           <!-- Holdings Table -->
           <div class="card card-bordered bg-base-100">
             <div class="card-body">
@@ -187,6 +199,27 @@ defmodule DividendsomaticWeb.PortfolioLive do
   end
 
   # Helper functions
+  
+  defp render_chart(data) when length(data) < 2 do
+    Phoenix.HTML.raw("""
+    <div class="text-center py-8 text-base-content/70">
+      Not enough data to display chart (need at least 2 snapshots)
+    </div>
+    """)
+  end
+  
+  defp render_chart(data) do
+    dataset = Contex.Dataset.new(data, ["Date", "Value"])
+    
+    chart =
+      Contex.Plot.new(600, 300, dataset)
+      |> Contex.Plot.plot(Contex.PointPlot, mapping: %{x_col: "Date", y_cols: ["Value"]})
+      |> Contex.Plot.axis_labels("Date", "Total Value")
+    
+    chart
+    |> Contex.Plot.to_svg()
+    |> Phoenix.HTML.raw()
+  end
   
   defp format_decimal(nil, _precision), do: "0.00"
   defp format_decimal(decimal, precision) do
