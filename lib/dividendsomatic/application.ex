@@ -12,8 +12,7 @@ defmodule Dividendsomatic.Application do
       Dividendsomatic.Repo,
       {DNSCluster, query: Application.get_env(:dividendsomatic, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Dividendsomatic.PubSub},
-      # Start a worker by calling: Dividendsomatic.Worker.start_link(arg)
-      # {Dividendsomatic.Worker, arg},
+      {Oban, Application.fetch_env!(:dividendsomatic, Oban)},
       # Start to serve requests, typically the last entry
       DividendsomaticWeb.Endpoint
     ]

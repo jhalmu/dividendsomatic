@@ -60,6 +60,20 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Configure Oban
+config :dividendsomatic, Oban,
+  repo: Dividendsomatic.Repo,
+  plugins: [
+    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},  # Keep jobs for 7 days
+    {Oban.Plugins.Cron,
+      crontab: [
+        # Daily CSV import at 8 AM (adjust timezone as needed)
+        {"0 8 * * *", Dividendsomatic.Workers.GmailImportWorker}
+      ]
+    }
+  ],
+  queues: [default: 10, gmail_import: 1]
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"
