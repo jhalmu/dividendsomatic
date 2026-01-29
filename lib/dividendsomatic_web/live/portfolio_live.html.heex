@@ -1,0 +1,141 @@
+<div class="min-h-screen bg-base-100" phx-window-keydown="keydown">
+  <div class="container mx-auto p-[var(--space-md)]">
+    <%= if @snapshot do %>
+      <!-- Header with navigation -->
+      <div class="flex items-center justify-between mb-[var(--space-lg)]">
+        <div>
+          <h1 class="text-[var(--text-2xl)] font-bold">Portfolio</h1>
+          <p class="text-[var(--text-base)] text-base-content/70">
+            <%= Calendar.strftime(@snapshot.report_date, "%A, %B %d, %Y") %>
+          </p>
+        </div>
+        
+        <div class="flex gap-[var(--space-xs)]">
+          <button
+            phx-click="navigate_prev"
+            class="btn btn-circle btn-outline"
+            title="Previous day (←)"
+          >
+            <.icon name="hero-arrow-left" class="w-5 h-5" />
+          </button>
+          
+          <button
+            phx-click="navigate_next"
+            class="btn btn-circle btn-outline"
+            title="Next day (→)"
+          >
+            <.icon name="hero-arrow-right" class="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      <!-- Summary cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-[var(--space-md)] mb-[var(--space-lg)]">
+        <% totals = calculate_totals(@snapshot.holdings) %>
+        
+        <div class="card bg-base-200">
+          <div class="card-body">
+            <h2 class="card-title text-[var(--text-lg)]">EUR Holdings</h2>
+            <p class="text-[var(--text-2xl)] font-bold text-primary">
+              <%= format_currency(totals.eur, "€") %>
+            </p>
+          </div>
+        </div>
+
+        <div class="card bg-base-200">
+          <div class="card-body">
+            <h2 class="card-title text-[var(--text-lg)]">USD Holdings</h2>
+            <p class="text-[var(--text-2xl)] font-bold text-secondary">
+              <%= format_currency(totals.usd, "$") %>
+            </p>
+          </div>
+        </div>
+
+        <div class="card bg-base-200">
+          <div class="card-body">
+            <h2 class="card-title text-[var(--text-lg)]">Total Positions</h2>
+            <p class="text-[var(--text-2xl)] font-bold">
+              <%= length(@snapshot.holdings) %>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Holdings table -->
+      <div class="card bg-base-200">
+        <div class="card-body">
+          <h2 class="card-title text-[var(--text-xl)] mb-[var(--space-md)]">Holdings</h2>
+          
+          <div class="overflow-x-auto">
+            <table class="table table-zebra">
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Description</th>
+                  <th class="text-right">Quantity</th>
+                  <th class="text-right">Price</th>
+                  <th class="text-right">Value</th>
+                  <th class="text-right">P&L</th>
+                  <th class="text-right">% of NAV</th>
+                </tr>
+              </thead>
+              <tbody>
+                <%= for holding <- @snapshot.holdings do %>
+                  <tr>
+                    <td>
+                      <div class="font-bold"><%= holding.symbol %></div>
+                      <div class="badge badge-sm badge-ghost"><%= holding.currency_primary %></div>
+                    </td>
+                    <td>
+                      <div class="max-w-xs truncate"><%= holding.description %></div>
+                      <div class="text-xs text-base-content/70"><%= holding.sub_category %></div>
+                    </td>
+                    <td class="text-right"><%= format_decimal(holding.quantity) %></td>
+                    <td class="text-right"><%= format_decimal(holding.mark_price) %></td>
+                    <td class="text-right font-semibold">
+                      <%= format_decimal(holding.position_value) %>
+                    </td>
+                    <td class="text-right">
+                      <span class={[
+                        "font-semibold",
+                        if(holding.fifo_pnl_unrealized && Decimal.positive?(holding.fifo_pnl_unrealized), 
+                          do: "text-success", 
+                          else: "text-error")
+                      ]}>
+                        <%= format_decimal(holding.fifo_pnl_unrealized) %>
+                      </span>
+                    </td>
+                    <td class="text-right">
+                      <%= format_decimal(holding.percent_of_nav) %>%
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Additional info -->
+      <div class="mt-[var(--space-md)] text-sm text-base-content/70 text-center">
+        <p>Use arrow keys (← →) or buttons to navigate between dates</p>
+      </div>
+
+    <% else %>
+      <!-- No data state -->
+      <div class="hero min-h-[60vh]">
+        <div class="hero-content text-center">
+          <div class="max-w-md">
+            <h1 class="text-[var(--text-2xl)] font-bold">No Portfolio Data</h1>
+            <p class="py-[var(--space-md)]">
+              Import your first CSV file to get started.
+            </p>
+            <div class="mockup-code">
+              <pre><code>mix import.csv path/to/flex.csv</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</div>
