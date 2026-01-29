@@ -12,9 +12,29 @@ defmodule DividendsomaticWeb.PortfolioLive do
       socket
       |> assign(:snapshot, snapshot)
       |> assign(:chart_data, chart_data)
+      |> assign(:sort_by, :symbol)
+      |> assign(:sort_order, :asc)
       |> assign(:page_title, "Portfolio")
     
     {:ok, socket}
+  end
+
+  @impl true
+  def handle_event("sort", %{"field" => field}, socket) do
+    field_atom = String.to_existing_atom(field)
+    current_sort = socket.assigns.sort_by
+    
+    new_order = 
+      if current_sort == field_atom do
+        case socket.assigns.sort_order do
+          :asc -> :desc
+          :desc -> :asc
+        end
+      else
+        :asc
+      end
+    
+    {:noreply, socket |> assign(:sort_by, field_atom) |> assign(:sort_order, new_order)}
   end
 
   @impl true
@@ -145,18 +165,34 @@ defmodule DividendsomaticWeb.PortfolioLive do
                 <table class="table table-zebra">
                   <thead>
                     <tr>
-                      <th>Symbol</th>
+                      <th>
+                        <button phx-click="sort" phx-value-field="symbol" class="flex items-center gap-1">
+                          Symbol <%= sort_icon(@sort_by, @sort_order, :symbol) %>
+                        </button>
+                      </th>
                       <th>Description</th>
-                      <th class="text-right">Quantity</th>
+                      <th class="text-right">
+                        <button phx-click="sort" phx-value-field="quantity" class="flex items-center gap-1 ml-auto">
+                          Quantity <%= sort_icon(@sort_by, @sort_order, :quantity) %>
+                        </button>
+                      </th>
                       <th class="text-right">Price</th>
-                      <th class="text-right">Value</th>
+                      <th class="text-right">
+                        <button phx-click="sort" phx-value-field="position_value" class="flex items-center gap-1 ml-auto">
+                          Value <%= sort_icon(@sort_by, @sort_order, :position_value) %>
+                        </button>
+                      </th>
                       <th class="text-right">Cost Basis</th>
-                      <th class="text-right">P&L</th>
+                      <th class="text-right">
+                        <button phx-click="sort" phx-value-field="fifo_pnl_unrealized" class="flex items-center gap-1 ml-auto">
+                          P&L <%= sort_icon(@sort_by, @sort_order, :fifo_pnl_unrealized) %>
+                        </button>
+                      </th>
                       <th class="text-right">% of NAV</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <%= for holding <- @snapshot.holdings do %>
+                    <%= for holding <- sorted_holdings(@snapshot.holdings, @sort_by, @sort_order) do %>
                       <tr>
                         <td class="font-semibold"><%= holding.symbol %></td>
                         <td><%= holding.description %></td>
@@ -199,6 +235,29 @@ defmodule DividendsomaticWeb.PortfolioLive do
   end
 
   # Helper functions
+  
+  defp sorted_holdings(holdings, sort_by, sort_order) do
+    sorted = Enum.sort_by(holdings, fn holding ->
+      case Map.get(holding, sort_by) do
+        %Decimal{} = val -> Decimal.to_float(val)
+        val -> val
+      end
+    end)
+    
+    case sort_order do
+      :asc -> sorted
+      :desc -> Enum.reverse(sorted)
+    end
+  end
+  
+  defp sort_icon(current_sort, sort_order, field) when current_sort == field do
+    case sort_order do
+      :asc -> Phoenix.HTML.raw("▲")
+      :desc -> Phoenix.HTML.raw("▼")
+    end
+  end
+  
+  defp sort_icon(_, _, _), do: Phoenix.HTML.raw("⬍")
   
   defp render_chart(data) when length(data) < 2 do
     Phoenix.HTML.raw("""
