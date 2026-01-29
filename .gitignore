@@ -28,6 +28,15 @@ dividendsomatic-*.tar
 # Ignore assets that are produced by build tools.
 /priv/static/assets/
 
+# Ignore SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# Ignore CSV data files
+*.csv
+!example.csv
+
 # Ignore digested assets cache.
 /priv/static/cache_manifest.json
 
