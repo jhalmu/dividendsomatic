@@ -1,129 +1,208 @@
-# GitHub Issues for Dividendsomatic
+# GitHub Issues - Dividendsomatic
 
-## Setup (käytä näitä gh CLI:llä)
+Käytä näitä kun luot GitHub repon:
 
-```bash
-cd /Users/juha/Library/CloudStorage/Dropbox/Projektit/Elixir/dividendsomatic
+## ✅ COMPLETED
 
-# Completed features
-gh issue create --title "✅ Setup Phoenix project with LiveView" \
-  --body "- Phoenix 1.8.1 + LiveView 1.1.0
-- SQLite database (dev)
-- DaisyUI + Tailwind CSS v4
-- Project structure" \
-  --label "completed"
+### #1 - Project Setup ✓
+**Status:** DONE
+**Completion:** 2026-01-29
 
-gh issue create --title "✅ Database schema with all CSV fields" \
-  --body "Tables:
-- portfolio_snapshots (report_date, raw_csv_data)
-- holdings (18 CSV fields: Symbol, Quantity, MarkPrice, etc.)
+- [x] Phoenix 1.8.1 + LiveView 1.1.0 projekti
+- [x] SQLite tietokanta (dev)
+- [x] DaisyUI + Tailwind v4
+- [x] NimbleCSV dependency
 
-Indexes on: portfolio_snapshot_id, symbol, report_date" \
-  --label "completed"
+### #2 - Database Schema ✓
+**Status:** DONE
+**Completion:** 2026-01-29
 
-gh issue create --title "✅ CSV import with NimbleCSV" \
-  --body "Mix task: \`mix import.csv path/to/file.csv\`
+- [x] portfolio_snapshots taulu (report_date unique)
+- [x] holdings taulu (KAIKKI 18 CSV-kenttää)
+- [x] Foreign key constraints
+- [x] Proper indexes
 
-Features:
-- NimbleCSV parser
-- Transaction-based insert
-- All 18 Interactive Brokers CSV fields
-- Tested successfully with sample data" \
-  --label "completed"
+### #3 - Portfolio Context ✓
+**Status:** DONE
+**Completion:** 2026-01-29
 
-gh issue create --title "✅ LiveView portfolio viewer" \
-  --body "Features:
-- Latest snapshot display
-- Holdings table with all key fields
-- Currency-grouped summary cards
-- Arrow key navigation (← →)
-- P&L color coding (red/green)
-- DaisyUI components
-- Responsive layout
-- Empty state with instructions" \
-  --label "completed"
+- [x] `get_latest_snapshot/0`
+- [x] `get_snapshot_by_date/1`
+- [x] `get_previous_snapshot/1`
+- [x] `get_next_snapshot/1`
+- [x] `create_snapshot_from_csv/2`
 
-# TODO features
-gh issue create --title "Automated CSV import from Gmail" \
-  --body "Requirements:
-- Gmail MCP integration
-- Search for 'Activity Flex' emails from Interactive Brokers
-- Download CSV attachments
-- Oban worker for daily schedule
-- Error handling and notifications
+### #4 - CSV Import ✓
+**Status:** DONE
+**Completion:** 2026-01-29
 
-Files to create:
-- lib/dividendsomatic/workers/gmail_import_worker.ex
-- Config for Oban" \
-  --label "enhancement"
+- [x] NimbleCSV parser
+- [x] Mix task `mix import.csv`
+- [x] Parse all 18 fields
+- [x] Transaction safety
 
-gh issue create --title "Portfolio value charts" \
-  --body "Using Contex library:
-- Total portfolio value over time
-- Per-currency breakdown
-- Individual holding performance
-- Interactive date range selection
+### #5 - LiveView Portfolio Viewer ✓
+**Status:** DONE
+**Completion:** 2026-01-29
 
-Consider adding:
-- lib/dividendsomatic_web/live/charts_live.ex" \
-  --label "enhancement"
+- [x] LiveView module
+- [x] DaisyUI components (table, cards, buttons)
+- [x] Summary stats (holdings count, total value, P&L)
+- [x] Navigation buttons (← →)
+- [x] Keyboard navigation (arrow keys)
+- [x] Design tokens from homesite
+- [x] Empty state message
 
-gh issue create --title "Dividend tracking and projections" \
-  --body "Features:
-- Separate dividends table
-- Import dividend history
-- Calculate projected annual dividends
-- Dividend yield per holding
-- Payment schedule calendar
+---
 
-Database:
-- Add dividends table (symbol, ex_date, pay_date, amount)
-- Link to holdings" \
-  --label "enhancement"
+## 🚧 IN PROGRESS
 
-gh issue create --title "Deployment to production" \
-  --body "Tasks:
-- PostgreSQL setup (replace SQLite)
-- Hetzner Cloud configuration
-- Docker + Caddy setup
-- Environment variables
-- GitHub Actions CI/CD
-- Database migrations strategy" \
-  --label "deployment"
+_None currently_
 
-gh issue create --title "Testing suite" \
-  --body "Add tests for:
-- Portfolio context functions
-- CSV import
-- LiveView interactions
-- Navigation logic
-- Currency calculations
+---
 
-Target: >80% coverage" \
-  --label "testing"
+## 📋 TODO
 
-gh issue create --title "Error handling improvements" \
-  --body "Add proper error handling:
-- CSV import failures
-- Invalid data format
-- Database constraints
-- User feedback messages
-- Logging" \
-  --label "enhancement"
+### #6 - Gmail Integration
+**Priority:** HIGH
+**Estimated:** 3-4 hours
 
-gh issue create --title "Performance optimization" \
-  --body "Optimize:
-- Preload holdings in queries
-- Add database indexes for common queries
-- Lazy loading for large datasets
-- Caching for summary calculations" \
-  --label "performance"
+- [ ] Gmail MCP server integration
+- [ ] Search for "Activity Flex" emails
+- [ ] Download CSV attachments
+- [ ] Parse filename for date
+- [ ] Auto-import to database
+- [ ] Error handling (duplicate dates, missing files)
+
+**Tasks:**
+1. Test Gmail MCP connection
+2. Implement attachment download
+3. Create import function
+4. Add error logging
+
+### #7 - Oban Background Jobs
+**Priority:** HIGH
+**Estimated:** 2 hours
+
+- [ ] Add Oban dependency
+- [ ] Create worker for Gmail import
+- [ ] Daily cron schedule
+- [ ] Retry logic
+- [ ] Success/failure notifications
+
+**Cron:**
+```elixir
+# Run at 8 AM daily
+{Cron, expression: "0 8 * * *", worker: GmailImportWorker}
 ```
 
-## Quick create all at once
+### #8 - Charts & Visualizations
+**Priority:** MEDIUM
+**Estimated:** 4-5 hours
 
-```bash
-# You can run this after pushing to GitHub
-cd /Users/juha/Library/CloudStorage/Dropbox/Projektit/Elixir/dividendsomatic
-bash -c "$(cat GITHUB_ISSUES.md | grep '^gh issue create' | tr '\n' ' ')"
-```
+- [ ] Add Contex dependency
+- [ ] Portfolio value over time (line chart)
+- [ ] Holdings distribution (pie chart)
+- [ ] P&L by symbol (bar chart)
+- [ ] Performance metrics
+
+**Charts:**
+1. Total portfolio value timeline
+2. Asset allocation by symbol
+3. Currency distribution
+4. Profit/Loss trends
+
+### #9 - Dividend Tracking
+**Priority:** MEDIUM
+**Estimated:** 3-4 hours
+
+- [ ] Create dividends table
+- [ ] Import dividend data
+- [ ] Calculate yearly projections
+- [ ] Display dividend calendar
+- [ ] Show yield percentages
+
+**Fields:**
+- symbol
+- payment_date
+- ex_dividend_date
+- amount
+- currency
+- type (qualified/ordinary)
+
+### #10 - Enhanced UI Features
+**Priority:** LOW
+**Estimated:** 2-3 hours
+
+- [ ] Filtering by symbol
+- [ ] Sorting by columns
+- [ ] Search functionality
+- [ ] Date range selector
+- [ ] Export to CSV
+- [ ] Print-friendly view
+
+### #11 - Authentication
+**Priority:** LOW (Future)
+**Estimated:** 3 hours
+
+- [ ] User accounts (if needed)
+- [ ] Session management
+- [ ] Protected routes
+- [ ] Multi-user support
+
+### #12 - Testing
+**Priority:** MEDIUM
+**Estimated:** 4 hours
+
+- [ ] Portfolio context tests
+- [ ] LiveView tests
+- [ ] CSV parsing tests
+- [ ] Integration tests
+- [ ] CI/CD setup
+
+### #13 - Production Deployment
+**Priority:** HIGH (when ready)
+**Estimated:** 2-3 hours
+
+- [ ] PostgreSQL setup (replace SQLite)
+- [ ] Environment configuration
+- [ ] Database migrations
+- [ ] SSL certificates
+- [ ] Error monitoring (Sentry?)
+
+**Hosting options:**
+- Fly.io
+- Render.com
+- Gigalixir
+- Self-hosted (Hetzner?)
+
+### #14 - Documentation
+**Priority:** MEDIUM
+**Estimated:** 1-2 hours
+
+- [ ] API documentation
+- [ ] Deployment guide
+- [ ] User manual
+- [ ] CSV format specification
+- [ ] Troubleshooting guide
+
+---
+
+## 🐛 BUGS
+
+_None reported yet_
+
+---
+
+## 💡 NICE TO HAVE
+
+- Portfolio comparison (month-over-month)
+- Tax reporting helpers
+- Mobile app (LiveView Native?)
+- Email notifications for big changes
+- Performance benchmarks
+- Dark mode theme
+- Multiple portfolios support
+- Notes on holdings
+- Transaction history
+- Alerts on price changes
