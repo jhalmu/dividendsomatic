@@ -1,128 +1,130 @@
-<div class="container mx-auto p-[var(--space-lg)]" phx-window-keydown="key_down">
-  <%= if @snapshot do %>
-    <!-- Header with navigation -->
-    <div class="flex items-center justify-between mb-[var(--space-lg)]">
-      <h1 class="text-[var(--text-2xl)] font-bold">
-        Portfolio - <%= Calendar.strftime(@snapshot.report_date, "%B %d, %Y") %>
-      </h1>
-      
-      <div class="flex gap-[var(--space-sm)]">
-        <button 
-          phx-click="navigate" 
-          phx-value-direction="prev"
-          class="btn btn-circle btn-outline"
-          title="Previous day (←)"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-          </svg>
-        </button>
-        
-        <button 
-          phx-click="navigate" 
-          phx-value-direction="next"
-          class="btn btn-circle btn-outline"
-          title="Next day (→)"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-          </svg>
-        </button>
-      </div>
-    </div>
-
-    <!-- Summary cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-[var(--space-md)] mb-[var(--space-lg)]">
-      <%= for {currency, holdings} <- Enum.group_by(@snapshot.holdings, & &1.currency_primary) do %>
-        <div class="card card-bordered bg-base-100">
-          <div class="card-body">
-            <h2 class="card-title text-[var(--text-lg)]"><%= currency %></h2>
-            <div class="space-y-2">
-              <div>
-                <div class="text-sm opacity-70">Total Value</div>
-                <div class="text-[var(--text-xl)] font-bold">
-                  <%= format_currency(
-                    Enum.reduce(holdings, Decimal.new("0"), fn h, acc -> 
-                      Decimal.add(acc, h.position_value) 
-                    end),
-                    currency
-                  ) %>
-                </div>
-              </div>
-              <div>
-                <div class="text-sm opacity-70">Unrealized P&L</div>
-                <div class={"text-[var(--text-lg)] font-semibold #{pnl_class(Enum.reduce(holdings, Decimal.new("0"), fn h, acc -> Decimal.add(acc, h.fifo_pnl_unrealized) end))}"}>
-                  <%= format_currency(
-                    Enum.reduce(holdings, Decimal.new("0"), fn h, acc -> 
-                      Decimal.add(acc, h.fifo_pnl_unrealized) 
-                    end),
-                    currency
-                  ) %>
-                </div>
+<div class="min-h-screen bg-base-200">
+  <div class="container mx-auto p-[var(--space-md)]">
+    <%= if @current_snapshot do %>
+      <!-- Header -->
+      <div class="card bg-base-100 shadow-xl mb-[var(--space-md)]">
+        <div class="card-body">
+          <div class="flex justify-between items-center">
+            <div>
+              <h1 class="text-[var(--text-2xl)] font-bold">Portfolio Snapshot</h1>
+              <p class="text-[var(--text-lg)] text-base-content/70">
+                <%= Calendar.strftime(@current_snapshot.report_date, "%B %d, %Y") %>
+              </p>
+            </div>
+            
+            <!-- Navigation -->
+            <div class="flex gap-[var(--space-sm)]">
+              <button 
+                phx-click="navigate" 
+                phx-value-direction="prev"
+                class="btn btn-circle"
+                disabled={!@has_prev}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                </svg>
+              </button>
+              
+              <button 
+                phx-click="navigate" 
+                phx-value-direction="next"
+                class="btn btn-circle"
+                disabled={!@has_next}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Summary Stats -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-[var(--space-md)] mt-[var(--space-md)]">
+            <div class="stat bg-base-200 rounded-box">
+              <div class="stat-title">Holdings</div>
+              <div class="stat-value text-primary"><%= length(@holdings) %></div>
+            </div>
+            
+            <div class="stat bg-base-200 rounded-box">
+              <div class="stat-title">Total Value</div>
+              <div class="stat-value text-[var(--text-xl)]"><%= format_decimal(@total_value) %></div>
+            </div>
+            
+            <div class="stat bg-base-200 rounded-box">
+              <div class="stat-title">Unrealized P&L</div>
+              <div class={"stat-value text-[var(--text-xl)] #{pnl_class(@total_pnl)}"}>
+                <%= format_decimal(@total_pnl) %>
               </div>
             </div>
           </div>
         </div>
-      <% end %>
-    </div>
-
-    <!-- Holdings table -->
-    <div class="card card-bordered bg-base-100">
-      <div class="card-body">
-        <h2 class="card-title text-[var(--text-xl)] mb-[var(--space-md)]">Holdings</h2>
-        
-        <div class="overflow-x-auto">
-          <table class="table table-zebra">
-            <thead>
-              <tr>
-                <th>Symbol</th>
-                <th>Description</th>
-                <th class="text-right">Quantity</th>
-                <th class="text-right">Price</th>
-                <th class="text-right">Value</th>
-                <th class="text-right">Cost Basis</th>
-                <th class="text-right">P&L</th>
-                <th class="text-right">% of NAV</th>
-              </tr>
-            </thead>
-            <tbody>
-              <%= for holding <- Enum.sort_by(@snapshot.holdings, & Decimal.to_float(&1.position_value), :desc) do %>
-                <tr>
-                  <td class="font-bold"><%= holding.symbol %></td>
-                  <td class="text-sm opacity-80"><%= holding.description %></td>
-                  <td class="text-right"><%= Decimal.to_string(holding.quantity, :normal) %></td>
-                  <td class="text-right"><%= format_currency(holding.mark_price, holding.currency_primary) %></td>
-                  <td class="text-right font-semibold"><%= format_currency(holding.position_value, holding.currency_primary) %></td>
-                  <td class="text-right text-sm opacity-70"><%= format_currency(holding.cost_basis_money, holding.currency_primary) %></td>
-                  <td class={"text-right font-semibold #{pnl_class(holding.fifo_pnl_unrealized)}"}>
-                    <%= format_currency(holding.fifo_pnl_unrealized, holding.currency_primary) %>
-                  </td>
-                  <td class="text-right"><%= format_percent(holding.percent_of_nav) %></td>
-                </tr>
-              <% end %>
-            </tbody>
-          </table>
-        </div>
       </div>
-    </div>
 
-  <% else %>
-    <!-- Empty state -->
-    <div class="flex flex-col items-center justify-center min-h-[60vh] gap-[var(--space-lg)]">
-      <div class="text-center">
-        <h1 class="text-[var(--text-3xl)] font-bold mb-[var(--space-sm)]">No Portfolio Data</h1>
-        <p class="text-[var(--text-lg)] opacity-70">Import a CSV file to get started</p>
-      </div>
-      
-      <div class="card card-bordered bg-base-200 max-w-xl">
+      <!-- Holdings Table -->
+      <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
-          <h2 class="card-title">Import CSV</h2>
-          <p class="text-sm opacity-80">Run the following command to import your Interactive Brokers CSV:</p>
-          <div class="mockup-code text-sm mt-[var(--space-sm)]">
-            <pre><code>mix import.csv path/to/flex.csv</code></pre>
+          <h2 class="card-title">Holdings</h2>
+          
+          <div class="overflow-x-auto">
+            <table class="table table-zebra">
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Description</th>
+                  <th>Quantity</th>
+                  <th>Price</th>
+                  <th>Value</th>
+                  <th>Cost Basis</th>
+                  <th>P&L</th>
+                  <th>% of NAV</th>
+                </tr>
+              </thead>
+              <tbody>
+                <%= for holding <- @holdings do %>
+                  <tr>
+                    <td class="font-bold"><%= holding.symbol %></td>
+                    <td class="text-sm text-base-content/70"><%= holding.description %></td>
+                    <td><%= format_decimal(holding.quantity) %></td>
+                    <td><%= format_currency(holding.mark_price, holding.currency_primary) %></td>
+                    <td><%= format_currency(holding.position_value, holding.currency_primary) %></td>
+                    <td><%= format_currency(holding.cost_basis_money, holding.currency_primary) %></td>
+                    <td class={pnl_class(holding.fifo_pnl_unrealized)}>
+                      <%= format_currency(holding.fifo_pnl_unrealized, holding.currency_primary) %>
+                    </td>
+                    <td><%= format_decimal(holding.percent_of_nav) %>%</td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
-    </div>
-  <% end %>
+    <% else %>
+      <!-- Empty State -->
+      <div class="card bg-base-100 shadow-xl">
+        <div class="card-body text-center">
+          <h2 class="text-[var(--text-2xl)] font-bold">No Portfolio Data</h2>
+          <p class="text-base-content/70">Import a CSV file to get started</p>
+          <div class="mt-[var(--space-md)]">
+            <code class="bg-base-200 p-[var(--space-sm)] rounded">
+              mix import.csv path/to/file.csv
+            </code>
+          </div>
+        </div>
+      </div>
+    <% end %>
+  </div>
 </div>
+
+<!-- Keyboard Navigation -->
+<script>
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') {
+      const prevBtn = document.querySelector('[phx-value-direction="prev"]');
+      if (prevBtn && !prevBtn.disabled) prevBtn.click();
+    } else if (e.key === 'ArrowRight') {
+      const nextBtn = document.querySelector('[phx-value-direction="next"]');
+      if (nextBtn && !nextBtn.disabled) nextBtn.click();
+    }
+  });
+</script>
