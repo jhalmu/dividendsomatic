@@ -35,3 +35,11 @@ dividendsomatic-*.tar
 npm-debug.log
 /assets/node_modules/
 
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# CSV data files (user's private data)
+*.csv
+
