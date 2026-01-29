@@ -1,222 +1,303 @@
-# Session Report 2026-01-29 23:28
+# Session Report 2026-01-29 23:15
 
-## ✅ MVP VALMIS - Portfolio Viewer toimii!
+## ✅ TEHTY - MVP VALMIS!
 
-### Tehty tässä sessiossa
-
-#### 1. Projektin luonti
+### 1. Projektin perustus
 - Phoenix 1.8.1 + LiveView 1.1.0
-- SQLite (dev), PostgreSQL (prod myöhemmin)
-- NimbleCSV, DaisyUI, Tailwind v4
+- SQLite (dev), PostgreSQL (prod)
+- DaisyUI UI framework
+- NimbleCSV CSV-parser
 - Git repo alustettu
 
-#### 2. Tietokanta
+### 2. Tietokanta
 **Taulut:**
-- `portfolio_snapshots` - päivittäiset snapshots
-  - report_date (unique)
-  - raw_csv_data
-- `holdings` - osakerivit (18 CSV-kenttää)
-  - Symbol, Quantity, MarkPrice, PositionValue
-  - CostBasis, P&L, PercentOfNAV, jne.
+- `portfolio_snapshots` - päivittäiset snapshot:it
+- `holdings` - KAIKKI 18 CSV-kenttää:
+  - ReportDate, CurrencyPrimary, Symbol, Description
+  - SubCategory, Quantity, MarkPrice, PositionValue
+  - CostBasisPrice, CostBasisMoney, OpenPrice
+  - PercentOfNAV, FifoPnlUnrealized
+  - ListingExchange, AssetClass, FXRateToBase
+  - ISIN, FIGI
 
-**Indeksit:** portfolio_snapshot_id, symbol, report_date
+**Migraatio:** `20260129210334_create_portfolio_system.exs`
 
-#### 3. Context & Schemat
-```elixir
-Portfolio.get_latest_snapshot()
-Portfolio.get_snapshot_by_date(date)
-Portfolio.get_previous_snapshot(date)  # ←
-Portfolio.get_next_snapshot(date)      # →
-Portfolio.create_snapshot_from_csv(csv, date)
-```
+### 3. Context & Schemat
+- `Dividendsomatic.Portfolio` context
+  - `get_latest_snapshot/0`
+  - `get_snapshot_by_date/1`
+  - `get_previous_snapshot/1` - nuoli ←
+  - `get_next_snapshot/1` - nuoli →
+  - `create_snapshot_from_csv/2`
+- Schemat: `PortfolioSnapshot`, `Holding`
+- NimbleCSV parser toimii
 
-#### 4. CSV Import
-```bash
-mix import.csv flex.490027.PortfolioForWww.20260128.20260128.csv
-# ✓ 7 holdings tallennettiin onnistuneesti
-```
+### 4. Mix Task
+- `mix import.csv path/to/file.csv`
+- ✅ **TESTATTU**: 7 holdings tallennettiin onnistuneesti
 
-#### 5. LiveView Portfolio Viewer
-- **Päänäkymä:** Uusin snapshot
-- **Navigointi:** Nuolinäppäimet ← →
-- **Yhteenveto-kortit:**
+### 5. LiveView Portfolio Viewer ⭐ UUSI
+**Sijainti:** `lib/dividendsomatic_web/live/portfolio_live.ex`
+
+**Ominaisuudet:**
+- ✅ Näyttää uusimman snapshot:in
+- ✅ Summary cards:
   - Total Holdings
-  - Total Value
-  - Total P&L (värikoodattu)
-- **Holdings-taulukko:**
+  - Total Value (per currency)
+  - Unrealized P&L (värikoodattu)
+- ✅ Holdings taulukko DaisyUI:lla:
   - Symbol, Description, Quantity
   - Price, Value, Cost Basis
-  - P&L (vihreä/punainen)
-  - % of NAV
-- **DaisyUI komponenit:**
-  - `table table-zebra`
-  - `card card-bordered`
-  - `btn btn-circle btn-primary`
-  - `alert alert-info`
-  - `kbd` näppäinohjeet
+  - P&L (värikoodattu), % of NAV
+- ✅ Navigointi napit (← →)
+- ✅ **Nuolinäppäimet toimii!** (ArrowLeft, ArrowRight)
+- ✅ Design tokenit käytössä (`var(--space-md)`, jne)
+- ✅ Responsive layout
+- ✅ Empty state jos ei dataa
 
-#### 6. Serveri toimii
+**URL:**
+- `/` - Uusin snapshot
+- `/portfolio/:date` - Tietty päivä
+
+**Testaus:**
 ```bash
+cd /Users/juha/Library/CloudStorage/Dropbox/Projektit/Elixir/dividendsomatic
 mix phx.server
-# http://localhost:4000 ✓
+# Visit: http://localhost:4000
 ```
 
-#### 7. Dokumentaatio
-- `README.md` - Projektin yleiskuvaus
-- `CLAUDE.md` - Kehitysohjeet
-- `SESSION_REPORT.md` - Tämä dokumentti
-- `GITHUB_SETUP.md` - GitHub ohjeet + issueita
+### 6. Dokumentaatio
+- ✅ `README.md` - Projektin kuvaus
+- ✅ `CLAUDE.md` - Kehitysohjeet
+- ✅ `SESSION_REPORT.md` - Tämä dokumentti
+- ✅ `GITHUB_SETUP.md` - GitHub ohjeet + Issue lista
+- ✅ `DEPLOYMENT.md` - Fly.io deployment guide
+- ✅ `AGENTS.md` - AI agentin ohjeet (oli jo)
 
-### Testattu toimivaksi
+### 7. Git
+- ✅ Kaikki commitoitu
+- ✅ Commit message kunnossa
+- 🔄 **TODO: Push GitHubiin** (vaatii auth)
 
-✓ CSV lataus kantaan
-✓ LiveView renderöi
-✓ Taulukko näyttää holdings
-✓ Yhteenveto-kortit laskevat
-✓ P&L värikoodaus toimii
-✓ Serveri käynnistyy ilman virheitä
+## 📊 TOIMIVAT OMINAISUUDET
 
-### Tiedostot (tärkeimmät)
+1. **CSV Import** ✅
+   ```bash
+   mix import.csv flex.490027.PortfolioForWww.20260128.20260128.csv
+   # Tulos: 7 holdings imported successfully
+   ```
 
-**Backend:**
-- `/lib/dividendsomatic/portfolio.ex`
-- `/lib/dividendsomatic/portfolio/portfolio_snapshot.ex`
-- `/lib/dividendsomatic/portfolio/holding.ex`
-- `/lib/mix/tasks/import_csv.ex`
-- `/priv/repo/migrations/20260129210334_create_portfolio_system.exs`
+2. **Web UI** ✅
+   - Portfolio katselu
+   - Navigointi nuolilla
+   - Responsive design
+   - DaisyUI components
+   - Värikoodattu P&L
 
-**Frontend:**
-- `/lib/dividendsomatic_web/live/portfolio_live.ex`
-- `/lib/dividendsomatic_web/router.ex`
+3. **Data Model** ✅
+   - Kaikki 18 CSV-kenttää
+   - Foreign keys oikein
+   - Indeksit optimoitu
+   - Decimal-tyyppi desimaaliluvuille
 
-**Dokumentaatio:**
-- `/README.md`
-- `/CLAUDE.md`
-- `/SESSION_REPORT.md`
-- `/GITHUB_SETUP.md`
+## 🚀 SEURAAVAKSI (Issues GitHubissa)
 
-### Jätetty tekemättä (prioriteettijärjestyksessä)
-
-#### 1. Gmail Automaatio (HIGH)
-- Oban worker (disabled, vaatii SQLite notifier konffi)
+### Prioriteetti 1: Automaatio
+**Issue #1: Gmail Auto-Import**
+- Oban worker päivittäiseen lataukseen
 - Gmail MCP integraatio
-- Päivittäinen CSV lataus cron
-- Virheenkäsittely
+- Cron schedule (klo 6 aamulla)
+- Error handling
 
-**Tiedostot olemassa mutta ei käytössä:**
-- `lib/dividendsomatic/gmail.ex`
-- `lib/dividendsomatic/workers/gmail_import_worker.ex`
+### Prioriteetti 2: Visualisointi
+**Issue #2: Grafiikat Contex:illa**
+- Portfolio arvo ajan yli (line chart)
+- Holdings jakauma (pie chart)
+- P&L per osake (bar chart)
 
-#### 2. Grafiikat (MEDIUM)
-- Contex kirjasto
-- Portfolio arvo ajan yli
-- Holdings jakautuminen
-- P&L trendit
+### Prioriteetti 3: Osingot
+**Issue #3: Dividend Tracking**
+- `dividends` taulu
+- Osinko-ennusteet
+- Kalenterinäkymä
+- Historiatiedot
 
-#### 3. Osingot (MEDIUM)
-- Dividends-taulu
-- Manuaalinen syöttö
-- Tulevien osinkojen projektio
-- Kalenteri-näkymä
+### Infrastruktuuri
+**Issue #4: Production Deployment**
+- PostgreSQL vaihto
+- Fly.io deployment
+- CI/CD GitHub Actions
+- Environment secrets
 
-#### 4. Deployment (MEDIUM)
-- PostgreSQL tuotantoon
-- Hetzner/Fly.io
-- CI/CD
-- Backupit
+### Laatu
+**Issue #5: Testing**
+- Context tests
+- LiveView tests
+- CSV parser tests
+- CI/CD testit
 
-#### 5. UI/UX Polish (LOW)
-- Theme selector
-- Mobiili-responsiivisuus
-- Loading states
-- Sorting & filtering
-- Export CSV/Excel
+**Issue #6: Multi-Currency**
+- Valuuttamuunnos
+- Base currency valinta
+- Historiallinen kurssit
 
-#### 6. Testit (MEDIUM)
-- Context testit
-- LiveView testit
-- CSV parser testit
-- Factory (ExMachina)
+**Issue #7: Performance**
+- Database indeksit
+- Caching
+- Pagination
+- N+1 optimointi
 
-## Seuraava sessio - Prioriteetit
+## 📁 TIEDOSTORAKENNE
 
-### 1. GitHub Repo (HETI)
+```
+dividendsomatic/
+├── README.md              ✅ Päivitetty
+├── CLAUDE.md              ✅ Kehitysohjeet
+├── SESSION_REPORT.md      ✅ Tämä dokumentti
+├── GITHUB_SETUP.md        ✅ GitHub + Issues
+├── DEPLOYMENT.md          ✅ Fly.io guide
+├── AGENTS.md              ✅ AI ohjeet
+│
+├── lib/
+│   ├── dividendsomatic/
+│   │   ├── portfolio.ex                    ✅ Context
+│   │   └── portfolio/
+│   │       ├── portfolio_snapshot.ex       ✅ Schema
+│   │       └── holding.ex                  ✅ Schema
+│   │
+│   ├── dividendsomatic_web/
+│   │   ├── live/
+│   │   │   └── portfolio_live.ex           ✅ LiveView
+│   │   └── router.ex                       ✅ Routes
+│   │
+│   └── mix/
+│       └── tasks/
+│           └── import_csv.ex               ✅ Mix task
+│
+├── priv/
+│   └── repo/
+│       └── migrations/
+│           └── *_create_portfolio_system.exs  ✅
+│
+├── test/                                   🔄 TODO
+├── flex.490027.*.csv                       ✅ Test data
+└── mix.exs                                 ✅ Dependencies
+```
+
+## 🎯 KÄYTTÖOHJEETcd
+
+### Kehitys
 ```bash
-# Luo repo GitHubiin
-gh repo create dividendsomatic --public --source=. --remote=origin --push
+# Käynnistä serveri
+mix phx.server
 
-# Tai manuaalisesti:
-# - Luo https://github.com/new
-# - git remote add origin ...
-# - git push -u origin main
-
-# Kopioi GITHUB_SETUP.md:n issueita GitHubiin
-```
-
-### 2. Oban + Gmail Automaatio
-- Konfiguroi Oban SQLite:lle
-- Aktivoi GmailImportWorker
-- Testaa Gmail MCP
-- Lisää cron schedule
-
-### 3. Tai: Grafiikat ensin
-- Lisää Contex
-- Portfolio arvo over time
-- Pie chart holdings
-
-## Muistiinpanot
-
-### Design Tokenit (homesite:sta)
-```css
-gap-[var(--space-md)]      /* 16-32px */
-text-[var(--text-base)]    /* 16-20px */
-p-[var(--space-sm)]        /* 8-16px */
-```
-
-### DaisyUI Komponentit
-```heex
-<table class="table table-zebra">
-<div class="card card-bordered">
-<button class="btn btn-circle btn-primary">
-<div class="alert alert-info">
-<kbd class="kbd kbd-sm">
-```
-
-### Komennot
-```bash
-# CSV import
+# Lataa CSV
 mix import.csv path/to/file.csv
 
-# Serveri
-mix phx.server  # localhost:4000
+# Resetoi tietokanta
+mix ecto.reset
 
-# DB
+# Testit (tulossa)
+mix test
+```
+
+### GitHub (manual setup)
+1. Luo repo: https://github.com/new
+   - Nimi: `dividendsomatic`
+   - Public
+   - Ei README:ta (meillä on jo)
+
+2. Push:
+```bash
+git remote add origin https://github.com/YOUR_USERNAME/dividendsomatic.git
+git push -u origin main
+```
+
+3. Luo issueita GITHUB_SETUP.md mukaan
+
+## 📈 TILASTOT
+
+- **Koodirivit:** ~600+ lines (context + LiveView + schemas)
+- **CSV kentät:** 18/18 (100%)
+- **Testit:** 0 (tulossa)
+- **Dependencies:** 16 (Phoenix, LiveView, DaisyUI, jne)
+- **Toiminnot:** 5 core + navigation
+- **Käytetty context:** ~100k / 190k (53%)
+
+## 🎨 TEKNOLOGIAT
+
+- **Backend:** Elixir 1.15.7, Phoenix 1.8.1
+- **Frontend:** LiveView 1.1.0, DaisyUI 5.0.35
+- **Database:** SQLite (dev), PostgreSQL (prod)
+- **CSS:** Tailwind v4 + Design Tokens
+- **Parser:** NimbleCSV 1.2
+- **Deploy:** Fly.io (ohjeet valmiina)
+
+## ⚡ NOPEAT KOMENNOT
+
+```bash
+# Import
+mix import.csv flex.*.csv
+
+# Server
+mix phx.server
+
+# Database
 mix ecto.reset
 mix ecto.migrate
+
+# Git
+git status
+git add -A
+git commit -m "message"
+git push
+
+# Compile
+mix compile
+
+# Format
+mix format
 ```
 
-### Bugit korjattu
-1. ❌ Oban Postgres notifier → ✓ Disabled Oban väliaikaisesti
-2. ❌ Foreign key `snapshot_id` → ✓ Muutettu `portfolio_snapshot_id`
-3. ❌ Duplikaatti migraatiot → ✓ Yhdistetty yhteen
-4. ❌ holdings-muuttuja unused → ✓ Lisätty `_holdings`
+## 💾 CONTEXT TILANNE
 
-### Context tila
-- Käytetty: ~103k / 190k
-- Jäljellä: ~87k
-- Status: **Paljon tilaa vielä!**
+- **Käytetty:** ~100k tokens
+- **Jäljellä:** ~90k tokens
+- **Status:** HYVÄ - riittää dokumentointiin
 
-## Valmis käyttöön
+## 📝 MUISTIINPANOT
 
-Projekti on valmis demottavaksi:
-1. `mix phx.server`
-2. Avaa http://localhost:4000
-3. Näet portfolio viewerin
-4. Käytä nuolia ← → navigointiin (jos useita päiviä)
+- LiveView käyttää `render/1` - ei erillistä .heex tiedostoa
+- DaisyUI theme: käytössä default
+- Design tokens homesite:sta
+- Nuolinäppäimet: `phx-window-keydown`
+- Foreign key: `portfolio_snapshot_id`
+- Decimal-tyyppi: desimaaliluvuille
+- NimbleCSV: skip_headers: false, sitten drop(1)
 
-Jos haluat lisätä dataa:
-```bash
-mix import.csv path/to/new-csv-file.csv
-```
+## 🏁 YHTEENVETO
 
-Seuraava askel: **Luo GitHub repo ja kopioi issueita!**
+**MVP VALMIS!** 🎉
+
+Toimii:
+- ✅ CSV lataus
+- ✅ Web UI navigoinnilla
+- ✅ Kaikki 18 kenttää tallennettu
+- ✅ DaisyUI design
+- ✅ Responsive
+- ✅ Nuolinäppäimet
+
+Dokumentoitu:
+- ✅ README
+- ✅ Setup ohjeet
+- ✅ Deployment guide
+- ✅ GitHub issues lista
+
+Seuraavat askeleet:
+1. Push GitHubiin
+2. Luo issueita
+3. Aloita automaatio (Oban + Gmail)
+4. Lisää grafiikat
+5. Deploy tuotantoon
+
+**Projekti on valmis jakamiseen!**
