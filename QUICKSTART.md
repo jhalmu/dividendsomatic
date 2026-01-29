@@ -1,188 +1,133 @@
-# Dividendsomatic - Quick Start Guide
+# 🚀 Quickstart - Dividendsomatic
 
-## 🎯 What is this?
+Get up and running in 5 minutes!
 
-Portfolio tracking for Interactive Brokers CSV files. Built with Phoenix LiveView.
+## Prerequisites
 
-## ⚡ 5-Minute Setup
+- Elixir 1.15+
+- Phoenix 1.8+
+- PostgreSQL (production) or SQLite (development)
 
-### 1. Install (MacOS/Linux)
+## Installation
+
 ```bash
-# Clone
+# Clone repo
 git clone https://github.com/jhalmu/dividendsomatic.git
 cd dividendsomatic
 
-# Setup
+# Install dependencies
 mix deps.get
+
+# Setup database
 mix ecto.setup
 
-# Start
-mix phx.server
+# Install assets
+cd assets && npm install && cd ..
 ```
 
-Open: http://localhost:4000
+## Import Your First CSV
 
-### 2. Import Your Data
 ```bash
-# Get CSV from Interactive Brokers:
-# Reports → Flex Queries → Activity Flex → Generate
+# Download your Interactive Brokers "Activity Flex" CSV
+# Then import it:
+mix import.csv path/to/your/flex.csv
 
-# Import
+# Example:
 mix import.csv ~/Downloads/flex.490027.PortfolioForWww.20260128.20260128.csv
 ```
 
-### 3. View Portfolio
-- Navigate: **←** **→** arrow keys
-- See holdings, P&L, totals
+## Start Server
 
-## 📥 Getting Your CSV
-
-### Interactive Brokers Portal
-1. Login → **Reports** → **Flex Queries**
-2. Create new: **Activity Flex**
-3. Select: **Portfolio**
-4. Period: **Daily**
-5. Format: **CSV**
-6. Generate → Download
-
-### CSV Location
-Usually downloads to:
-- MacOS: `~/Downloads/flex.*.csv`
-- Windows: `C:\Users\YourName\Downloads\flex.*.csv`
-
-## 🎮 Basic Usage
-
-### Import Multiple Days
 ```bash
-# Import each day
-mix import.csv flex.20260128.csv
-mix import.csv flex.20260127.csv
-mix import.csv flex.20260126.csv
+mix phx.server
+```
 
-# Or batch import
-for f in ~/Downloads/flex.*.csv; do
-  mix import.csv "$f"
+Visit: **http://localhost:4000**
+
+## Usage
+
+### Navigation
+- **Arrow Left (←)** - Previous day
+- **Arrow Right (→)** - Next day
+- **Click navigation buttons** - Same as arrows
+
+### Features
+- View latest portfolio snapshot
+- See holdings grouped by currency
+- Track unrealized P&L (color-coded)
+- Navigate between different days
+
+## CSV Format
+
+Your CSV should be from Interactive Brokers "Activity Flex" reports with these columns:
+
+```
+ReportDate, CurrencyPrimary, Symbol, Description, SubCategory,
+Quantity, MarkPrice, PositionValue, CostBasisPrice, CostBasisMoney,
+OpenPrice, PercentOfNAV, FifoPnlUnrealized, ListingExchange,
+AssetClass, FXRateToBase, ISIN, FIGI
+```
+
+## Common Tasks
+
+### Reset database
+```bash
+mix ecto.reset
+```
+
+### Import multiple CSV files
+```bash
+for file in ~/Downloads/flex*.csv; do
+  mix import.csv "$file"
 done
 ```
 
-### Navigation
-- **Home** → Latest portfolio
-- **←** Previous day
-- **→** Next day
-
-### View Data
-- Total portfolio value
-- Individual holdings
-- Profit/Loss per position
-- Currency breakdown (EUR/USD)
-
-## 🔧 Troubleshooting
-
-### "Mix not found"
-Install Elixir:
-```bash
-# MacOS
-brew install elixir
-
-# Ubuntu/Debian
-sudo apt-get install elixir
-
-# Or: https://elixir-lang.org/install.html
-```
-
-### "Database error"
-Reset database:
-```bash
-mix ecto.reset
-# Then re-import your CSV files
-```
-
-### "CSV parse error"
-Check:
-- File is Activity Flex format (not another report)
-- File encoding is UTF-8
-- File is not corrupted
-
-### "Port 4000 in use"
-Change port:
-```bash
-PORT=4001 mix phx.server
-```
-
-## 📚 Next Steps
-
-### Automation (Coming Soon)
-- Gmail auto-import
-- Daily schedule
-- Email notifications
-
-### Analytics (Coming Soon)
-- Portfolio charts
-- Asset allocation
-- P&L timeline
-
-### Dividends (Coming Soon)
-- Dividend tracking
-- Yield calculator
-- Future projections
-
-## 🆘 Need Help?
-
-**Check documentation:**
-- [README.md](README.md) - Full documentation
-- [CLAUDE.md](CLAUDE.md) - Development guide
-- [GITHUB_ISSUES.md](GITHUB_ISSUES.md) - Roadmap
-
-**Issues?**
-- Open issue: https://github.com/jhalmu/dividendsomatic/issues
-- Check logs: Look at terminal output
-- Debug: Add `require IEx; IEx.pry` in code
-
-## 💡 Tips
-
-1. **Import Order**: Import oldest → newest for best navigation
-2. **Daily Routine**: Download + import each day
-3. **Backup**: Keep CSV files as backup
-4. **Performance**: SQLite handles 100s of days easily
-
-## ⚙️ Advanced
-
-### Database Location
-```bash
-# Development
-ls dividendsomatic_dev.db
-
-# View tables
-sqlite3 dividendsomatic_dev.db ".tables"
-
-# Count holdings
-sqlite3 dividendsomatic_dev.db "SELECT COUNT(*) FROM holdings;"
-```
-
-### Custom Port
-```bash
-# config/dev.exs
-http: [ip: {127, 0, 0, 1}, port: 4001]
-```
-
-### Add Test Data
+### View all snapshots
 ```elixir
 # In iex -S mix
-alias Dividendsomatic.{Repo, Portfolio}
-csv = File.read!("path/to/flex.csv")
-Portfolio.create_snapshot_from_csv(csv, ~D[2026-01-28])
+Dividendsomatic.Portfolio.list_snapshots()
 ```
 
-## 🚀 Production Deploy
+## Troubleshooting
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for:
-- Fly.io deployment
-- Railway deployment
-- PostgreSQL setup
-- SSL configuration
+### "No Portfolio Data" shown?
+- Make sure you've imported a CSV first
+- Check that CSV has the correct format
+- Run `mix import.csv` again
+
+### Database issues?
+```bash
+mix ecto.reset  # This will recreate everything
+```
+
+### Server not starting?
+```bash
+mix deps.get
+mix compile
+```
+
+## Next Steps
+
+1. ✅ Import your CSV files
+2. ✅ Browse your portfolio
+3. 📊 Set up automated imports (see TODO.md)
+4. 📈 Add charts (see TODO.md)
+5. 💰 Track dividends (see TODO.md)
+
+## Documentation
+
+- [README.md](README.md) - Project overview
+- [CLAUDE.md](CLAUDE.md) - Development guide
+- [TODO.md](TODO.md) - Feature roadmap
+- [SESSION_REPORT.md](SESSION_REPORT.md) - Latest changes
+
+## Need Help?
+
+Check:
+1. [GitHub Issues](https://github.com/jhalmu/dividendsomatic/issues)
+2. CLAUDE.md for technical details
+3. SESSION_REPORT.md for latest updates
 
 ---
 
-**Questions?** Open an issue on GitHub  
-**Feedback?** PRs welcome!  
-**Status:** ✅ MVP Working
+**Happy investing! 📈💰**
