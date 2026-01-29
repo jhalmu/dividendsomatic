@@ -1,133 +1,189 @@
-# 🚀 Quickstart - Dividendsomatic
+# Quick Start Guide
 
-Get up and running in 5 minutes!
-
-## Prerequisites
-
-- Elixir 1.15+
-- Phoenix 1.8+
-- PostgreSQL (production) or SQLite (development)
-
-## Installation
+## 1. Clone & Setup
 
 ```bash
-# Clone repo
-git clone https://github.com/jhalmu/dividendsomatic.git
+# Clone repository (after pushing to GitHub)
+git clone https://github.com/YOUR_USERNAME/dividendsomatic.git
 cd dividendsomatic
 
 # Install dependencies
 mix deps.get
+mix deps.compile
 
 # Setup database
-mix ecto.setup
-
-# Install assets
-cd assets && npm install && cd ..
+mix ecto.create
+mix ecto.migrate
 ```
 
-## Import Your First CSV
+## 2. Import Test Data
 
 ```bash
-# Download your Interactive Brokers "Activity Flex" CSV
-# Then import it:
-mix import.csv path/to/your/flex.csv
+# Import the example CSV (included in repo)
+mix import.csv flex.490027.PortfolioForWww.20260128.20260128.csv
 
-# Example:
-mix import.csv ~/Downloads/flex.490027.PortfolioForWww.20260128.20260128.csv
+# Expected output:
+# Importing snapshot for 2026-01-28...
+# ✓ Successfully imported 7 holdings
 ```
 
-## Start Server
+## 3. Start Server
 
 ```bash
 mix phx.server
 ```
 
-Visit: **http://localhost:4000**
+Visit: http://localhost:4000
 
-## Usage
+## 4. What You'll See
 
-### Navigation
-- **Arrow Left (←)** - Previous day
-- **Arrow Right (→)** - Next day
-- **Click navigation buttons** - Same as arrows
+**Portfolio Snapshot Page:**
+- Summary cards (Holdings, Total Value, P&L)
+- Holdings table with all positions
+- Navigation buttons (← →)
+- Responsive DaisyUI design
 
-### Features
-- View latest portfolio snapshot
-- See holdings grouped by currency
-- Track unrealized P&L (color-coded)
-- Navigate between different days
+**Try:**
+- Click arrow buttons to navigate
+- Use keyboard: ← → keys
+- View different snapshots (if you have multiple)
 
-## CSV Format
+## 5. Import Your Own Data
 
-Your CSV should be from Interactive Brokers "Activity Flex" reports with these columns:
+### Get CSV from Interactive Brokers
 
-```
-ReportDate, CurrencyPrimary, Symbol, Description, SubCategory,
-Quantity, MarkPrice, PositionValue, CostBasisPrice, CostBasisMoney,
-OpenPrice, PercentOfNAV, FifoPnlUnrealized, ListingExchange,
-AssetClass, FXRateToBase, ISIN, FIGI
-```
+1. Log in to Interactive Brokers
+2. Go to Reports → Flex Queries
+3. Create "Activity Flex" query:
+   - Format: CSV
+   - Sections: Portfolio
+   - Include all fields
+4. Download CSV file
 
-## Common Tasks
+### Import to App
 
-### Reset database
 ```bash
-mix ecto.reset
+mix import.csv path/to/your/flex.csv
 ```
 
-### Import multiple CSV files
+### View in Browser
+
+Refresh http://localhost:4000
+
+## Common Commands
+
 ```bash
-for file in ~/Downloads/flex*.csv; do
-  mix import.csv "$file"
-done
+# Development
+mix phx.server              # Start server
+mix format                  # Format code
+mix compile                 # Check for errors
+
+# Database
+mix ecto.create             # Create database
+mix ecto.migrate            # Run migrations
+mix ecto.reset              # Drop + recreate + migrate
+mix ecto.rollback           # Rollback last migration
+
+# Import
+mix import.csv file.csv     # Import CSV
+
+# Testing (coming soon)
+mix test                    # Run tests
+mix test --trace            # Run with detailed output
+
+# Production
+mix release                 # Build release
+mix assets.deploy           # Compile assets for prod
 ```
 
-### View all snapshots
-```elixir
-# In iex -S mix
-Dividendsomatic.Portfolio.list_snapshots()
+## Project Structure
+
 ```
-
-## Troubleshooting
-
-### "No Portfolio Data" shown?
-- Make sure you've imported a CSV first
-- Check that CSV has the correct format
-- Run `mix import.csv` again
-
-### Database issues?
-```bash
-mix ecto.reset  # This will recreate everything
-```
-
-### Server not starting?
-```bash
-mix deps.get
-mix compile
+dividendsomatic/
+├── lib/
+│   ├── dividendsomatic/              # Business logic
+│   │   ├── portfolio.ex              # Main context
+│   │   └── portfolio/                # Schemas
+│   │
+│   ├── dividendsomatic_web/          # Web layer
+│   │   ├── live/                     # LiveView modules
+│   │   │   └── portfolio_live.ex    # Main UI
+│   │   └── router.ex                 # Routes
+│   │
+│   └── mix/tasks/
+│       └── import_csv.ex             # CSV import task
+│
+├── priv/repo/migrations/             # Database migrations
+├── test/                             # Tests
+├── config/                           # Configuration
+└── assets/                           # Frontend assets
 ```
 
 ## Next Steps
 
-1. ✅ Import your CSV files
-2. ✅ Browse your portfolio
-3. 📊 Set up automated imports (see TODO.md)
-4. 📈 Add charts (see TODO.md)
-5. 💰 Track dividends (see TODO.md)
+1. **Import More Data**
+   - Get historical CSV files
+   - Import multiple dates
+   - Test navigation
 
-## Documentation
+2. **Explore Code**
+   - Read API.md for API reference
+   - Check DEVELOPMENT.md for patterns
+   - Review schemas in lib/dividendsomatic/portfolio/
 
-- [README.md](README.md) - Project overview
-- [CLAUDE.md](CLAUDE.md) - Development guide
-- [TODO.md](TODO.md) - Feature roadmap
-- [SESSION_REPORT.md](SESSION_REPORT.md) - Latest changes
+3. **Contribute**
+   - Check GITHUB_SETUP.md for issues
+   - Pick an issue to work on
+   - Submit PR
 
-## Need Help?
+4. **Deploy**
+   - See DEPLOYMENT.md for Fly.io instructions
+   - Switch to PostgreSQL
+   - Set environment variables
 
-Check:
-1. [GitHub Issues](https://github.com/jhalmu/dividendsomatic/issues)
-2. CLAUDE.md for technical details
-3. SESSION_REPORT.md for latest updates
+## Troubleshooting
 
----
+### Port Already in Use
+```bash
+lsof -ti:4000 | xargs kill -9
+mix phx.server
+```
 
-**Happy investing! 📈💰**
+### Database Errors
+```bash
+mix ecto.reset
+mix import.csv file.csv
+```
+
+### Compilation Errors
+```bash
+mix clean
+mix deps.clean --all
+mix deps.get
+mix compile
+```
+
+### Assets Not Loading
+```bash
+cd assets
+npm install
+cd ..
+mix assets.build
+```
+
+## Learn More
+
+- **Phoenix:** https://hexdocs.pm/phoenix
+- **LiveView:** https://hexdocs.pm/phoenix_live_view
+- **Ecto:** https://hexdocs.pm/ecto
+- **DaisyUI:** https://daisyui.com
+
+## Support
+
+- GitHub Issues: Report bugs and request features
+- Documentation: See README.md, API.md, DEVELOPMENT.md
+- Interactive Brokers: https://www.interactivebrokers.com
+
+## License
+
+See LICENSE file
