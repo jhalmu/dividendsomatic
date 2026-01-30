@@ -5,15 +5,33 @@ defmodule Dividendsomatic.MixProject do
     [
       app: :dividendsomatic,
       version: "0.1.0",
-      elixir: "~> 1.15",
+      elixir: "~> 1.16",
       elixirc_paths: elixirc_paths(Mix.env()),
+      elixirc_options: elixirc_options(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
-      listeners: [Phoenix.CodeReloader]
+      listeners: [Phoenix.CodeReloader],
+      dialyzer: dialyzer()
     ]
   end
+
+  defp dialyzer do
+    [
+      plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
+      plt_add_apps: [:mix, :ex_unit],
+      flags: [
+        :error_handling,
+        :underspecs,
+        :unknown
+      ],
+      ignore_warnings: ".dialyzer_ignore.exs"
+    ]
+  end
+
+  # Compiler options
+  defp elixirc_options(_), do: []
 
   # Configuration for the OTP application.
   #
@@ -27,7 +45,7 @@ defmodule Dividendsomatic.MixProject do
 
   def cli do
     [
-      preferred_envs: [precommit: :test]
+      preferred_envs: [precommit: :test, "test.all": :test, "test.full": :test]
     ]
   end
 
@@ -45,12 +63,7 @@ defmodule Dividendsomatic.MixProject do
       {:ecto_sql, "~> 3.13"},
       {:ecto_sqlite3, "~> 0.18"},
       {:phoenix_html, "~> 4.1"},
-      {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.1.0"},
-      {:lazy_html, ">= 0.1.0", only: :test},
-      {:phoenix_live_dashboard, "~> 0.8.3"},
-      {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
-      {:tailwind, "~> 0.3", runtime: Mix.env() == :dev},
       {:heroicons,
        github: "tailwindlabs/heroicons",
        tag: "v2.2.0",
@@ -60,15 +73,37 @@ defmodule Dividendsomatic.MixProject do
        depth: 1},
       {:swoosh, "~> 1.16"},
       {:req, "~> 0.5"},
-      {:telemetry_metrics, "~> 1.0"},
-      {:telemetry_poller, "~> 1.0"},
       {:gettext, "~> 0.26"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
+
+      # Project-specific
       {:nimble_csv, "~> 1.2"},
       {:oban, "~> 2.18"},
-      {:contex, "~> 0.5.0"}
+      {:contex, "~> 0.5.0"},
+      {:timex, "~> 3.7"},
+
+      # Monitoring and Telemetry
+      {:phoenix_live_dashboard, "~> 0.8.7"},
+      {:telemetry_metrics, "~> 1.1"},
+      {:telemetry_poller, "~> 1.3"},
+
+      # Dev and Test
+      # {:phoenix_test, "~> 0.9", only: :test, runtime: false},  # TODO: Compatibility issue with Phoenix 1.8
+      # {:phoenix_test_playwright, "~> 0.10", only: :test, runtime: false},
+      # {:a11y_audit, "~> 0.3", only: :test, runtime: false},
+      {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
+      {:tailwind, "~> 0.4", runtime: Mix.env() == :dev},
+      {:phoenix_live_reload, "~> 1.6", only: :dev},
+      {:tailwind_formatter, "~> 0.4", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.14", only: [:dev, :test], runtime: false},
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+      {:lazy_html, "~> 0.1.8", only: :test},
+      {:tidewave, "~> 0.5", only: :dev},
+      {:igniter, "~> 0.7", only: [:dev, :test]}
     ]
   end
 
@@ -91,7 +126,9 @@ defmodule Dividendsomatic.MixProject do
         "esbuild dividendsomatic --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warning-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: ["compile --warning-as-errors", "deps.unlock --unused", "format", "test"],
+      "test.all": ["precommit", "credo --strict"],
+      "test.full": ["test.all"]
     ]
   end
 end

@@ -201,14 +201,19 @@ mix ecto.reset              # Drop, create, migrate, seed
 # Code quality
 mix compile                 # Check compilation
 mix format                  # Format code
-mix credo                   # Lint (when added)
+mix credo                   # Static analysis
+mix sobelow                 # Security analysis
+mix deps.audit              # Dependency vulnerabilities
+mix dialyzer                # Type checking (slow first run)
 ```
 
-### Testing (TODO)
+### Testing
 ```bash
-mix test
-mix test --cover
-mix test.watch             # Requires mix_test_watch
+mix test                    # Run tests
+mix test --cover            # With coverage
+mix precommit               # compile + unlock + format + test
+mix test.all                # precommit + credo --strict
+mix test.full               # test.all (full suite)
 ```
 
 ### Production (TODO)
@@ -349,6 +354,34 @@ Portfolio.list_snapshots()
 **Decimal:**
 - https://hexdocs.pm/decimal/Decimal.html
 
+## 🤖 Claude Behavioral Rules
+
+### EOD Workflow
+
+When user says **"EOD"**: Execute immediately without confirmation:
+1. Run `mix test.all`
+2. Sync GitHub issues (`gh issue list/close/comment`)
+3. Update SESSION_REPORT.md
+4. Commit & push
+
+Commands allowed without asking: `git`, `gh`, `mix test`, `mix format`, `mix credo`
+
+### Commit Message Format
+```
+[type]: Short description
+
+- Bullet points for changes
+Fixes: #issue
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+Types: feat, fix, docs, test, refactor, chore, security, perf
+
+### Test Failures = STOP
+
+If tests fail, stop and fix before proceeding. Never commit failing code.
+
 ## 🤖 AI Assistant Notes
 
 **Tämä projekti on:**
@@ -376,6 +409,6 @@ Portfolio.list_snapshots()
 
 ---
 
-**Version:** 0.1.0 (MVP)  
-**Last Updated:** 2026-01-29  
+**Version:** 0.1.0 (MVP)
+**Last Updated:** 2026-01-30
 **Status:** 🟢 Fully Functional MVP
