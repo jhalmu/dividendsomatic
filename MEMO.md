@@ -182,6 +182,18 @@ mix import.csv flex.490027.PortfolioForWww.20260128.20260128.csv
 - [ ] Oban disabled (needs SQLite notifier config)
 - [ ] Gmail/Worker files exist but not active (stub code)
 - [ ] Design tokens only partially used
-- [ ] Missing @moduledoc on schemas
+
+## Credo Issues (mix credo --strict)
+
+**Code Readability (6):**
+- [ ] Missing `@moduledoc` - `lib/dividendsomatic/portfolio/portfolio_snapshot.ex`
+- [ ] Missing `@moduledoc` - `lib/dividendsomatic/portfolio/holding.ex`
+- [ ] Alias ordering - `lib/dividendsomatic_web.ex:91`
+- [ ] Alias ordering - `lib/dividendsomatic/portfolio.ex:7-8`
+- [ ] Trailing whitespace - `lib/dividendsomatic/gmail.ex:41`
+
+**Software Design (14):**
+- 11 TODO comments in Gmail/Worker files (expected - Issue #1 placeholders)
+- 3 nested module alias suggestions (core_components.ex, data_case.ex)
 
 ---
