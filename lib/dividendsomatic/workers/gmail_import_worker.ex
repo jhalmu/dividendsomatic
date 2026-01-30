@@ -38,7 +38,7 @@ defmodule Dividendsomatic.Workers.GmailImportWorker do
 
   require Logger
 
-  alias Dividendsomatic.Portfolio
+  # alias Dividendsomatic.Portfolio  # TODO: Uncomment when Gmail MCP is implemented
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
@@ -47,20 +47,15 @@ defmodule Dividendsomatic.Workers.GmailImportWorker do
     # TODO: Implement Gmail MCP integration
     # For now, this is a placeholder that shows the intended flow
 
-    case search_gmail_for_csv_emails() do
-      {:ok, emails} ->
-        import_results =
-          emails
-          |> Enum.map(&download_and_import_csv/1)
-          |> Enum.filter(fn {status, _} -> status == :ok end)
+    {:ok, emails} = search_gmail_for_csv_emails()
 
-        Logger.info("Gmail import completed: #{length(import_results)} snapshots imported")
-        {:ok, %{imported_count: length(import_results)}}
+    import_results =
+      emails
+      |> Enum.map(&download_and_import_csv/1)
+      |> Enum.filter(fn {status, _} -> status == :ok end)
 
-      {:error, reason} ->
-        Logger.error("Gmail search failed: #{inspect(reason)}")
-        {:error, reason}
-    end
+    Logger.info("Gmail import completed: #{length(import_results)} snapshots imported")
+    {:ok, %{imported_count: length(import_results)}}
   end
 
   # Private functions
@@ -108,7 +103,8 @@ defmodule Dividendsomatic.Workers.GmailImportWorker do
     {:skipped, :not_implemented}
   end
 
-  defp extract_report_date(csv_data) do
+  # TODO: Use when Gmail MCP is implemented
+  defp _extract_report_date(csv_data) do
     # Parse first data row to get ReportDate
     [_header | [first_row | _]] = String.split(csv_data, "\n", trim: true)
     [date_str | _] = String.split(first_row, ",", parts: 2)

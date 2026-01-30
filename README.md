@@ -78,8 +78,8 @@ The CSV should have these fields:
 ## 📚 Documentation
 
 - **[CLAUDE.md](CLAUDE.md)** - Development guide for AI assistants
-- **[SESSION_REPORT.md](SESSION_REPORT.md)** - Latest development session notes
-- **[GITHUB_ISSUES.md](GITHUB_ISSUES.md)** - Planned features and issues
+- **[MEMO.md](MEMO.md)** - Session notes and progress tracking
+- **[GitHub Issues](https://github.com/jhalmu/dividendsomatic/issues)** - Planned features and bugs
 
 ## 🏗 Project Structure
 
@@ -101,8 +101,11 @@ lib/
 ## 🧪 Testing
 
 ```bash
-# Run tests (when implemented)
+# Run tests
 mix test
+
+# Full test suite with credo
+mix test.all
 
 # Check compilation
 mix compile
@@ -132,33 +135,24 @@ MIX_ENV=prod mix phx.server
 
 ## 📈 Roadmap
 
-See [GITHUB_ISSUES.md](GITHUB_ISSUES.md) for detailed roadmap.
+See [GitHub Issues](https://github.com/jhalmu/dividendsomatic/issues) for detailed roadmap.
 
 ### Phase 1: MVP ✅
 - CSV import
 - LiveView portfolio viewer
 - Basic navigation
 
-### Phase 2: Automation 🚧
-- Gmail MCP integration
-- Oban scheduling
-- Automatic daily imports
+### Phase 2: Automation
+- [#1](https://github.com/jhalmu/dividendsomatic/issues/1) Gmail MCP integration
+- [#2](https://github.com/jhalmu/dividendsomatic/issues/2) Oban scheduling
 
-### Phase 3: Analytics 🚧
-- Portfolio value charts
-- Asset allocation visualization
-- P&L timeline
+### Phase 3: Analytics
+- [#3](https://github.com/jhalmu/dividendsomatic/issues/3) Portfolio value charts
+- [#4](https://github.com/jhalmu/dividendsomatic/issues/4) Dividend tracking
 
-### Phase 4: Dividends 🚧
-- Dividend tracking
-- Yield calculator
-- Future projections
-
-### Phase 5: Production 🚧
-- PostgreSQL migration
-- Authentication
-- Multi-user support
-- Deployment to Fly.io
+### Phase 4: Production
+- [#5](https://github.com/jhalmu/dividendsomatic/issues/5) Testing suite
+- [#6](https://github.com/jhalmu/dividendsomatic/issues/6) Production deployment
 
 ## 🤝 Contributing
 
@@ -185,4 +179,4 @@ This project was built with the assistance of Claude (Anthropic), using modern P
 
 ---
 
-**Status**: 🟢 MVP Complete | **Version**: 0.1.0 | **Last Updated**: 2026-01-29
+**Status**: 🟢 MVP Complete | **Version**: 0.1.0 | **Last Updated**: 2026-01-30

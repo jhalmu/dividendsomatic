@@ -34,7 +34,7 @@ defmodule Dividendsomatic.Gmail do
       {:ok, [%{id: "abc123", subject: "Activity Flex for 01/28/2026"}]}
   """
   def search_activity_flex_emails(opts \\ []) do
-    max_results = Keyword.get(opts, :max_results, 30)
+    _max_results = Keyword.get(opts, :max_results, 30)
     days_back = Keyword.get(opts, :days_back, 30)
 
     # Build Gmail search query
