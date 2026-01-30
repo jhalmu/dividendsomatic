@@ -93,7 +93,8 @@ Updated project dependencies to match homesite, added dev/test quality tools, cl
 - `MEMO.md` - Created (this file)
 
 ### Test Results
-- Compilation: Pending (server running)
+- 14 tests, 0 failures
+- Credo: 6 readability issues, 12 design suggestions
 
 ---
 
@@ -131,21 +132,23 @@ mix import.csv flex.490027.PortfolioForWww.20260128.20260128.csv
 
 ---
 
+## GitHub Issues
+
+| # | Title | Priority | Status |
+|---|-------|----------|--------|
+| [#1](https://github.com/jhalmu/dividendsomatic/issues/1) | Gmail MCP Integration | HIGH | Open |
+| [#2](https://github.com/jhalmu/dividendsomatic/issues/2) | Oban Background Jobs | HIGH | Open |
+| [#3](https://github.com/jhalmu/dividendsomatic/issues/3) | Charts & Visualizations | MEDIUM | Open |
+| [#4](https://github.com/jhalmu/dividendsomatic/issues/4) | Dividend Tracking | MEDIUM | Open |
+| [#5](https://github.com/jhalmu/dividendsomatic/issues/5) | Testing Suite | MEDIUM | Open |
+| [#6](https://github.com/jhalmu/dividendsomatic/issues/6) | Production Deployment | HIGH | Open |
+| [#7](https://github.com/jhalmu/dividendsomatic/issues/7) | Fix Compiler Warnings | LOW | Open |
+
 ## Technical Debt
 
-- [ ] Tests not written yet
 - [ ] Oban disabled (needs SQLite notifier config)
-- [ ] Gmail/Worker files exist but not active
+- [ ] Gmail/Worker files exist but not active (stub code)
 - [ ] Design tokens only partially used
-
-## GitHub Issues (TODO)
-
-Create these on GitHub:
-- #6 - Gmail Integration (HIGH)
-- #7 - Oban Background Jobs (HIGH)
-- #8 - Charts & Visualizations (MEDIUM)
-- #9 - Dividend Tracking (MEDIUM)
-- #10 - Testing Suite (MEDIUM)
-- #11 - Production Deployment (HIGH)
+- [ ] Missing @moduledoc on schemas
 
 ---
