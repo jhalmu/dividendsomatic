@@ -51,6 +51,39 @@ mix ecto.reset              # Drop + create + migrate
 
 ---
 
+## 2026-01-30 (evening) - GitHub Issues & Cleanup
+
+### Session Summary
+
+Created GitHub issues for project roadmap, fixed compiler warnings, updated README.
+
+### Changes Made
+
+**GitHub Issues Created:**
+- #1 Gmail MCP Integration
+- #2 Oban Background Jobs
+- #3 Charts & Visualizations
+- #4 Dividend Tracking
+- #5 Testing Suite
+- #6 Production Deployment
+- #7 Fix Compiler Warnings (closed)
+
+**Compiler Warnings Fixed (#7):**
+- Unused variable `max_results` -> `_max_results`
+- Unused function `extract_report_date` -> `_extract_report_date`
+- Removed unreachable error clause
+- Commented out unused alias
+
+**README Updated:**
+- Fixed documentation links
+- Added GitHub issue links to roadmap
+- Updated last modified date
+
+### Commits
+- `9da7ce3` - fix: Fix compiler warnings and update README
+
+---
+
 ## 2026-01-30 - Dependencies Update & Cleanup
 
 ### Session Summary
@@ -142,7 +175,7 @@ mix import.csv flex.490027.PortfolioForWww.20260128.20260128.csv
 | [#4](https://github.com/jhalmu/dividendsomatic/issues/4) | Dividend Tracking | MEDIUM | Open |
 | [#5](https://github.com/jhalmu/dividendsomatic/issues/5) | Testing Suite | MEDIUM | Open |
 | [#6](https://github.com/jhalmu/dividendsomatic/issues/6) | Production Deployment | HIGH | Open |
-| [#7](https://github.com/jhalmu/dividendsomatic/issues/7) | Fix Compiler Warnings | LOW | Open |
+| [#7](https://github.com/jhalmu/dividendsomatic/issues/7) | Fix Compiler Warnings | LOW | **Closed** |
 
 ## Technical Debt
 
