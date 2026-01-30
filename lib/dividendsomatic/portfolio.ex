@@ -6,7 +6,7 @@ defmodule Dividendsomatic.Portfolio do
   import Ecto.Query
   alias Dividendsomatic.Repo
   alias Dividendsomatic.Portfolio.{PortfolioSnapshot, Holding}
-  
+
   NimbleCSV.define(CSVParser, separator: ",", escape: "\"")
 
   ## Portfolio Snapshots
@@ -78,7 +78,7 @@ defmodule Dividendsomatic.Portfolio do
         Enum.reduce(snapshot.holdings, Decimal.new("0"), fn holding, acc ->
           Decimal.add(acc, holding.position_value || Decimal.new("0"))
         end)
-      
+
       {Date.to_string(snapshot.report_date), Decimal.to_float(total_value)}
     end)
   end
@@ -109,7 +109,8 @@ defmodule Dividendsomatic.Portfolio do
   defp parse_csv_holdings(csv_data, snapshot_id) do
     csv_data
     |> CSVParser.parse_string(skip_headers: false)
-    |> Enum.drop(1) # Skip header row
+    # Skip header row
+    |> Enum.drop(1)
     |> Enum.map(fn row ->
       create_holding_from_row(row, snapshot_id)
     end)
@@ -145,6 +146,7 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   defp parse_date(nil), do: nil
+
   defp parse_date(value) when is_binary(value) do
     case Date.from_iso8601(value) do
       {:ok, date} -> date
@@ -154,6 +156,7 @@ defmodule Dividendsomatic.Portfolio do
 
   defp parse_decimal(nil), do: Decimal.new("0")
   defp parse_decimal(""), do: Decimal.new("0")
+
   defp parse_decimal(value) when is_binary(value) do
     case Decimal.parse(value) do
       {decimal, _} -> decimal

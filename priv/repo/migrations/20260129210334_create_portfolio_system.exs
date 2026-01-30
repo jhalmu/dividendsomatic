@@ -6,7 +6,7 @@ defmodule Dividendsomatic.Repo.Migrations.CreatePortfolioSystem do
       add :id, :binary_id, primary_key: true
       add :report_date, :date, null: false
       add :raw_csv_data, :text
-      
+
       timestamps()
     end
 
@@ -14,8 +14,10 @@ defmodule Dividendsomatic.Repo.Migrations.CreatePortfolioSystem do
 
     create table(:holdings, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :portfolio_snapshot_id, references(:portfolio_snapshots, type: :binary_id, on_delete: :delete_all), null: false
-      
+
+      add :portfolio_snapshot_id,
+          references(:portfolio_snapshots, type: :binary_id, on_delete: :delete_all), null: false
+
       # All CSV fields
       add :report_date, :date, null: false
       add :currency_primary, :string
@@ -35,7 +37,7 @@ defmodule Dividendsomatic.Repo.Migrations.CreatePortfolioSystem do
       add :fx_rate_to_base, :decimal
       add :isin, :string
       add :figi, :string
-      
+
       timestamps()
     end
 

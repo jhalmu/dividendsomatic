@@ -6,7 +6,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
   @impl true
   def mount(_params, _session, socket) do
     snapshot = Portfolio.get_latest_snapshot()
-    
+
     {:ok, assign_snapshot(socket, snapshot)}
   end
 
@@ -16,6 +16,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
       {:ok, date} ->
         snapshot = Portfolio.get_snapshot_by_date(date)
         {:noreply, assign_snapshot(socket, snapshot)}
+
       _ ->
         {:noreply, socket}
     end
@@ -58,18 +59,20 @@ defmodule DividendsomaticWeb.PortfolioLive do
 
   defp assign_snapshot(socket, snapshot) do
     holdings = snapshot.holdings || []
-    
-    total_value = Enum.reduce(holdings, Decimal.new("0"), fn h, acc ->
-      Decimal.add(acc, h.position_value || Decimal.new("0"))
-    end)
-    
-    total_pnl = Enum.reduce(holdings, Decimal.new("0"), fn h, acc ->
-      Decimal.add(acc, h.fifo_pnl_unrealized || Decimal.new("0"))
-    end)
-    
+
+    total_value =
+      Enum.reduce(holdings, Decimal.new("0"), fn h, acc ->
+        Decimal.add(acc, h.position_value || Decimal.new("0"))
+      end)
+
+    total_pnl =
+      Enum.reduce(holdings, Decimal.new("0"), fn h, acc ->
+        Decimal.add(acc, h.fifo_pnl_unrealized || Decimal.new("0"))
+      end)
+
     has_prev = Portfolio.get_previous_snapshot(snapshot.report_date) != nil
     has_next = Portfolio.get_next_snapshot(snapshot.report_date) != nil
-    
+
     socket
     |> assign(:current_snapshot, snapshot)
     |> assign(:holdings, holdings)
@@ -80,6 +83,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
   end
 
   defp format_decimal(nil), do: "0.00"
+
   defp format_decimal(decimal) do
     decimal
     |> Decimal.round(2)

@@ -6,7 +6,8 @@ defmodule Dividendsomatic.Portfolio.Holding do
   @foreign_key_type :binary_id
 
   schema "holdings" do
-    belongs_to :portfolio_snapshot, Dividendsomatic.Portfolio.PortfolioSnapshot, foreign_key: :portfolio_snapshot_id
+    belongs_to :portfolio_snapshot, Dividendsomatic.Portfolio.PortfolioSnapshot,
+      foreign_key: :portfolio_snapshot_id
 
     field :report_date, :date
     field :currency_primary, :string
