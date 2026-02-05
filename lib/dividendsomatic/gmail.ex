@@ -38,7 +38,7 @@ defmodule Dividendsomatic.Gmail do
     days_back = Keyword.get(opts, :days_back, 30)
 
     # Build Gmail search query
-    # from:noreply@interactivebrokers.com 
+    # from:noreply@interactivebrokers.com
     # subject:"Activity Flex"
     # has:attachment
     # newer_than:30d
@@ -83,12 +83,25 @@ defmodule Dividendsomatic.Gmail do
     # Match pattern: "Activity Flex for MM/DD/YYYY"
     case Regex.run(~r/Activity Flex for (\d{2})\/(\d{2})\/(\d{4})/, subject) do
       [_, month, day, year] ->
-        {:ok, date} =
-          Date.new(String.to_integer(year), String.to_integer(month), String.to_integer(day))
+        case Date.new(
+               String.to_integer(year),
+               String.to_integer(month),
+               String.to_integer(day)
+             ) do
+          {:ok, date} ->
+            date
 
-        date
+          {:error, _} ->
+            Logger.warning("Invalid date in subject: #{subject}, using today's date as fallback")
+
+            Date.utc_today()
+        end
 
       _ ->
+        Logger.warning(
+          "Could not extract date from subject: #{subject}, using today's date as fallback"
+        )
+
         Date.utc_today()
     end
   end

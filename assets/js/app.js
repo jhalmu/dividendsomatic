@@ -25,11 +25,30 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/dividendsomatic"
 import topbar from "../vendor/topbar"
 
+// Custom hooks
+const Hooks = {
+  KeyboardNav: {
+    mounted() {
+      this.handleKeydown = (e) => {
+        if (e.key === "ArrowLeft") {
+          this.pushEvent("navigate", {direction: "prev"})
+        } else if (e.key === "ArrowRight") {
+          this.pushEvent("navigate", {direction: "next"})
+        }
+      }
+      window.addEventListener("keydown", this.handleKeydown)
+    },
+    destroyed() {
+      window.removeEventListener("keydown", this.handleKeydown)
+    }
+  }
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  hooks: {...colocatedHooks, ...Hooks},
 })
 
 // Show progress bar on live navigation and form submits

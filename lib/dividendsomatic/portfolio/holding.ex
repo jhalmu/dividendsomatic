@@ -1,4 +1,10 @@
 defmodule Dividendsomatic.Portfolio.Holding do
+  @moduledoc """
+  Schema representing an individual stock holding within a portfolio snapshot.
+
+  Contains all fields from the Interactive Brokers Activity Flex CSV export,
+  including position details, cost basis, and unrealized P&L.
+  """
   use Ecto.Schema
   import Ecto.Changeset
 

@@ -70,14 +70,11 @@ defmodule DividendsomaticWeb.PortfolioLive do
         Decimal.add(acc, h.fifo_pnl_unrealized || Decimal.new("0"))
       end)
 
-    has_prev = Portfolio.get_previous_snapshot(snapshot.report_date) != nil
-    has_next = Portfolio.get_next_snapshot(snapshot.report_date) != nil
-
     socket
     |> assign(:current_snapshot, snapshot)
     |> assign(:holdings, holdings)
-    |> assign(:has_prev, has_prev)
-    |> assign(:has_next, has_next)
+    |> assign(:has_prev, Portfolio.has_previous_snapshot?(snapshot.report_date))
+    |> assign(:has_next, Portfolio.has_next_snapshot?(snapshot.report_date))
     |> assign(:total_value, total_value)
     |> assign(:total_pnl, total_pnl)
   end
@@ -90,15 +87,32 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> Decimal.to_string()
   end
 
-  defp format_currency(decimal, currency) do
-    "#{format_decimal(decimal)} #{currency}"
-  end
+  defp pnl_badge_class(pnl) do
+    pnl = pnl || Decimal.new("0")
 
-  defp pnl_class(pnl) do
     cond do
-      Decimal.compare(pnl, Decimal.new("0")) == :gt -> "text-success"
-      Decimal.compare(pnl, Decimal.new("0")) == :lt -> "text-error"
+      Decimal.compare(pnl, Decimal.new("0")) == :gt -> "terminal-gain"
+      Decimal.compare(pnl, Decimal.new("0")) == :lt -> "terminal-loss"
       true -> ""
     end
+  end
+
+  defp format_integer(nil), do: "0"
+
+  defp format_integer(decimal) do
+    decimal
+    |> Decimal.round(0)
+    |> Decimal.to_integer()
+    |> Integer.to_string()
+    |> add_thousands_separator()
+  end
+
+  defp add_thousands_separator(str) do
+    str
+    |> String.reverse()
+    |> String.graphemes()
+    |> Enum.chunk_every(3)
+    |> Enum.join(",")
+    |> String.reverse()
   end
 end

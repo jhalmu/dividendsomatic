@@ -1,4 +1,10 @@
 defmodule Dividendsomatic.Portfolio.PortfolioSnapshot do
+  @moduledoc """
+  Schema representing a daily portfolio snapshot from Interactive Brokers.
+
+  Each snapshot captures the state of all holdings on a specific report date,
+  with the original CSV data stored for reference.
+  """
   use Ecto.Schema
   import Ecto.Changeset
 

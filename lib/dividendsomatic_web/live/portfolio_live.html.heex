@@ -1,152 +1,171 @@
-<div class="min-h-screen bg-base-200">
-  <div class="container mx-auto p-[var(--space-md)]">
+<div id="portfolio-view" class="terminal-theme terminal-grid" phx-hook="KeyboardNav">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <%= if @current_snapshot do %>
-      <!-- Header -->
-      <div class="card bg-base-100 shadow-xl mb-[var(--space-md)]">
-        <div class="card-body">
-          <div class="flex justify-between items-center">
+      <!-- Header Card -->
+      <div class="terminal-card terminal-header mb-6 animate-fade-in">
+        <div class="p-6">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 class="text-[var(--text-2xl)] font-bold">Portfolio Snapshot</h1>
-              <p class="text-[var(--text-lg)] text-base-content/70">
-                {Calendar.strftime(@current_snapshot.report_date, "%B %d, %Y")}
+              <h1 class="text-2xl sm:text-3xl font-bold tracking-tight" style="font-family: var(--font-display);">
+                Portfolio Overview
+              </h1>
+              <p class="terminal-date mt-1">
+                {Calendar.strftime(@current_snapshot.report_date, "%Y-%m-%d")}
+                <span class="text-[var(--terminal-muted)] mx-2">•</span>
+                <span class="text-[var(--terminal-muted)]">
+                  {Calendar.strftime(@current_snapshot.report_date, "%A")}
+                </span>
               </p>
             </div>
-            
-<!-- Navigation -->
-            <div class="flex gap-[var(--space-sm)]">
-              <button
-                phx-click="navigate"
-                phx-value-direction="prev"
-                class="btn btn-circle"
-                disabled={!@has_prev}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke-width="1.5"
-                  stroke="currentColor"
-                  class="w-6 h-6"
+
+            <!-- Navigation -->
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-[var(--terminal-muted)] uppercase tracking-wider hidden sm:block">
+                Navigate
+              </span>
+              <div class="flex gap-2">
+                <button
+                  phx-click="navigate"
+                  phx-value-direction="prev"
+                  class="terminal-nav-btn"
+                  disabled={!@has_prev}
+                  title="Previous snapshot (←)"
                 >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M15.75 19.5L8.25 12l7.5-7.5"
-                  />
-                </svg>
-              </button>
-
-              <button
-                phx-click="navigate"
-                phx-value-direction="next"
-                class="btn btn-circle"
-                disabled={!@has_next}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke-width="1.5"
-                  stroke="currentColor"
-                  class="w-6 h-6"
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                  </svg>
+                </button>
+                <button
+                  phx-click="navigate"
+                  phx-value-direction="next"
+                  class="terminal-nav-btn"
+                  disabled={!@has_next}
+                  title="Next snapshot (→)"
                 >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M8.25 4.5l7.5 7.5-7.5 7.5"
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
-          
-<!-- Summary Stats -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-[var(--space-md)] mt-[var(--space-md)]">
-            <div class="stat bg-base-200 rounded-box">
-              <div class="stat-title">Holdings</div>
-              <div class="stat-value text-primary">{length(@holdings)}</div>
-            </div>
-
-            <div class="stat bg-base-200 rounded-box">
-              <div class="stat-title">Total Value</div>
-              <div class="stat-value text-[var(--text-xl)]">{format_decimal(@total_value)}</div>
-            </div>
-
-            <div class="stat bg-base-200 rounded-box">
-              <div class="stat-title">Unrealized P&L</div>
-              <div class={"stat-value text-[var(--text-xl)] #{pnl_class(@total_pnl)}"}>
-                {format_decimal(@total_pnl)}
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
         </div>
       </div>
-      
-<!-- Holdings Table -->
-      <div class="card bg-base-100 shadow-xl">
-        <div class="card-body">
-          <h2 class="card-title">Holdings</h2>
 
-          <div class="overflow-x-auto">
-            <table class="table table-zebra">
-              <thead>
-                <tr>
-                  <th>Symbol</th>
-                  <th>Description</th>
-                  <th>Quantity</th>
-                  <th>Price</th>
-                  <th>Value</th>
-                  <th>Cost Basis</th>
-                  <th>P&L</th>
-                  <th>% of NAV</th>
-                </tr>
-              </thead>
-              <tbody>
-                <%= for holding <- @holdings do %>
-                  <tr>
-                    <td class="font-bold">{holding.symbol}</td>
-                    <td class="text-sm text-base-content/70">{holding.description}</td>
-                    <td>{format_decimal(holding.quantity)}</td>
-                    <td>{format_currency(holding.mark_price, holding.currency_primary)}</td>
-                    <td>{format_currency(holding.position_value, holding.currency_primary)}</td>
-                    <td>{format_currency(holding.cost_basis_money, holding.currency_primary)}</td>
-                    <td class={pnl_class(holding.fifo_pnl_unrealized)}>
-                      {format_currency(holding.fifo_pnl_unrealized, holding.currency_primary)}
-                    </td>
-                    <td>{format_decimal(holding.percent_of_nav)}%</td>
-                  </tr>
-                <% end %>
-              </tbody>
-            </table>
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div class="terminal-stat animate-fade-in animate-delay-1">
+          <div class="terminal-stat-label">Holdings</div>
+          <div class="terminal-stat-value">{length(@holdings)}</div>
+        </div>
+
+        <div class="terminal-stat animate-fade-in animate-delay-2">
+          <div class="terminal-stat-label">Total Value</div>
+          <div class="terminal-stat-value">
+            €{format_decimal(@total_value)}
+          </div>
+        </div>
+
+        <div class="terminal-stat animate-fade-in animate-delay-3">
+          <div class="terminal-stat-label">Unrealized P&L</div>
+          <div class={"terminal-stat-value #{if Decimal.compare(@total_pnl, Decimal.new("0")) == :lt, do: "loss", else: "gain"}"}>
+            <%= if Decimal.compare(@total_pnl, Decimal.new("0")) != :lt do %>+<% end %>{format_decimal(@total_pnl)}
           </div>
         </div>
       </div>
+
+      <!-- Holdings Table -->
+      <div class="terminal-card animate-fade-in" style="animation-delay: 0.4s; opacity: 0;">
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold" style="font-family: var(--font-display);">
+              Holdings
+            </h2>
+            <span class="text-xs text-[var(--terminal-muted)] uppercase tracking-wider">
+              {length(@holdings)} positions
+            </span>
+          </div>
+
+          <div class="overflow-x-auto -mx-6">
+            <div class="px-6 min-w-[800px]">
+              <table class="terminal-table">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Description</th>
+                    <th class="text-right">Qty</th>
+                    <th class="text-right">Price</th>
+                    <th class="text-right">Value</th>
+                    <th class="text-right">Cost Basis</th>
+                    <th class="text-right">P&L</th>
+                    <th class="text-right">% NAV</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <%= for holding <- @holdings do %>
+                    <tr>
+                      <td>
+                        <span class="terminal-symbol">{holding.symbol}</span>
+                      </td>
+                      <td>
+                        <span class="terminal-description">{holding.description}</span>
+                      </td>
+                      <td class="terminal-number">
+                        {format_integer(holding.quantity)}
+                      </td>
+                      <td class="terminal-number">
+                        {format_decimal(holding.mark_price)}
+                        <span class="text-[var(--terminal-muted)] text-xs ml-1">{holding.currency_primary}</span>
+                      </td>
+                      <td class="terminal-number font-medium">
+                        {format_decimal(holding.position_value)}
+                      </td>
+                      <td class="terminal-number text-[var(--terminal-muted)]">
+                        {format_decimal(holding.cost_basis_money)}
+                      </td>
+                      <td class="terminal-number">
+                        <span class={pnl_badge_class(holding.fifo_pnl_unrealized)}>
+                          <%= if Decimal.compare(holding.fifo_pnl_unrealized || Decimal.new("0"), Decimal.new("0")) != :lt do %>+<% end %>{format_decimal(holding.fifo_pnl_unrealized)}
+                        </span>
+                      </td>
+                      <td class="terminal-number">
+                        <span class="text-[var(--terminal-muted)]">{format_decimal(holding.percent_of_nav)}%</span>
+                        <span class="terminal-percent-bar">
+                          <span class="terminal-percent-fill" style={"width: #{min(Decimal.to_float(holding.percent_of_nav || Decimal.new("0")), 100)}%"}></span>
+                        </span>
+                      </td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer hint -->
+      <div class="mt-6 text-center text-xs text-[var(--terminal-muted)]">
+        <kbd class="px-2 py-1 bg-[var(--terminal-elevated)] border border-[var(--terminal-border)] rounded text-[10px]">←</kbd>
+        <kbd class="px-2 py-1 bg-[var(--terminal-elevated)] border border-[var(--terminal-border)] rounded text-[10px] ml-1">→</kbd>
+        <span class="ml-2">to navigate between snapshots</span>
+      </div>
+
     <% else %>
       <!-- Empty State -->
-      <div class="card bg-base-100 shadow-xl">
-        <div class="card-body text-center">
-          <h2 class="text-[var(--text-2xl)] font-bold">No Portfolio Data</h2>
-          <p class="text-base-content/70">Import a CSV file to get started</p>
-          <div class="mt-[var(--space-md)]">
-            <code class="bg-base-200 p-[var(--space-sm)] rounded">
-              mix import.csv path/to/file.csv
-            </code>
+      <div class="terminal-card animate-fade-in">
+        <div class="terminal-empty">
+          <div class="terminal-empty-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-10 h-10 text-[var(--terminal-muted)]">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+            </svg>
           </div>
+          <h2>No Portfolio Data</h2>
+          <p>Import a CSV file from Interactive Brokers to get started</p>
+          <code class="terminal-code">
+            mix import.csv path/to/file.csv
+          </code>
         </div>
       </div>
     <% end %>
   </div>
 </div>
-
-<!-- Keyboard Navigation -->
-<script>
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowLeft') {
-      const prevBtn = document.querySelector('[phx-value-direction="prev"]');
-      if (prevBtn && !prevBtn.disabled) prevBtn.click();
-    } else if (e.key === 'ArrowRight') {
-      const nextBtn = document.querySelector('[phx-value-direction="next"]');
-      if (nextBtn && !nextBtn.disabled) nextBtn.click();
-    }
-  });
-</script>

@@ -87,7 +87,7 @@ defmodule Dividendsomatic.Workers.GmailImportWorker do
     # with {:ok, attachment} <- fetch_csv_attachment(email),
     #      {:ok, csv_data} <- decode_attachment(attachment),
     #      report_date <- extract_report_date(csv_data),
-    #      {:ok, {:ok, _snapshot}} <- Portfolio.create_snapshot_from_csv(csv_data, report_date) do
+    #      {:ok, _snapshot} <- Portfolio.create_snapshot_from_csv(csv_data, report_date) do
     #   Logger.info("Successfully imported snapshot for #{report_date}")
     #   {:ok, report_date}
     # else
@@ -101,17 +101,5 @@ defmodule Dividendsomatic.Workers.GmailImportWorker do
 
     Logger.warning("CSV import not yet implemented for email: #{inspect(email)}")
     {:skipped, :not_implemented}
-  end
-
-  # TODO: Use when Gmail MCP is implemented
-  defp _extract_report_date(csv_data) do
-    # Parse first data row to get ReportDate
-    [_header | [first_row | _]] = String.split(csv_data, "\n", trim: true)
-    [date_str | _] = String.split(first_row, ",", parts: 2)
-
-    case Date.from_iso8601(String.trim(date_str, "\"")) do
-      {:ok, date} -> date
-      _ -> Date.utc_today()
-    end
   end
 end

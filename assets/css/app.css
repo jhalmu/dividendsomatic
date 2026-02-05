@@ -127,3 +127,358 @@
 }
 
 /* This file is for your main application CSS */
+
+/* ============================================
+   DIVIDENDSOMATIC - Financial Terminal Theme
+   ============================================ */
+
+/* Import distinctive fonts */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+/* Terminal-inspired color palette */
+:root {
+  --terminal-bg: #0a0e17;
+  --terminal-surface: #111827;
+  --terminal-elevated: #1a2234;
+  --terminal-border: #2d3748;
+  --terminal-text: #e2e8f0;
+  --terminal-muted: #64748b;
+  --terminal-accent: #3b82f6;
+
+  /* P&L Colors - Sharp and confident */
+  --gain: #10b981;
+  --gain-bg: rgba(16, 185, 129, 0.1);
+  --loss: #ef4444;
+  --loss-bg: rgba(239, 68, 68, 0.1);
+
+  /* Fonts */
+  --font-display: 'Outfit', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* Base terminal styling */
+.terminal-theme {
+  background: var(--terminal-bg);
+  background-image:
+    radial-gradient(ellipse at top, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
+    linear-gradient(180deg, var(--terminal-bg) 0%, #0d1220 100%);
+  color: var(--terminal-text);
+  font-family: var(--font-display);
+  min-height: 100vh;
+}
+
+/* Subtle grid pattern overlay */
+.terminal-grid {
+  background-image:
+    linear-gradient(rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Card styling */
+.terminal-card {
+  background: var(--terminal-surface);
+  border: 1px solid var(--terminal-border);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.3),
+    0 2px 4px -2px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.terminal-card-elevated {
+  background: var(--terminal-elevated);
+}
+
+/* Header with gradient accent */
+.terminal-header {
+  background: linear-gradient(135deg, var(--terminal-surface) 0%, var(--terminal-elevated) 100%);
+  border-bottom: 1px solid var(--terminal-border);
+  position: relative;
+  overflow: hidden;
+}
+
+.terminal-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--terminal-accent), #8b5cf6, var(--terminal-accent));
+  background-size: 200% 100%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Stats styling */
+.terminal-stat {
+  background: var(--terminal-elevated);
+  border: 1px solid var(--terminal-border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.terminal-stat:hover {
+  border-color: var(--terminal-accent);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.1);
+}
+
+.terminal-stat-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--terminal-muted);
+  margin-bottom: 0.5rem;
+}
+
+.terminal-stat-value {
+  font-family: var(--font-mono);
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--terminal-text);
+}
+
+.terminal-stat-value.gain {
+  color: var(--gain);
+}
+
+.terminal-stat-value.loss {
+  color: var(--loss);
+}
+
+/* Table styling */
+.terminal-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.terminal-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.terminal-table th {
+  background: var(--terminal-elevated);
+  border-bottom: 2px solid var(--terminal-border);
+  padding: 0.875rem 1rem;
+  text-align: left;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--terminal-muted);
+  white-space: nowrap;
+}
+
+.terminal-table th:first-child {
+  border-radius: 8px 0 0 0;
+}
+
+.terminal-table th:last-child {
+  border-radius: 0 8px 0 0;
+}
+
+.terminal-table td {
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--terminal-border);
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+
+.terminal-table tbody tr:hover td {
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.terminal-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Symbol column - distinctive */
+.terminal-symbol {
+  font-weight: 700;
+  color: var(--terminal-accent);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+/* Description - muted */
+.terminal-description {
+  font-family: var(--font-display);
+  color: var(--terminal-muted);
+  font-size: 0.8rem;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Numeric columns - right aligned */
+.terminal-number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* P&L styling with background glow */
+.terminal-gain {
+  color: var(--gain);
+  background: var(--gain-bg);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.terminal-loss {
+  color: var(--loss);
+  background: var(--loss-bg);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+/* Navigation buttons */
+.terminal-nav-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--terminal-elevated);
+  border: 1px solid var(--terminal-border);
+  border-radius: 8px;
+  color: var(--terminal-text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.terminal-nav-btn:hover:not(:disabled) {
+  background: var(--terminal-accent);
+  border-color: var(--terminal-accent);
+  color: white;
+  transform: scale(1.05);
+}
+
+.terminal-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Date display */
+.terminal-date {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  color: var(--terminal-muted);
+  letter-spacing: 0.02em;
+}
+
+/* Empty state */
+.terminal-empty {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.terminal-empty-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 1.5rem;
+  background: var(--terminal-elevated);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--terminal-border);
+}
+
+.terminal-empty h2 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.terminal-empty p {
+  color: var(--terminal-muted);
+  margin-bottom: 1.5rem;
+}
+
+.terminal-code {
+  font-family: var(--font-mono);
+  background: var(--terminal-bg);
+  border: 1px solid var(--terminal-border);
+  padding: 0.75rem 1.25rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: var(--terminal-accent);
+  display: inline-block;
+}
+
+/* Percentage bar (for % of NAV) */
+.terminal-percent-bar {
+  width: 60px;
+  height: 4px;
+  background: var(--terminal-border);
+  border-radius: 2px;
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 0.5rem;
+}
+
+.terminal-percent-fill {
+  height: 100%;
+  background: var(--terminal-accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* Animations */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in-up 0.4s ease-out forwards;
+}
+
+.animate-delay-1 { animation-delay: 0.1s; opacity: 0; }
+.animate-delay-2 { animation-delay: 0.2s; opacity: 0; }
+.animate-delay-3 { animation-delay: 0.3s; opacity: 0; }
+
+/* Scrollbar styling */
+.terminal-theme ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.terminal-theme ::-webkit-scrollbar-track {
+  background: var(--terminal-bg);
+}
+
+.terminal-theme ::-webkit-scrollbar-thumb {
+  background: var(--terminal-border);
+  border-radius: 4px;
+}
+
+.terminal-theme ::-webkit-scrollbar-thumb:hover {
+  background: var(--terminal-muted);
+}

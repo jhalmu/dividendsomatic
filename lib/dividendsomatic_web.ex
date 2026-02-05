@@ -88,8 +88,8 @@ defmodule DividendsomaticWeb do
       import DividendsomaticWeb.CoreComponents
 
       # Common modules used in templates
-      alias Phoenix.LiveView.JS
       alias DividendsomaticWeb.Layouts
+      alias Phoenix.LiveView.JS
 
       # Routes generation with the ~p sigil
       unquote(verified_routes())

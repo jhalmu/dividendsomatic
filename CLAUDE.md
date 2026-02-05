@@ -20,19 +20,19 @@ Portfolio ja osinko-seurantajärjestelmä Interactive Brokers CSV-tiedostoille. 
 ## 🛠 Tekniset Valinnat
 
 ### Core Stack
-- **Phoenix 1.8.1** + **LiveView 1.1.0**
-- **Ecto 3.13** + **SQLite** (dev) / **PostgreSQL** (prod)
-- **NimbleCSV 1.2** - CSV parsing
+- **Phoenix 1.8.3** + **LiveView 1.1.22**
+- **Ecto 3.13.4** + **SQLite** (dev) / **PostgreSQL** (prod)
+- **NimbleCSV 1.3** - CSV parsing
 - **DaisyUI 5.0** - UI components
 - **Tailwind CSS v4** - Styling with design tokens
 
 ### Libraries
-- `phoenix` ~> 1.8.1
-- `phoenix_live_view` ~> 1.1.0
-- `ecto_sql` ~> 3.13
-- `ecto_sqlite3` ~> 0.18 (dev)
-- `nimble_csv` ~> 1.2
-- `decimal` ~> 2.0 (for precise money calculations)
+- `phoenix` ~> 1.8.3
+- `phoenix_live_view` ~> 1.1.22
+- `ecto_sql` ~> 3.13.4
+- `ecto_sqlite3` ~> 0.22.0
+- `nimble_csv` ~> 1.3.0
+- `decimal` ~> 2.3 (for precise money calculations)
 
 ## 📁 Tiedostorakenne
 
@@ -117,8 +117,8 @@ get_previous_snapshot(Date.t()) :: PortfolioSnapshot.t() | nil
 get_next_snapshot(Date.t()) :: PortfolioSnapshot.t() | nil
 
 # Import
-create_snapshot_from_csv(csv_data :: String.t(), report_date :: Date.t()) 
-  :: {:ok, {:ok, PortfolioSnapshot.t()}} | {:error, term()}
+create_snapshot_from_csv(csv_data :: String.t(), report_date :: Date.t())
+  :: {:ok, PortfolioSnapshot.t()} | {:error, term()}
 
 # Listing
 list_snapshots() :: [PortfolioSnapshot.t()]

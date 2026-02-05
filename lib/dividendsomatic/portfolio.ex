@@ -4,8 +4,10 @@ defmodule Dividendsomatic.Portfolio do
   """
 
   import Ecto.Query
+  require Logger
+
+  alias Dividendsomatic.Portfolio.{Holding, PortfolioSnapshot}
   alias Dividendsomatic.Repo
-  alias Dividendsomatic.Portfolio.{PortfolioSnapshot, Holding}
 
   NimbleCSV.define(CSVParser, separator: ",", escape: "\"")
 
@@ -64,6 +66,26 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   @doc """
+  Checks if a snapshot exists before the given date.
+  More efficient than get_previous_snapshot when you only need to know existence.
+  """
+  def has_previous_snapshot?(date) do
+    PortfolioSnapshot
+    |> where([s], s.report_date < ^date)
+    |> Repo.exists?()
+  end
+
+  @doc """
+  Checks if a snapshot exists after the given date.
+  More efficient than get_next_snapshot when you only need to know existence.
+  """
+  def has_next_snapshot?(date) do
+    PortfolioSnapshot
+    |> where([s], s.report_date > ^date)
+    |> Repo.exists?()
+  end
+
+  @doc """
   Returns snapshot data for charting (date and total value).
   """
   def get_chart_data(limit \\ 30) do
@@ -85,23 +107,29 @@ defmodule Dividendsomatic.Portfolio do
 
   @doc """
   Creates a portfolio snapshot with holdings from CSV data.
+
+  Returns `{:ok, snapshot}` on success, `{:error, reason}` on failure.
   """
   def create_snapshot_from_csv(csv_data, report_date) do
     Repo.transaction(fn ->
-      # Create snapshot
-      {:ok, snapshot} =
-        %PortfolioSnapshot{}
-        |> PortfolioSnapshot.changeset(%{
-          report_date: report_date,
-          raw_csv_data: csv_data
-        })
-        |> Repo.insert()
+      case create_snapshot(report_date, csv_data) do
+        {:ok, snapshot} ->
+          parse_csv_holdings(csv_data, snapshot.id)
+          snapshot
 
-      # Parse and create holdings
-      _holdings = parse_csv_holdings(csv_data, snapshot.id)
-
-      {:ok, snapshot}
+        {:error, changeset} ->
+          Repo.rollback(changeset)
+      end
     end)
+  end
+
+  defp create_snapshot(report_date, csv_data) do
+    %PortfolioSnapshot{}
+    |> PortfolioSnapshot.changeset(%{
+      report_date: report_date,
+      raw_csv_data: csv_data
+    })
+    |> Repo.insert()
   end
 
   ## Private Functions
@@ -159,8 +187,12 @@ defmodule Dividendsomatic.Portfolio do
 
   defp parse_decimal(value) when is_binary(value) do
     case Decimal.parse(value) do
-      {decimal, _} -> decimal
-      :error -> Decimal.new("0")
+      {decimal, _} ->
+        decimal
+
+      :error ->
+        Logger.warning("Failed to parse decimal value: #{inspect(value)}, defaulting to 0")
+        Decimal.new("0")
     end
   end
 end

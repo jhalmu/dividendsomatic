@@ -13,51 +13,51 @@ defmodule Dividendsomatic.PortfolioTest do
     @valid_date ~D[2026-01-28]
 
     test "create_snapshot_from_csv/2 creates snapshot with holdings" do
-      assert {:ok, {:ok, snapshot}} = Portfolio.create_snapshot_from_csv(@valid_csv, @valid_date)
+      assert {:ok, snapshot} = Portfolio.create_snapshot_from_csv(@valid_csv, @valid_date)
       assert snapshot.report_date == @valid_date
       assert length(Repo.preload(snapshot, :holdings).holdings) == 2
     end
 
     test "get_latest_snapshot/0 returns most recent snapshot" do
-      {:ok, {:ok, _}} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-27])
-      {:ok, {:ok, latest}} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-28])
+      {:ok, _} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-27])
+      {:ok, latest} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-28])
 
       result = Portfolio.get_latest_snapshot()
       assert result.report_date == latest.report_date
     end
 
     test "get_snapshot_by_date/1 finds specific snapshot" do
-      {:ok, {:ok, snapshot}} = Portfolio.create_snapshot_from_csv(@valid_csv, @valid_date)
+      {:ok, snapshot} = Portfolio.create_snapshot_from_csv(@valid_csv, @valid_date)
 
       result = Portfolio.get_snapshot_by_date(@valid_date)
       assert result.id == snapshot.id
     end
 
     test "get_previous_snapshot/1 returns earlier snapshot" do
-      {:ok, {:ok, earlier}} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-27])
-      {:ok, {:ok, _later}} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-28])
+      {:ok, earlier} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-27])
+      {:ok, _later} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-28])
 
       result = Portfolio.get_previous_snapshot(~D[2026-01-28])
       assert result.id == earlier.id
     end
 
     test "get_next_snapshot/1 returns later snapshot" do
-      {:ok, {:ok, _earlier}} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-27])
-      {:ok, {:ok, later}} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-28])
+      {:ok, _earlier} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-27])
+      {:ok, later} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-28])
 
       result = Portfolio.get_next_snapshot(~D[2026-01-27])
       assert result.id == later.id
     end
 
     test "get_previous_snapshot/1 returns nil when no earlier snapshot" do
-      {:ok, {:ok, _}} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-28])
+      {:ok, _} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-28])
 
       result = Portfolio.get_previous_snapshot(~D[2026-01-28])
       assert is_nil(result)
     end
 
     test "get_next_snapshot/1 returns nil when no later snapshot" do
-      {:ok, {:ok, _}} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-28])
+      {:ok, _} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-28])
 
       result = Portfolio.get_next_snapshot(~D[2026-01-28])
       assert is_nil(result)
@@ -71,7 +71,7 @@ defmodule Dividendsomatic.PortfolioTest do
     """
 
     test "holdings have correct decimal values" do
-      {:ok, {:ok, snapshot}} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-28])
+      {:ok, snapshot} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-28])
       [holding] = Repo.preload(snapshot, :holdings).holdings
 
       assert Decimal.equal?(holding.quantity, Decimal.new("1000"))
@@ -81,7 +81,7 @@ defmodule Dividendsomatic.PortfolioTest do
     end
 
     test "holdings have correct string values" do
-      {:ok, {:ok, snapshot}} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-28])
+      {:ok, snapshot} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-28])
       [holding] = Repo.preload(snapshot, :holdings).holdings
 
       assert holding.symbol == "KESKOB"
