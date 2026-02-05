@@ -183,15 +183,19 @@
   background-size: 32px 32px;
 }
 
-/* Branding header */
+/* Branding header - positioned behind content */
 .terminal-branding {
-  text-align: center;
-  padding: 1rem 0;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+  pointer-events: none;
 }
 
 .terminal-brand-name {
   font-family: var(--font-brand);
-  font-size: 18rem;
+  font-size: 10rem;
   font-weight: 400;
   color: var(--terminal-elevated);
   letter-spacing: 0.05em;
@@ -199,11 +203,12 @@
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
   margin: 0;
   line-height: 1;
+  white-space: nowrap;
 }
 
 @media (max-width: 640px) {
   .terminal-brand-name {
-    font-size: 6rem;
+    font-size: 4rem;
   }
 }
 
@@ -217,6 +222,9 @@
     0 4px 6px -1px rgba(0, 0, 0, 0.3),
     0 2px 4px -2px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  position: relative;
+  z-index: 1;
+  opacity: 0.9;
 }
 
 .terminal-card-elevated {
@@ -257,6 +265,8 @@
   position: relative;
   overflow: hidden;
   transition: all 0.2s ease;
+  z-index: 1;
+  opacity: 0.9;
 }
 
 .terminal-stat:hover {
@@ -550,6 +560,9 @@
   border: 1px solid var(--terminal-border);
   border-radius: 12px;
   padding: 1.5rem;
+  position: relative;
+  z-index: 1;
+  opacity: 0.9;
 }
 
 .terminal-chart-title {
@@ -608,6 +621,9 @@
   background: var(--terminal-surface);
   border: 1px solid var(--terminal-border);
   border-radius: 12px;
+  position: relative;
+  z-index: 1;
+  opacity: 0.9;
 }
 
 .terminal-nav-date {
