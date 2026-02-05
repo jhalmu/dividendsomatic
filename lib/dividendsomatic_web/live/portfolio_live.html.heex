@@ -1,58 +1,104 @@
 <div id="portfolio-view" class="terminal-theme terminal-grid" phx-hook="KeyboardNav">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <%= if @current_snapshot do %>
-      <!-- Header Card -->
-      <div class="terminal-card terminal-header mb-6 animate-fade-in">
-        <div class="p-6">
-          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 class="text-2xl sm:text-3xl font-bold tracking-tight" style="font-family: var(--font-display);">
-                Portfolio Overview
-              </h1>
-              <p class="terminal-date mt-1">
-                {Calendar.strftime(@current_snapshot.report_date, "%Y-%m-%d")}
-                <span class="text-[var(--terminal-muted)] mx-2">•</span>
-                <span class="text-[var(--terminal-muted)]">
-                  {Calendar.strftime(@current_snapshot.report_date, "%A")}
-                </span>
-              </p>
-            </div>
+      <!-- Top Navigation Bar -->
+      <div class="terminal-nav-bar mb-6 animate-fade-in">
+        <button
+          phx-click="navigate"
+          phx-value-direction="first"
+          class="terminal-nav-btn-sm"
+          disabled={!@has_prev}
+          title="First snapshot"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="2"
+            stroke="currentColor"
+            class="w-5 h-5"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5"
+            />
+          </svg>
+        </button>
 
-            <!-- Navigation -->
-            <div class="flex items-center gap-3">
-              <span class="text-xs text-[var(--terminal-muted)] uppercase tracking-wider hidden sm:block">
-                Navigate
-              </span>
-              <div class="flex gap-2">
-                <button
-                  phx-click="navigate"
-                  phx-value-direction="prev"
-                  class="terminal-nav-btn"
-                  disabled={!@has_prev}
-                  title="Previous snapshot (←)"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                  </svg>
-                </button>
-                <button
-                  phx-click="navigate"
-                  phx-value-direction="next"
-                  class="terminal-nav-btn"
-                  disabled={!@has_next}
-                  title="Next snapshot (→)"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                  </svg>
-                </button>
-              </div>
-            </div>
+        <button
+          phx-click="navigate"
+          phx-value-direction="prev"
+          class="terminal-nav-btn"
+          disabled={!@has_prev}
+          title="Previous snapshot (←)"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="2.5"
+            stroke="currentColor"
+            class="w-6 h-6"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+          </svg>
+        </button>
+
+        <div class="terminal-nav-date">
+          <div class="terminal-nav-date-main">
+            {Calendar.strftime(@current_snapshot.report_date, "%Y-%m-%d")}
+          </div>
+          <div class="terminal-nav-date-sub">
+            {Calendar.strftime(@current_snapshot.report_date, "%A")}
+            <span class="mx-2">•</span> Day {@snapshot_position} of {@total_snapshots}
           </div>
         </div>
-      </div>
 
-      <!-- Stats Grid -->
+        <button
+          phx-click="navigate"
+          phx-value-direction="next"
+          class="terminal-nav-btn"
+          disabled={!@has_next}
+          title="Next snapshot (→)"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="2.5"
+            stroke="currentColor"
+            class="w-6 h-6"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+          </svg>
+        </button>
+
+        <button
+          phx-click="navigate"
+          phx-value-direction="last"
+          class="terminal-nav-btn-sm"
+          disabled={!@has_next}
+          title="Latest snapshot"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="2"
+            stroke="currentColor"
+            class="w-5 h-5"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M11.25 4.5l7.5 7.5-7.5 7.5m-6-15l7.5 7.5-7.5 7.5"
+            />
+          </svg>
+        </button>
+      </div>
+      
+<!-- Stats Grid -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div class="terminal-stat animate-fade-in animate-delay-1">
           <div class="terminal-stat-label">Holdings</div>
@@ -69,12 +115,81 @@
         <div class="terminal-stat animate-fade-in animate-delay-3">
           <div class="terminal-stat-label">Unrealized P&L</div>
           <div class={"terminal-stat-value #{if Decimal.compare(@total_pnl, Decimal.new("0")) == :lt, do: "loss", else: "gain"}"}>
-            <%= if Decimal.compare(@total_pnl, Decimal.new("0")) != :lt do %>+<% end %>{format_decimal(@total_pnl)}
+            <%= if Decimal.compare(@total_pnl, Decimal.new("0")) != :lt do %>
+              +
+            <% end %>
+            {format_decimal(@total_pnl)}
           </div>
         </div>
       </div>
+      
+<!-- Dividend Stats (only show if we have dividend data or ytd > 0) -->
+      <%= if Decimal.compare(@dividends_ytd, Decimal.new("0")) == :gt or length(@recent_dividends) > 0 do %>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div class="terminal-stat animate-fade-in" style="animation-delay: 0.3s; opacity: 0;">
+            <div class="terminal-stat-label">Dividends YTD</div>
+            <div class="terminal-stat-value gain">
+              €{format_decimal(@dividends_ytd)}
+            </div>
+          </div>
 
-      <!-- Holdings Table -->
+          <div class="terminal-stat animate-fade-in" style="animation-delay: 0.35s; opacity: 0;">
+            <div class="terminal-stat-label">Projected Annual</div>
+            <div class="terminal-stat-value" style="color: var(--gain-light);">
+              €{format_decimal(@projected_dividends)}
+            </div>
+          </div>
+        </div>
+      <% end %>
+      
+<!-- Portfolio Growth Chart -->
+      <%= if length(@chart_data) > 1 do %>
+        <div
+          class="terminal-chart mb-6 animate-fade-in"
+          style="animation-delay: 0.35s; opacity: 0;"
+        >
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="terminal-chart-title">Portfolio Growth</h2>
+            <%= if @growth_stats do %>
+              <div class={"terminal-growth-badge #{if Decimal.compare(@growth_stats.absolute_change, Decimal.new("0")) == :lt, do: "negative", else: ""}"}>
+                <%= if Decimal.compare(@growth_stats.absolute_change, Decimal.new("0")) != :lt do %>
+                  +
+                <% end %>€{format_decimal(@growth_stats.absolute_change)}
+                <span class="opacity-70">
+                  (<%= if Decimal.compare(@growth_stats.percent_change, Decimal.new("0")) != :lt do %>
+                    +
+                  <% end %>
+                  {Decimal.to_string(@growth_stats.percent_change)}%)
+                </span>
+              </div>
+            <% end %>
+          </div>
+
+          <.live_component
+            module={DividendsomaticWeb.Components.PortfolioChart}
+            id="portfolio-chart"
+            chart_data={@chart_data}
+            current_date={@current_snapshot.report_date}
+          />
+
+          <div class="mt-4 text-sm text-[var(--terminal-muted)] flex items-center justify-between flex-wrap gap-2">
+            <%= if @growth_stats do %>
+              <span>
+                From {Date.to_string(@growth_stats.first_date)} to {Date.to_string(
+                  @growth_stats.latest_date
+                )}
+              </span>
+            <% end %>
+            <%= if @fear_greed do %>
+              <div class={"terminal-fear-greed-badge #{@fear_greed.color}"}>
+                F&G: {@fear_greed.value} {@fear_greed.classification}
+              </div>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+      
+<!-- Holdings Table -->
       <div class="terminal-card animate-fade-in" style="animation-delay: 0.4s; opacity: 0;">
         <div class="p-6">
           <div class="flex items-center justify-between mb-4">
@@ -115,7 +230,9 @@
                       </td>
                       <td class="terminal-number">
                         {format_decimal(holding.mark_price)}
-                        <span class="text-[var(--terminal-muted)] text-xs ml-1">{holding.currency_primary}</span>
+                        <span class="text-[var(--terminal-muted)] text-xs ml-1">
+                          {holding.currency_primary}
+                        </span>
                       </td>
                       <td class="terminal-number font-medium">
                         {format_decimal(holding.position_value)}
@@ -125,13 +242,22 @@
                       </td>
                       <td class="terminal-number">
                         <span class={pnl_badge_class(holding.fifo_pnl_unrealized)}>
-                          <%= if Decimal.compare(holding.fifo_pnl_unrealized || Decimal.new("0"), Decimal.new("0")) != :lt do %>+<% end %>{format_decimal(holding.fifo_pnl_unrealized)}
+                          <%= if Decimal.compare(holding.fifo_pnl_unrealized || Decimal.new("0"), Decimal.new("0")) != :lt do %>
+                            +
+                          <% end %>
+                          {format_decimal(holding.fifo_pnl_unrealized)}
                         </span>
                       </td>
                       <td class="terminal-number">
-                        <span class="text-[var(--terminal-muted)]">{format_decimal(holding.percent_of_nav)}%</span>
+                        <span class="text-[var(--terminal-muted)]">
+                          {format_decimal(holding.percent_of_nav)}%
+                        </span>
                         <span class="terminal-percent-bar">
-                          <span class="terminal-percent-fill" style={"width: #{min(Decimal.to_float(holding.percent_of_nav || Decimal.new("0")), 100)}%"}></span>
+                          <span
+                            class="terminal-percent-fill"
+                            style={"width: #{min(Decimal.to_float(holding.percent_of_nav || Decimal.new("0")), 100)}%"}
+                          >
+                          </span>
                         </span>
                       </td>
                     </tr>
@@ -142,21 +268,133 @@
           </div>
         </div>
       </div>
+      
+<!-- Bottom Navigation Bar (Duplicate) -->
+      <div
+        class="terminal-nav-bar mt-6 animate-fade-in"
+        style="animation-delay: 0.5s; opacity: 0;"
+      >
+        <button
+          phx-click="navigate"
+          phx-value-direction="first"
+          class="terminal-nav-btn-sm"
+          disabled={!@has_prev}
+          title="First snapshot"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="2"
+            stroke="currentColor"
+            class="w-5 h-5"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5"
+            />
+          </svg>
+        </button>
 
-      <!-- Footer hint -->
-      <div class="mt-6 text-center text-xs text-[var(--terminal-muted)]">
-        <kbd class="px-2 py-1 bg-[var(--terminal-elevated)] border border-[var(--terminal-border)] rounded text-[10px]">←</kbd>
-        <kbd class="px-2 py-1 bg-[var(--terminal-elevated)] border border-[var(--terminal-border)] rounded text-[10px] ml-1">→</kbd>
-        <span class="ml-2">to navigate between snapshots</span>
+        <button
+          phx-click="navigate"
+          phx-value-direction="prev"
+          class="terminal-nav-btn"
+          disabled={!@has_prev}
+          title="Previous snapshot (←)"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="2.5"
+            stroke="currentColor"
+            class="w-6 h-6"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+          </svg>
+        </button>
+
+        <div class="terminal-nav-date">
+          <div class="terminal-nav-date-main">
+            {Calendar.strftime(@current_snapshot.report_date, "%Y-%m-%d")}
+          </div>
+          <div class="terminal-nav-date-sub">
+            {Calendar.strftime(@current_snapshot.report_date, "%A")}
+            <span class="mx-2">•</span> Day {@snapshot_position} of {@total_snapshots}
+          </div>
+        </div>
+
+        <button
+          phx-click="navigate"
+          phx-value-direction="next"
+          class="terminal-nav-btn"
+          disabled={!@has_next}
+          title="Next snapshot (→)"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="2.5"
+            stroke="currentColor"
+            class="w-6 h-6"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+          </svg>
+        </button>
+
+        <button
+          phx-click="navigate"
+          phx-value-direction="last"
+          class="terminal-nav-btn-sm"
+          disabled={!@has_next}
+          title="Latest snapshot"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="2"
+            stroke="currentColor"
+            class="w-5 h-5"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M11.25 4.5l7.5 7.5-7.5 7.5m-6-15l7.5 7.5-7.5 7.5"
+            />
+          </svg>
+        </button>
+
+        <div class="terminal-nav-footer w-full">
+          <div>
+            <span class="terminal-kbd">←</span>
+            <span class="terminal-kbd ml-1">→</span>
+            <span class="ml-2">to navigate</span>
+          </div>
+          <div>dividends-o-matic.com</div>
+        </div>
       </div>
-
     <% else %>
       <!-- Empty State -->
       <div class="terminal-card animate-fade-in">
         <div class="terminal-empty">
           <div class="terminal-empty-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-10 h-10 text-[var(--terminal-muted)]">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              class="w-10 h-10 text-[var(--terminal-muted)]"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
+              />
             </svg>
           </div>
           <h2>No Portfolio Data</h2>

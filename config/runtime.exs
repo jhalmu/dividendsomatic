@@ -20,6 +20,21 @@ if System.get_env("PHX_SERVER") do
   config :dividendsomatic, DividendsomaticWeb.Endpoint, server: true
 end
 
+# Google OAuth configuration for Gmail API access
+# Used by Dividendsomatic.Gmail to fetch Activity Flex emails
+if google_client_id = System.get_env("GOOGLE_CLIENT_ID") do
+  config :dividendsomatic,
+    google_client_id: google_client_id,
+    google_client_secret: System.get_env("GOOGLE_CLIENT_SECRET"),
+    google_refresh_token: System.get_env("GOOGLE_REFRESH_TOKEN")
+end
+
+# Finnhub API configuration for stock data
+# Free tier: 60 calls/minute
+if finnhub_api_key = System.get_env("FINNHUB_API_KEY") do
+  config :dividendsomatic, finnhub_api_key: finnhub_api_key
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

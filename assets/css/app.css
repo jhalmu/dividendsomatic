@@ -145,11 +145,18 @@
   --terminal-muted: #64748b;
   --terminal-accent: #3b82f6;
 
-  /* P&L Colors - Sharp and confident */
-  --gain: #10b981;
+  /* P&L Colors - Emerald growth theme */
+  --gain: #10b981;           /* emerald-500 */
+  --gain-light: #34d399;     /* emerald-400 */
   --gain-bg: rgba(16, 185, 129, 0.1);
+  --gain-glow: 0 0 20px rgba(16, 185, 129, 0.3);
   --loss: #ef4444;
   --loss-bg: rgba(239, 68, 68, 0.1);
+
+  /* Chart colors */
+  --chart-line: #10b981;
+  --chart-area: rgba(16, 185, 129, 0.15);
+  --chart-grid: rgba(59, 130, 246, 0.1);
 
   /* Fonts */
   --font-display: 'Outfit', system-ui, sans-serif;
@@ -251,6 +258,7 @@
 
 .terminal-stat-value.gain {
   color: var(--gain);
+  text-shadow: var(--gain-glow);
 }
 
 .terminal-stat-value.loss {
@@ -349,19 +357,20 @@
   display: inline-block;
 }
 
-/* Navigation buttons */
+/* Navigation buttons - Large prominent style */
 .terminal-nav-btn {
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--terminal-elevated);
-  border: 1px solid var(--terminal-border);
-  border-radius: 8px;
+  border: 2px solid var(--terminal-border);
+  border-radius: 12px;
   color: var(--terminal-text);
   cursor: pointer;
   transition: all 0.2s ease;
+  font-weight: 600;
 }
 
 .terminal-nav-btn:hover:not(:disabled) {
@@ -369,9 +378,36 @@
   border-color: var(--terminal-accent);
   color: white;
   transform: scale(1.05);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
 }
 
 .terminal-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Small nav buttons for first/last */
+.terminal-nav-btn-sm {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--terminal-surface);
+  border: 1px solid var(--terminal-border);
+  border-radius: 8px;
+  color: var(--terminal-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.terminal-nav-btn-sm:hover:not(:disabled) {
+  background: var(--terminal-elevated);
+  border-color: var(--terminal-accent);
+  color: var(--terminal-text);
+}
+
+.terminal-nav-btn-sm:disabled {
   opacity: 0.3;
   cursor: not-allowed;
 }
@@ -481,4 +517,157 @@
 
 .terminal-theme ::-webkit-scrollbar-thumb:hover {
   background: var(--terminal-muted);
+}
+
+/* Chart styling */
+.terminal-chart {
+  background: var(--terminal-elevated);
+  border: 1px solid var(--terminal-border);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.terminal-chart-title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--terminal-text);
+  margin-bottom: 1rem;
+}
+
+.terminal-chart svg {
+  width: 100%;
+  height: auto;
+}
+
+/* Chart axis styling */
+.terminal-chart .axis text {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  fill: var(--terminal-muted);
+}
+
+.terminal-chart .axis line,
+.terminal-chart .axis path {
+  stroke: var(--terminal-border);
+}
+
+/* Growth stats badge */
+.terminal-growth-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--gain-bg);
+  border: 1px solid var(--gain);
+  border-radius: 8px;
+  color: var(--gain);
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.terminal-growth-badge.negative {
+  background: var(--loss-bg);
+  border-color: var(--loss);
+  color: var(--loss);
+}
+
+/* Navigation bar (top and bottom) */
+.terminal-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: var(--terminal-surface);
+  border: 1px solid var(--terminal-border);
+  border-radius: 12px;
+}
+
+.terminal-nav-date {
+  text-align: center;
+  min-width: 200px;
+}
+
+.terminal-nav-date-main {
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--terminal-text);
+  letter-spacing: 0.02em;
+}
+
+.terminal-nav-date-sub {
+  font-size: 0.875rem;
+  color: var(--terminal-muted);
+  margin-top: 0.25rem;
+}
+
+/* Footer navigation with keyboard hints */
+.terminal-nav-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--terminal-border);
+  font-size: 0.75rem;
+  color: var(--terminal-muted);
+}
+
+.terminal-kbd {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  background: var(--terminal-elevated);
+  border: 1px solid var(--terminal-border);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+}
+
+/* Fear & Greed Index badge */
+.terminal-fear-greed-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.terminal-fear-greed-badge.red {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.terminal-fear-greed-badge.orange {
+  background: rgba(249, 115, 22, 0.15);
+  color: #f97316;
+  border: 1px solid rgba(249, 115, 22, 0.3);
+}
+
+.terminal-fear-greed-badge.yellow {
+  background: rgba(234, 179, 8, 0.15);
+  color: #eab308;
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.terminal-fear-greed-badge.emerald {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.terminal-fear-greed-badge.green {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
 }

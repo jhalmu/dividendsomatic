@@ -18,12 +18,10 @@ defmodule Dividendsomatic.Workers.GmailImportWorker do
 
   Scheduled to run daily at 8 AM via Oban.Plugins.Cron in config.exs
 
-  ## Gmail MCP Integration
-
-  This worker uses the Gmail MCP to:
-  - Search for emails: "from:noreply@interactivebrokers.com subject:Activity Flex"
-  - Fetch email attachments (flex*.csv files)
-  - Parse and import the CSV data
+  Required environment variables:
+  - `GOOGLE_CLIENT_ID` - Google OAuth client ID
+  - `GOOGLE_CLIENT_SECRET` - Google OAuth client secret
+  - `GOOGLE_REFRESH_TOKEN` - Long-lived refresh token
 
   ## Error Handling
 
@@ -38,68 +36,27 @@ defmodule Dividendsomatic.Workers.GmailImportWorker do
 
   require Logger
 
-  # alias Dividendsomatic.Portfolio  # TODO: Uncomment when Gmail MCP is implemented
+  alias Dividendsomatic.Gmail
 
   @impl Oban.Worker
-  def perform(%Oban.Job{}) do
+  def perform(%Oban.Job{args: args}) do
     Logger.info("Starting Gmail CSV import")
 
-    # TODO: Implement Gmail MCP integration
-    # For now, this is a placeholder that shows the intended flow
+    days_back = Map.get(args, "days_back", 30)
+    max_results = Map.get(args, "max_results", 30)
 
-    {:ok, emails} = search_gmail_for_csv_emails()
+    case Gmail.import_all_new(days_back: days_back, max_results: max_results) do
+      {:ok, summary} ->
+        Logger.info("Gmail import completed: #{inspect(summary)}")
+        {:ok, summary}
 
-    import_results =
-      emails
-      |> Enum.map(&download_and_import_csv/1)
-      |> Enum.filter(fn {status, _} -> status == :ok end)
+      {:error, :not_configured} ->
+        Logger.warning("Gmail OAuth not configured - skipping import")
+        {:ok, %{skipped: true, reason: :not_configured}}
 
-    Logger.info("Gmail import completed: #{length(import_results)} snapshots imported")
-    {:ok, %{imported_count: length(import_results)}}
-  end
-
-  # Private functions
-
-  defp search_gmail_for_csv_emails do
-    # TODO: Use Gmail MCP to search for emails
-    # Query: "from:noreply@interactivebrokers.com subject:Activity Flex has:attachment"
-
-    # Example implementation (when Gmail MCP is available):
-    # case GmailMCP.search(
-    #   query: "from:noreply@interactivebrokers.com subject:Activity Flex has:attachment",
-    #   max_results: 30
-    # ) do
-    #   {:ok, results} -> {:ok, results}
-    #   {:error, reason} -> {:error, reason}
-    # end
-
-    # For now, return empty list
-    Logger.warning("Gmail MCP not yet implemented - returning empty results")
-    {:ok, []}
-  end
-
-  defp download_and_import_csv(email) do
-    # TODO: Download CSV attachment from email
-    # Extract CSV data and report date
-    # Import using Portfolio.create_snapshot_from_csv/2
-
-    # Example implementation:
-    # with {:ok, attachment} <- fetch_csv_attachment(email),
-    #      {:ok, csv_data} <- decode_attachment(attachment),
-    #      report_date <- extract_report_date(csv_data),
-    #      {:ok, _snapshot} <- Portfolio.create_snapshot_from_csv(csv_data, report_date) do
-    #   Logger.info("Successfully imported snapshot for #{report_date}")
-    #   {:ok, report_date}
-    # else
-    #   {:error, %Ecto.Changeset{errors: [report_date: {"has already been taken", _}]}} ->
-    #     Logger.info("Snapshot already exists, skipping")
-    #     {:skipped, :duplicate}
-    #   {:error, reason} ->
-    #     Logger.error("Failed to import: #{inspect(reason)}")
-    #     {:error, reason}
-    # end
-
-    Logger.warning("CSV import not yet implemented for email: #{inspect(email)}")
-    {:skipped, :not_implemented}
+      {:error, reason} ->
+        Logger.error("Gmail import failed: #{inspect(reason)}")
+        {:error, reason}
+    end
   end
 end
