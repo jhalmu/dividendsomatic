@@ -133,7 +133,7 @@
    ============================================ */
 
 /* Import distinctive fonts */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=Satisfy&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=Pacifico&display=swap');
 
 /* Terminal-inspired color palette */
 :root {
@@ -161,7 +161,7 @@
   /* Fonts */
   --font-display: 'Outfit', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-  --font-brand: 'Satisfy', cursive;
+  --font-brand: 'Pacifico', cursive;
 }
 
 /* Base terminal styling */
