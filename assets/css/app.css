@@ -183,12 +183,12 @@
   background-size: 32px 32px;
 }
 
-/* Branding header - positioned behind content */
+/* Branding header - positioned behind content at top */
 .terminal-branding {
   position: fixed;
-  top: 50%;
+  top: 2rem;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   z-index: 0;
   pointer-events: none;
 }
@@ -266,7 +266,7 @@
   overflow: hidden;
   transition: all 0.2s ease;
   z-index: 1;
-  opacity: 0.9;
+  opacity: 0.75;
 }
 
 .terminal-stat:hover {
@@ -562,7 +562,7 @@
   padding: 1.5rem;
   position: relative;
   z-index: 1;
-  opacity: 0.9;
+  opacity: 0.75;
 }
 
 .terminal-chart-title {
@@ -623,7 +623,7 @@
   border-radius: 12px;
   position: relative;
   z-index: 1;
-  opacity: 0.9;
+  opacity: 0.75;
 }
 
 .terminal-nav-date {
