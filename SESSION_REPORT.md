@@ -3,6 +3,13 @@
 ## Summary
 Major implementation session completing the Dividendsomatic Master Plan phases 1-5.
 
+## Evening Session: Branding & UI Refinement
+- **Brand header**: Own div at top using JetBrains Mono uppercase
+- **Font exploration**: Tested Dancing Script, Righteous, Bebas Neue, Archivo Black, Josefin Sans
+- **Final choice**: JetBrains Mono (matches holdings table aesthetic)
+- **UI tweaks**: Semi-transparent backgrounds (rgba 0.4), refined date text colors
+- **Layout**: Brand → Nav bar with date → Stats → Chart → Holdings
+
 ## Completed Features
 
 ### Phase 1: Core UI Improvements
