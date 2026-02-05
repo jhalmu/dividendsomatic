@@ -133,7 +133,7 @@
    ============================================ */
 
 /* Import distinctive fonts */
-@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
 
 /* Terminal-inspired color palette */
 :root {
@@ -161,7 +161,7 @@
   /* Fonts */
   --font-display: 'Outfit', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-  --font-brand: 'Dancing Script', cursive;
+  --font-brand: var(--font-mono);
 }
 
 /* Base terminal styling */
@@ -183,24 +183,21 @@
   background-size: 32px 32px;
 }
 
-/* Branding header - positioned behind content at top */
+/* Branding - own div at top */
 .terminal-branding {
-  position: fixed;
-  top: 2rem;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 0;
-  pointer-events: none;
+  text-align: center;
+  margin-bottom: 1.5rem;
+  position: relative;
+  z-index: 10;
 }
 
 .terminal-brand-name {
   font-family: var(--font-brand);
-  font-size: 10rem;
-  font-weight: 400;
+  font-size: 1.5rem;
+  font-weight: 300;
   color: var(--terminal-elevated);
-  letter-spacing: 0.05em;
-  text-transform: lowercase;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
   margin: 0;
   line-height: 1;
   white-space: nowrap;
@@ -208,7 +205,7 @@
 
 @media (max-width: 640px) {
   .terminal-brand-name {
-    font-size: 4rem;
+    font-size: 2rem;
   }
 }
 
@@ -258,7 +255,7 @@
 
 /* Stats styling */
 .terminal-stat {
-  background: var(--terminal-elevated);
+  background: rgba(17, 24, 39, 0.4);
   border: 1px solid var(--terminal-border);
   border-radius: 8px;
   padding: 1.25rem;
@@ -266,7 +263,6 @@
   overflow: hidden;
   transition: all 0.2s ease;
   z-index: 1;
-  opacity: 0.75;
 }
 
 .terminal-stat:hover {
@@ -556,13 +552,12 @@
 
 /* Chart styling */
 .terminal-chart {
-  background: var(--terminal-elevated);
+  background: transparent;
   border: 1px solid var(--terminal-border);
   border-radius: 12px;
   padding: 1.5rem;
   position: relative;
   z-index: 1;
-  opacity: 0.75;
 }
 
 .terminal-chart-title {
@@ -618,18 +613,17 @@
   justify-content: center;
   gap: 1rem;
   padding: 1.5rem;
-  background: var(--terminal-surface);
+  background: rgba(17, 24, 39, 0.4);
   border: 1px solid var(--terminal-border);
   border-radius: 12px;
   position: relative;
   z-index: 1;
-  opacity: 0.75;
 }
 
 .terminal-nav-date {
   text-align: center;
   min-width: 200px;
-  opacity: 0.7;
+  position: relative;
 }
 
 .terminal-nav-date-main {

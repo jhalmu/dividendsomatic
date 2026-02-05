@@ -1,10 +1,9 @@
 <div id="portfolio-view" class="terminal-theme terminal-grid" phx-hook="KeyboardNav">
-  <!-- Branding - positioned behind content -->
-  <div class="terminal-branding">
-    <h1 class="terminal-brand-name">dividends-o-matic</h1>
-  </div>
-
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Branding - own div at top -->
+    <div class="terminal-branding">
+      <span class="terminal-brand-name">dividends-o-matic</span>
+    </div>
     <%= if @current_snapshot do %>
       <!-- Top Navigation Bar -->
       <div class="terminal-nav-bar mb-6 animate-fade-in">
