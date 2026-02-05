@@ -190,19 +190,15 @@
 }
 
 .terminal-brand-name {
-  display: inline;
   font-family: var(--font-brand);
   font-size: 3rem;
   font-weight: 400;
-  color: var(--terminal-text);
+  color: var(--terminal-surface);
   letter-spacing: 0.05em;
   text-transform: lowercase;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   margin: 0;
   line-height: 1.2;
-  background-color: var(--terminal-surface);
-  padding: 0.25rem 1rem;
-  border-radius: 8px;
 }
 
 @media (max-width: 640px) {
