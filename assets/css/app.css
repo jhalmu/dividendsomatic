@@ -186,14 +186,7 @@
 /* Branding header */
 .terminal-branding {
   text-align: center;
-  padding: 1.5rem 2rem;
-  background: var(--terminal-surface);
-  border: 1px solid var(--terminal-border);
-  border-radius: 12px;
-  box-shadow:
-    0 4px 6px -1px rgba(0, 0, 0, 0.2),
-    0 2px 4px -2px rgba(0, 0, 0, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  padding: 1rem 0;
 }
 
 .terminal-brand-name {
@@ -203,9 +196,7 @@
   color: var(--terminal-text);
   letter-spacing: 0.05em;
   text-transform: lowercase;
-  text-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.3),
-    0 0 40px rgba(16, 185, 129, 0.15);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   margin: 0;
   line-height: 1.2;
 }
