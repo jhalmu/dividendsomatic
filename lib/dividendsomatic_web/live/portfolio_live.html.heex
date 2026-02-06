@@ -224,7 +224,7 @@
       <%= if length(@recent_dividends) > 0 or Decimal.compare(@realized_pnl, Decimal.new("0")) != :eq do %>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-[var(--space-xs)] mb-[var(--space-md)]">
           <%= if length(@recent_dividends) > 0 do %>
-            <div class="terminal-card p-[var(--space-sm)]animate-fade-in animate-delay-4">
+            <div class="terminal-card p-[var(--space-sm)] animate-fade-in animate-delay-4">
               <div class="terminal-section-label">Recent Dividends</div>
               <%= for div <- @recent_dividends do %>
                 <div class="terminal-dividend-row">
@@ -241,7 +241,7 @@
           <% end %>
 
           <%= if Decimal.compare(@realized_pnl, Decimal.new("0")) != :eq do %>
-            <div class="terminal-card p-[var(--space-sm)]animate-fade-in animate-delay-5">
+            <div class="terminal-card p-[var(--space-sm)] animate-fade-in animate-delay-5">
               <div class="terminal-section-label">Realized P&L (Sold)</div>
               <div class={"terminal-stat-value mt-[var(--space-xs)] #{if pnl_positive?(@realized_pnl), do: "gain", else: "loss"}"}>
                 <%= if pnl_positive?(@realized_pnl) do %>

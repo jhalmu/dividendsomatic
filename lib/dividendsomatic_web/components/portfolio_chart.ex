@@ -130,10 +130,9 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     """
   end
 
-  defp svg_grid(mt, main_h, y_lo, y_range) do
+  defp svg_grid(mt, main_h, _y_lo, _y_range) do
     for i <- 0..5 do
       gy = r(mt + main_h - i / 5 * main_h)
-      _val = y_lo + i / 5 * y_range
 
       """
       <line x1="#{@ml}" y1="#{gy}" x2="#{@ml + @pw}" y2="#{gy}" stroke="#1e293b" stroke-width="1"/>
