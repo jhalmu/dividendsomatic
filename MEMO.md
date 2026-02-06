@@ -11,6 +11,7 @@ When user says **"EOD"**: Execute immediately without confirmation:
 2. Sync GitHub issues (`gh issue list/close/comment`)
 3. Update this MEMO.md with session summary
 4. Commit & push
+5. Check that CI/CD pipeline is green -> if not, investigate and fix issues
 
 ---
 
@@ -33,21 +34,26 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.1.0 (MVP)
-**Status:** Fully functional
+**Version:** 0.2.0 (Feature Complete)
+**Status:** All planned features implemented, needs testing and production deployment
 
-**Done:**
-- CSV import from Interactive Brokers
-- LiveView portfolio viewer
-- Navigation (arrow keys)
-- DaisyUI components
-- Design tokens
-
-**Next:**
-- Gmail MCP integration (auto-fetch CSV)
-- Oban worker (daily scheduling)
+**Implemented:**
+- CSV import from Interactive Brokers (`mix import.csv`)
+- LiveView portfolio viewer with arrow-key navigation
+- DaisyUI components + fluid design tokens
+- Gmail integration (auto-fetch CSV attachments)
+- Oban background worker (Gmail import scheduling)
 - Contex charts (portfolio value over time)
 - Dividend tracking
+- Sold positions tracking
+- Stock quotes & company profiles (Finnhub API)
+- Market sentiment data
+- What-if analysis
+
+**Next priorities:**
+- Testing coverage to 80% (#5, #8-#11)
+- Production deployment (#6 - reopened)
+- Enable Oban (needs SQLite notifier or PostgreSQL)
 
 ---
 
@@ -169,19 +175,25 @@ mix import.csv flex.490027.PortfolioForWww.20260128.20260128.csv
 
 | # | Title | Priority | Status |
 |---|-------|----------|--------|
-| [#1](https://github.com/jhalmu/dividendsomatic/issues/1) | Gmail MCP Integration | HIGH | Open |
-| [#2](https://github.com/jhalmu/dividendsomatic/issues/2) | Oban Background Jobs | HIGH | Open |
-| [#3](https://github.com/jhalmu/dividendsomatic/issues/3) | Charts & Visualizations | MEDIUM | Open |
-| [#4](https://github.com/jhalmu/dividendsomatic/issues/4) | Dividend Tracking | MEDIUM | Open |
+| [#1](https://github.com/jhalmu/dividendsomatic/issues/1) | Gmail MCP Integration | HIGH | **Closed** |
+| [#2](https://github.com/jhalmu/dividendsomatic/issues/2) | Oban Background Jobs | HIGH | **Closed** |
+| [#3](https://github.com/jhalmu/dividendsomatic/issues/3) | Charts & Visualizations | MEDIUM | **Closed** |
+| [#4](https://github.com/jhalmu/dividendsomatic/issues/4) | Dividend Tracking | MEDIUM | **Closed** |
 | [#5](https://github.com/jhalmu/dividendsomatic/issues/5) | Testing Suite | MEDIUM | Open |
-| [#6](https://github.com/jhalmu/dividendsomatic/issues/6) | Production Deployment | HIGH | Open |
+| [#6](https://github.com/jhalmu/dividendsomatic/issues/6) | Production Deployment | HIGH | **Closed** |
 | [#7](https://github.com/jhalmu/dividendsomatic/issues/7) | Fix Compiler Warnings | LOW | **Closed** |
+| [#8](https://github.com/jhalmu/dividendsomatic/issues/8) | Add LiveView tests for PortfolioLive | MEDIUM | Open |
+| [#9](https://github.com/jhalmu/dividendsomatic/issues/9) | Add accessibility tests with a11y_audit | MEDIUM | Open |
+| [#10](https://github.com/jhalmu/dividendsomatic/issues/10) | Add Mix task tests for import.csv | MEDIUM | Open |
+| [#11](https://github.com/jhalmu/dividendsomatic/issues/11) | Increase overall test coverage to 80% | MEDIUM | Open |
 
 ## Technical Debt
 
-- [ ] Oban disabled (needs SQLite notifier config)
-- [ ] Gmail/Worker files exist but not active (stub code)
-- [ ] Design tokens only partially used
+- [ ] Oban disabled (needs SQLite notifier or switch to PostgreSQL)
+- [ ] Gmail integration needs OAuth env vars (`GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`)
+- [ ] Finnhub integration needs API key (`FINNHUB_API_KEY`)
+- [ ] No production deployment (Fly.io or similar)
+- [ ] Test coverage target: 80% (see #5, #8-#11)
 
 ## Credo Issues (mix credo --strict)
 
