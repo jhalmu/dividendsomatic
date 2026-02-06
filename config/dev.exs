@@ -2,7 +2,7 @@ import Config
 
 # Configure your database
 config :dividendsomatic, Dividendsomatic.Repo,
-  database: Path.expand("../dividendsomatic_dev.db", __DIR__),
+  database: Path.expand("../db/dividendsomatic_dev.db", __DIR__),
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10

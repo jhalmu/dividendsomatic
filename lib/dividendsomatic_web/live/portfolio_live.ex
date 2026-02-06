@@ -85,6 +85,9 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:dividends_ytd, Decimal.new("0"))
     |> assign(:projected_dividends, Decimal.new("0"))
     |> assign(:recent_dividends, [])
+    |> assign(:dividend_by_month, [])
+    |> assign(:sparkline_values, [])
+    |> assign(:realized_pnl, Decimal.new("0"))
   end
 
   defp assign_snapshot(socket, snapshot) do
@@ -103,6 +106,9 @@ defmodule DividendsomaticWeb.PortfolioLive do
     total_snapshots = Portfolio.count_snapshots()
     snapshot_position = Portfolio.get_snapshot_position(snapshot.report_date)
 
+    chart_data = Portfolio.get_all_chart_data()
+    sparkline_values = Enum.map(chart_data, & &1.value_float)
+
     socket
     |> assign(:current_snapshot, snapshot)
     |> assign(:holdings, holdings)
@@ -112,11 +118,14 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:total_pnl, total_pnl)
     |> assign(:snapshot_position, snapshot_position)
     |> assign(:total_snapshots, total_snapshots)
-    |> assign(:chart_data, Portfolio.get_all_chart_data())
+    |> assign(:chart_data, chart_data)
     |> assign(:growth_stats, Portfolio.get_growth_stats())
     |> assign(:dividends_ytd, Portfolio.total_dividends_this_year())
     |> assign(:projected_dividends, Portfolio.projected_annual_dividends())
     |> assign(:recent_dividends, Portfolio.list_dividends_this_year() |> Enum.take(5))
+    |> assign(:dividend_by_month, Portfolio.dividends_by_month())
+    |> assign(:sparkline_values, sparkline_values)
+    |> assign(:realized_pnl, Portfolio.total_realized_pnl())
   end
 
   defp format_decimal(nil), do: "0.00"
@@ -154,5 +163,9 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> Enum.chunk_every(3)
     |> Enum.join(",")
     |> String.reverse()
+  end
+
+  defp pnl_positive?(pnl) do
+    Decimal.compare(pnl || Decimal.new("0"), Decimal.new("0")) != :lt
   end
 end

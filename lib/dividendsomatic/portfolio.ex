@@ -115,11 +115,17 @@ defmodule Dividendsomatic.Portfolio do
         Decimal.add(acc, holding.position_value || Decimal.new("0"))
       end)
 
+    total_cost_basis =
+      Enum.reduce(snapshot.holdings, Decimal.new("0"), fn holding, acc ->
+        Decimal.add(acc, holding.cost_basis_money || Decimal.new("0"))
+      end)
+
     %{
       date: snapshot.report_date,
       date_string: Date.to_string(snapshot.report_date),
       value: total_value,
-      value_float: Decimal.to_float(total_value)
+      value_float: Decimal.to_float(total_value),
+      cost_basis_float: Decimal.to_float(total_cost_basis)
     }
   end
 

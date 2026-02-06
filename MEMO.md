@@ -32,6 +32,10 @@ mix ecto.reset              # Drop + create + migrate
 
 ---
 
+## Project Info
+
+**Domain:** dividends-o-matic.com
+
 ## Current Status
 
 **Version:** 0.2.0 (Feature Complete)
@@ -51,9 +55,54 @@ mix ecto.reset              # Drop + create + migrate
 - What-if analysis
 
 **Next priorities:**
-- Testing coverage to 80% (#5, #8-#11)
+- Testing coverage to 80% (#5, #9, #11)
 - Production deployment (#6 - reopened)
 - Enable Oban (needs SQLite notifier or PostgreSQL)
+- a11y/Playwright tests (#9)
+
+---
+
+## 2026-02-06 - Frontend Redesign, Tests & Quality
+
+### Session Summary
+
+Major frontend overhaul with combined charts, seed data improvements, test coverage expansion, and credo/DSG compliance.
+
+### Changes Made
+
+**Frontend Design:**
+- Combined chart with portfolio value + cost basis lines + dividend bar overlay
+- Custom SVG chart rendering (replaced single Contex line chart for main chart)
+- Fear & Greed index gauge integrated into chart header
+- Growth stats badge with absolute/percent change
+- Dividend overlay bars mapped to chart x-positions with cumulative orange line
+- Sparkline in Portfolio Value stat card (still uses Contex)
+
+**Seed Data Improvements:**
+- Added buy events to stocks (stepped quantity/cost changes over time)
+- Weighted average cost basis computation per day
+- Cost basis line now shows realistic step changes
+
+**Database:**
+- Moved SQLite DB files to `db/` folder
+- Updated dev.exs and test.exs configs
+
+**Testing (42 → 69 tests):**
+- 10 LiveView tests (empty state, navigation, stats, keyboard hook)
+- 5 import.csv Mix task tests (valid import, errors, edge cases)
+- 12 chart component tests (sparkline, F&G gauge)
+
+**Code Quality:**
+- Fixed all credo issues in portfolio_chart.ex (Enum.map_join, extracted functions, pattern matching)
+- Fixed nested module aliases in import_csv_test.exs
+- Migrated template to design system tokens (per DESIGN_SYSTEM_GUIDE.md)
+- Credo --strict: only 4 pre-existing suggestions remain
+
+**GitHub Issues Closed:** #8 (LiveView tests), #10 (import.csv tests)
+
+### Test Results
+- 69 tests, 0 failures
+- Credo: 4 software design suggestions (all pre-existing)
 
 ---
 
@@ -182,9 +231,9 @@ mix import.csv flex.490027.PortfolioForWww.20260128.20260128.csv
 | [#5](https://github.com/jhalmu/dividendsomatic/issues/5) | Testing Suite | MEDIUM | Open |
 | [#6](https://github.com/jhalmu/dividendsomatic/issues/6) | Production Deployment | HIGH | **Closed** |
 | [#7](https://github.com/jhalmu/dividendsomatic/issues/7) | Fix Compiler Warnings | LOW | **Closed** |
-| [#8](https://github.com/jhalmu/dividendsomatic/issues/8) | Add LiveView tests for PortfolioLive | MEDIUM | Open |
+| [#8](https://github.com/jhalmu/dividendsomatic/issues/8) | Add LiveView tests for PortfolioLive | MEDIUM | **Closed** |
 | [#9](https://github.com/jhalmu/dividendsomatic/issues/9) | Add accessibility tests with a11y_audit | MEDIUM | Open |
-| [#10](https://github.com/jhalmu/dividendsomatic/issues/10) | Add Mix task tests for import.csv | MEDIUM | Open |
+| [#10](https://github.com/jhalmu/dividendsomatic/issues/10) | Add Mix task tests for import.csv | MEDIUM | **Closed** |
 | [#11](https://github.com/jhalmu/dividendsomatic/issues/11) | Increase overall test coverage to 80% | MEDIUM | Open |
 
 ## Technical Debt

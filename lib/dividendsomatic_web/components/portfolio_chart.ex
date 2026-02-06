@@ -1,119 +1,469 @@
 defmodule DividendsomaticWeb.Components.PortfolioChart do
   @moduledoc """
-  LiveComponent for rendering portfolio value chart using Contex.
+  LiveComponent for rendering a combined portfolio chart as custom SVG.
+
+  Renders a unified panel with portfolio value line, cost basis line,
+  dividend bars, Fear & Greed indicator, and current date marker.
   """
   use Phoenix.LiveComponent
 
-  alias Contex.{Dataset, LinePlot, Plot}
+  alias Contex.Sparkline
+
+  # Layout constants
+  @w 900
+  @ml 62
+  @mr 20
+  @pw @w - @ml - @mr
+
+  @impl true
+  def update(assigns, socket) do
+    socket =
+      socket
+      |> assign(assigns)
+      |> assign_new(:fear_greed, fn -> nil end)
+      |> assign_new(:dividend_data, fn -> [] end)
+
+    {:ok, socket}
+  end
 
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="portfolio-chart-container">
-      {render_chart(@chart_data, @current_date)}
+    <div class="combined-chart-container">
+      {render_combined(@chart_data, @current_date, @dividend_data, @fear_greed)}
     </div>
     """
   end
 
-  defp render_chart(chart_data, current_date) when length(chart_data) > 1 do
-    data_points =
+  # --- Main combined chart renderer ---
+
+  defp render_combined(chart_data, current_date, dividend_data, fear_greed)
+       when is_list(chart_data) and length(chart_data) > 1 do
+    has_fg = is_map(fear_greed)
+    has_div = is_list(dividend_data) and dividend_data != []
+
+    fg_space = if has_fg, do: 22, else: 0
+    mt = 20 + fg_space
+    main_h = 250
+    chart_bottom = mt + main_h
+    total_h = chart_bottom + 25
+
+    n = length(chart_data)
+
+    # X scale: index -> pixel
+    x_fn = fn idx -> @ml + idx / max(n - 1, 1) * @pw end
+
+    # Y scale: value -> pixel
+    vals = Enum.map(chart_data, & &1.value_float)
+    costs = Enum.map(chart_data, & &1.cost_basis_float)
+    all_y = vals ++ costs
+    y_lo = Enum.min(all_y) * 0.97
+    y_hi = Enum.max(all_y) * 1.03
+    y_range = max(y_hi - y_lo, 1.0)
+    y_fn = fn v -> mt + main_h - (v - y_lo) / y_range * main_h end
+
+    # Dividend bars overlaid at bottom of main chart area
+    div_overlay =
+      if has_div do
+        svg_dividend_overlay(dividend_data, chart_data, x_fn, mt, main_h, chart_bottom)
+      else
+        ""
+      end
+
+    parts =
+      [
+        svg_defs(has_fg),
+        svg_grid(mt, main_h, y_lo, y_range),
+        svg_area_fill(chart_data, x_fn, y_fn, chart_bottom),
+        div_overlay,
+        svg_line(chart_data, :value_float, x_fn, y_fn, "#10b981", "2.5", nil),
+        svg_line(chart_data, :cost_basis_float, x_fn, y_fn, "#3b82f6", "1.5", "6 3"),
+        svg_current_marker(chart_data, current_date, x_fn, y_fn, mt, chart_bottom),
+        svg_x_labels(chart_data, x_fn, chart_bottom + 15),
+        svg_y_labels(mt, main_h, y_lo, y_range),
+        svg_annotations(chart_data, x_fn, y_fn),
+        if(has_fg, do: svg_fear_greed(fear_greed), else: "")
+      ]
+      |> Enum.join("\n")
+
+    Phoenix.HTML.raw("""
+    <svg width="#{@w}" height="#{round(total_h)}" viewBox="0 0 #{@w} #{round(total_h)}" xmlns="http://www.w3.org/2000/svg" style="font-family: 'JetBrains Mono', monospace;">
+      #{parts}
+    </svg>
+    """)
+  end
+
+  defp render_combined(_, _, _, _) do
+    Phoenix.HTML.raw("""
+    <div style="text-align: center; padding: 2.5rem; font-size: 0.75rem; color: #475569; font-family: 'JetBrains Mono', monospace;">
+      Not enough data for chart
+    </div>
+    """)
+  end
+
+  # --- SVG building blocks ---
+
+  defp svg_defs(has_fg) do
+    fg_grad =
+      if has_fg do
+        """
+        <linearGradient id="fg-bar-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#ef4444"/>
+          <stop offset="30%" stop-color="#f97316"/>
+          <stop offset="50%" stop-color="#eab308"/>
+          <stop offset="75%" stop-color="#10b981"/>
+          <stop offset="100%" stop-color="#22c55e"/>
+        </linearGradient>
+        """
+      else
+        ""
+      end
+
+    """
+    <defs>
+      <linearGradient id="val-area" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#10b981" stop-opacity="0.15"/>
+        <stop offset="100%" stop-color="#10b981" stop-opacity="0.02"/>
+      </linearGradient>
+      #{fg_grad}
+    </defs>
+    """
+  end
+
+  defp svg_grid(mt, main_h, y_lo, y_range) do
+    for i <- 0..5 do
+      gy = r(mt + main_h - i / 5 * main_h)
+      _val = y_lo + i / 5 * y_range
+
+      """
+      <line x1="#{@ml}" y1="#{gy}" x2="#{@ml + @pw}" y2="#{gy}" stroke="#1e293b" stroke-width="1"/>
+      """
+    end
+    |> Enum.join("\n")
+  end
+
+  defp svg_area_fill(chart_data, x_fn, y_fn, bottom_y) do
+    n = length(chart_data)
+
+    points =
       chart_data
       |> Enum.with_index()
-      |> Enum.map(fn {point, idx} -> {idx, point.value_float} end)
+      |> Enum.map(fn {p, i} ->
+        "#{r(x_fn.(i))},#{r(y_fn.(p.value_float))}"
+      end)
 
-    min_value = chart_data |> Enum.map(& &1.value_float) |> Enum.min() |> floor()
-    max_value = chart_data |> Enum.map(& &1.value_float) |> Enum.max() |> ceil()
-    padding = (max_value - min_value) * 0.1
+    first_x = r(x_fn.(0))
+    last_x = r(x_fn.(n - 1))
 
-    dataset = Dataset.new(data_points, ["Day", "Value"])
+    d = "M#{first_x},#{bottom_y} L#{Enum.join(points, " L")} L#{last_x},#{bottom_y} Z"
+    ~s[<path d="#{d}" fill="url(#val-area)"/>]
+  end
 
-    current_idx =
-      Enum.find_index(chart_data, fn point -> point.date == current_date end) || 0
+  defp svg_line(chart_data, field, x_fn, y_fn, color, width, dash) do
+    d =
+      chart_data
+      |> Enum.with_index()
+      |> Enum.map_join(" ", fn {p, i} ->
+        x = r(x_fn.(i))
+        y = r(y_fn.(Map.get(p, field)))
+        if i == 0, do: "M#{x} #{y}", else: "L#{x} #{y}"
+      end)
 
-    options = [
-      mapping: %{x_col: "Day", y_cols: ["Value"]},
-      colour_palette: ["#10b981"],
-      smoothed: false,
-      custom_y_scale:
-        Contex.ContinuousLinearScale.new()
-        |> Contex.ContinuousLinearScale.domain(min_value - padding, max_value + padding),
-      custom_y_formatter: &format_value/1,
-      axis_label_rotation: 0
-    ]
+    dash_attr = if dash, do: ~s[ stroke-dasharray="#{dash}" opacity="0.6"], else: ""
 
-    plot =
-      Plot.new(dataset, LinePlot, 800, 200, options)
-      |> Plot.titles("", "")
-      |> Plot.axis_labels("", "")
+    glow =
+      if dash,
+        do: "filter: drop-shadow(0 0 3px rgba(59,130,246,0.25));",
+        else: "filter: drop-shadow(0 0 5px rgba(16,185,129,0.4));"
 
-    {:safe, svg_iolist} = Plot.to_svg(plot)
+    ~s[<path d="#{d}" fill="none" stroke="#{color}" stroke-width="#{width}" stroke-linejoin="round"#{dash_attr} style="#{glow}"/>]
+  end
+
+  defp svg_current_marker(chart_data, current_date, x_fn, y_fn, mt, bottom) do
+    case Enum.find_index(chart_data, fn p -> p.date == current_date end) do
+      nil ->
+        ""
+
+      idx ->
+        point = Enum.at(chart_data, idx)
+        cx = r(x_fn.(idx))
+        cy = r(y_fn.(point.value_float))
+
+        """
+        <line x1="#{cx}" y1="#{mt}" x2="#{cx}" y2="#{bottom}" stroke="#10b981" stroke-width="1" stroke-dasharray="3 3" opacity="0.25"/>
+        <circle cx="#{cx}" cy="#{cy}" r="3.5" fill="#10b981" stroke="#0a0e17" stroke-width="2"/>
+        """
+    end
+  end
+
+  defp svg_x_labels(chart_data, x_fn, label_y) do
+    n = length(chart_data)
+    count = min(6, n)
+    step = max(div(n - 1, count), 1)
+
+    for i <- 0..count, idx = min(i * step, n - 1), reduce: [] do
+      acc ->
+        point = Enum.at(chart_data, idx)
+        lx = r(x_fn.(idx))
+        date_str = Calendar.strftime(point.date, "%b %d")
+
+        [
+          ~s[<text x="#{lx}" y="#{r(label_y)}" fill="#475569" font-size="8" text-anchor="middle">#{date_str}</text>]
+          | acc
+        ]
+    end
+    |> Enum.reverse()
+    |> Enum.uniq()
+    |> Enum.join("\n")
+  end
+
+  defp svg_y_labels(mt, main_h, y_lo, y_range) do
+    for i <- 0..5 do
+      gy = r(mt + main_h - i / 5 * main_h + 3)
+      val = y_lo + i / 5 * y_range
+
+      ~s[<text x="#{@ml - 8}" y="#{gy}" fill="#475569" font-size="8" text-anchor="end">#{format_compact(val)}</text>]
+    end
+    |> Enum.join("\n")
+  end
+
+  defp svg_annotations(chart_data, x_fn, y_fn) do
+    n = length(chart_data)
+    last = List.last(chart_data)
+    lx = r(x_fn.(n - 1))
+
+    val_y = r(y_fn.(last.value_float))
+    cost_y = r(y_fn.(last.cost_basis_float))
+
+    # Position labels to left if near edge
+    {label_x, anchor} = if lx > @w - 80, do: {lx - 8, "end"}, else: {lx + 8, "start"}
+
+    """
+    <text x="#{label_x}" y="#{val_y - 6}" fill="#10b981" font-size="8" font-weight="600" text-anchor="#{anchor}">€#{format_compact(last.value_float)}</text>
+    <text x="#{label_x}" y="#{cost_y + 12}" fill="#3b82f6" font-size="7" text-anchor="#{anchor}" opacity="0.6">€#{format_compact(last.cost_basis_float)}</text>
+    """
+  end
+
+  defp svg_fear_greed(fear_greed) do
+    value = fear_greed.value
+    color = fg_color_hex(fear_greed.color)
+    needle_x = r(@ml + @pw * value / 100)
+
+    """
+    <text x="#{@ml - 8}" y="10" fill="#475569" font-size="7" text-anchor="end" letter-spacing="0.04em">F&amp;G</text>
+    <rect x="#{@ml}" y="6" width="#{@pw}" height="5" rx="2.5" fill="#1e293b"/>
+    <rect x="#{@ml}" y="6" width="#{@pw}" height="5" rx="2.5" fill="url(#fg-bar-grad)" opacity="0.2"/>
+    <rect x="#{@ml}" y="6" width="#{r(needle_x - @ml)}" height="5" rx="2.5" fill="url(#fg-bar-grad)"/>
+    <circle cx="#{needle_x}" cy="8.5" r="5" fill="#{color}" stroke="#0a0e17" stroke-width="2"/>
+    <text x="#{needle_x}" y="-1" fill="#{color}" font-size="8" text-anchor="middle" font-weight="600">#{value}</text>
+    """
+  end
+
+  # Dividend bars overlaid at the bottom of the main chart area + cumulative orange line
+  defp svg_dividend_overlay(dividend_data, chart_data, x_fn, mt, main_h, chart_bottom) do
+    # Map each dividend month to the chart x-position
+    # Find the mid-point index in chart_data for each month "YYYY-MM"
+    month_positions =
+      Enum.map(dividend_data, fn d ->
+        month_str = d.month
+        # Find all chart_data indices whose date matches this month
+        matching_indices =
+          chart_data
+          |> Enum.with_index()
+          |> Enum.filter(fn {point, _idx} ->
+            Calendar.strftime(point.date, "%Y-%m") == month_str
+          end)
+          |> Enum.map(fn {_point, idx} -> idx end)
+
+        mid_idx =
+          case matching_indices do
+            [] -> nil
+            indices -> Enum.at(indices, div(length(indices), 2))
+          end
+
+        total = Decimal.to_float(d.total)
+        {mid_idx, total, d.month}
+      end)
+      |> Enum.reject(fn {idx, _, _} -> is_nil(idx) end)
+
+    case month_positions do
+      [] ->
+        ""
+
+      positions ->
+        bars = svg_dividend_bars(positions, x_fn, main_h, chart_bottom, chart_data)
+        cum_svg = svg_cumulative_line(positions, x_fn, mt, main_h)
+
+        """
+        #{bars}
+        #{cum_svg}
+        """
+    end
+  end
+
+  defp svg_dividend_bars(positions, x_fn, main_h, chart_bottom, chart_data) do
+    totals = Enum.map(positions, fn {_, t, _} -> t end)
+    max_total = Enum.max(totals)
+    bar_zone_h = main_h * 0.18
+    bar_w = max(@pw / length(chart_data) * 2.5, 12)
+
+    Enum.map_join(positions, "\n", fn {idx, total, _month} ->
+      cx = r(x_fn.(idx))
+      bh = if max_total > 0, do: r(total / max_total * bar_zone_h), else: 0
+      bx = r(cx - bar_w / 2)
+      by = r(chart_bottom - bh)
+
+      """
+      <rect x="#{bx}" y="#{by}" width="#{r(bar_w)}" height="#{bh}" rx="2" fill="#f59e0b" opacity="0.3"/>
+      <text x="#{cx}" y="#{r(by - 4)}" fill="#f59e0b" font-size="7" text-anchor="middle" font-weight="500" opacity="0.7">€#{format_compact(total)}</text>
+      """
+    end)
+  end
+
+  # Cumulative dividend orange line with dots and label
+  defp svg_cumulative_line(month_positions, x_fn, mt, main_h) do
+    cumulative =
+      Enum.scan(month_positions, {0, 0, ""}, fn {idx, total, month}, {_, cum, _} ->
+        {idx, cum + total, month}
+      end)
+
+    max_cum = elem(List.last(cumulative), 1)
+    cum_zone_h = main_h * 0.30
+    cum_base = mt + main_h * 0.15
+
+    cum_y_fn = fn val ->
+      if max_cum > 0,
+        do: cum_base + cum_zone_h - val / max_cum * cum_zone_h,
+        else: cum_base + cum_zone_h
+    end
+
+    cum_path = svg_cumulative_path(cumulative, x_fn, cum_y_fn)
+
+    cum_dots =
+      Enum.map_join(cumulative, "\n", fn {idx, cum, _} ->
+        cx = r(x_fn.(idx))
+        cy = r(cum_y_fn.(cum))
+
+        ~s[<circle cx="#{cx}" cy="#{cy}" r="2.5" fill="#f59e0b" stroke="#0a0e17" stroke-width="1.5"/>]
+      end)
+
+    {last_idx, last_cum, _} = List.last(cumulative)
+    last_x = r(x_fn.(last_idx))
+    last_y = r(cum_y_fn.(last_cum))
+    {label_x, anchor} = if last_x > @w - 80, do: {last_x - 8, "end"}, else: {last_x + 8, "start"}
+
+    cum_label =
+      ~s[<text x="#{label_x}" y="#{r(last_y - 4)}" fill="#f59e0b" font-size="7" font-weight="600" text-anchor="#{anchor}">€#{format_compact(last_cum)} div</text>]
+
+    """
+    #{cum_path}
+    #{cum_dots}
+    #{cum_label}
+    """
+  end
+
+  defp svg_cumulative_path(cumulative, _x_fn, _cum_y_fn) when length(cumulative) <= 1, do: ""
+
+  defp svg_cumulative_path(cumulative, x_fn, cum_y_fn) do
+    d =
+      cumulative
+      |> Enum.with_index()
+      |> Enum.map_join(" ", fn {{idx, cum, _}, i} ->
+        x = r(x_fn.(idx))
+        y = r(cum_y_fn.(cum))
+        if i == 0, do: "M#{x} #{y}", else: "L#{x} #{y}"
+      end)
+
+    ~s[<path d="#{d}" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round" opacity="0.8" style="filter: drop-shadow(0 0 3px rgba(245,158,11,0.3));"/>]
+  end
+
+  # --- Helpers ---
+
+  defp r(val), do: Float.round(val + 0.0, 1)
+
+  defp format_compact(val) when is_number(val) do
+    cond do
+      val >= 1_000_000 -> "#{Float.round(val / 1_000_000, 1)}M"
+      val >= 10_000 -> "#{round(val / 1_000)}K"
+      val >= 1_000 -> "#{Float.round(val / 1_000, 1)}K"
+      true -> "#{round(val)}"
+    end
+  end
+
+  defp format_compact(_), do: "0"
+
+  defp fg_color_hex("red"), do: "#ef4444"
+  defp fg_color_hex("orange"), do: "#f97316"
+  defp fg_color_hex("yellow"), do: "#eab308"
+  defp fg_color_hex("emerald"), do: "#10b981"
+  defp fg_color_hex("green"), do: "#22c55e"
+  defp fg_color_hex(_), do: "#64748b"
+
+  # --- Sparkline (public, used in stats cards) ---
+
+  @doc """
+  Renders an inline sparkline for use in stats cards.
+  """
+  def render_sparkline(values, opts \\ [])
+
+  def render_sparkline(values, opts) when is_list(values) and length(values) > 1 do
+    width = Keyword.get(opts, :width, 120)
+    height = Keyword.get(opts, :height, 28)
+    fill_color = Keyword.get(opts, :fill, "rgba(16, 185, 129, 0.15)")
+    line_color = Keyword.get(opts, :line, "#10b981")
+
+    sparkline =
+      Sparkline.new(values)
+      |> Sparkline.colours(fill_color, line_color)
+      |> Map.put(:width, width)
+      |> Map.put(:height, height)
+      |> Map.put(:line_width, 1.5)
+      |> Map.put(:spot_radius, 0)
+
+    {:safe, svg_iolist} = Sparkline.draw(sparkline)
     svg_string = IO.iodata_to_binary(svg_iolist)
 
-    first_date = format_date(List.first(chart_data))
-    current_date_str = format_date(Enum.at(chart_data, current_idx))
-    last_date = format_date(List.last(chart_data))
+    Phoenix.HTML.raw("""
+    <span class="sparkline-inline">#{svg_string}</span>
+    """)
+  end
+
+  def render_sparkline(_, _), do: Phoenix.HTML.raw("")
+
+  # --- Fear & Greed Gauge (standalone, used in template header) ---
+
+  @doc """
+  Renders a Fear & Greed Index gauge as an inline SVG.
+  """
+  def render_fear_greed_gauge(fear_greed) when is_map(fear_greed) do
+    value = fear_greed.value
+    color_hex = fg_color_hex(fear_greed.color)
+    needle_x = round(value * 1.4)
 
     Phoenix.HTML.raw("""
-    <div class="relative">
-      <style>
-        .portfolio-chart-container svg {
-          width: 100%;
-          height: auto;
-        }
-        .portfolio-chart-container .exc-tick text {
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 10px;
-          fill: #64748b;
-        }
-        .portfolio-chart-container .exc-tick line,
-        .portfolio-chart-container .exc-axis line,
-        .portfolio-chart-container .exc-axis path {
-          stroke: #2d3748;
-        }
-        .portfolio-chart-container .exc-line {
-          stroke-width: 2.5;
-          filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.4));
-        }
-      </style>
-      #{svg_string}
-      <div class="absolute bottom-8 left-0 right-0 flex justify-between px-12 text-xs text-[#64748b] font-mono">
-        <span>#{first_date}</span>
-        <span class="text-[#10b981] font-semibold">#{current_date_str}</span>
-        <span>#{last_date}</span>
-      </div>
+    <div class="fear-greed-gauge">
+      <svg width="140" height="40" viewBox="0 0 140 40" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="fg-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#ef4444"/>
+            <stop offset="30%" stop-color="#f97316"/>
+            <stop offset="50%" stop-color="#eab308"/>
+            <stop offset="75%" stop-color="#10b981"/>
+            <stop offset="100%" stop-color="#22c55e"/>
+          </linearGradient>
+        </defs>
+        <text x="0" y="10" fill="#475569" font-size="8" font-family="JetBrains Mono, monospace" letter-spacing="0.05em">FEAR &amp; GREED</text>
+        <text x="140" y="11" fill="#{color_hex}" font-size="12" font-family="JetBrains Mono, monospace" text-anchor="end" font-weight="600">#{value}</text>
+        <rect x="0" y="18" width="140" height="6" rx="3" fill="#1e293b"/>
+        <rect x="0" y="18" width="140" height="6" rx="3" fill="url(#fg-grad)" opacity="0.25"/>
+        <rect x="0" y="18" width="#{needle_x}" height="6" rx="3" fill="url(#fg-grad)"/>
+        <circle cx="#{needle_x}" cy="21" r="5" fill="#{color_hex}" stroke="#0a0e17" stroke-width="2"/>
+        <text x="0" y="36" fill="#334155" font-size="7" font-family="JetBrains Mono, monospace">FEAR</text>
+        <text x="140" y="36" fill="#334155" font-size="7" font-family="JetBrains Mono, monospace" text-anchor="end">GREED</text>
+      </svg>
     </div>
     """)
   end
 
-  defp render_chart(_chart_data, _current_date) do
-    Phoenix.HTML.raw("""
-    <div class="text-center text-[#64748b] py-8">
-      Not enough data points to display chart
-    </div>
-    """)
-  end
-
-  defp format_value(value) when is_number(value) do
-    value
-    |> round()
-    |> Integer.to_string()
-    |> add_thousands_separator()
-  end
-
-  defp format_value(value), do: to_string(value)
-
-  defp add_thousands_separator(str) do
-    str
-    |> String.reverse()
-    |> String.graphemes()
-    |> Enum.chunk_every(3)
-    |> Enum.join(",")
-    |> String.reverse()
-  end
-
-  defp format_date(%{date: date}) do
-    Calendar.strftime(date, "%b %d")
-  end
-
-  defp format_date(_), do: ""
+  def render_fear_greed_gauge(_), do: Phoenix.HTML.raw("")
 end

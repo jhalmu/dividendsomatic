@@ -29,6 +29,9 @@ dividendsomatic-*.tar
 /priv/static/assets/
 
 # Ignore SQLite database files
+/db/*.db
+/db/*.db-shm
+/db/*.db-wal
 *.db
 *.db-shm
 *.db-wal
@@ -43,12 +46,4 @@ dividendsomatic-*.tar
 # In case you use Node.js/npm, you want to ignore these.
 npm-debug.log
 /assets/node_modules/
-
-# SQLite database files
-*.db
-*.db-shm
-*.db-wal
-
-# CSV data files (user's private data)
-*.csv
 

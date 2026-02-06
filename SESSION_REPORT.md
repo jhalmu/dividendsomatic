@@ -1,83 +1,61 @@
-# Session Report - 2026-02-05
+# Session Report - 2026-02-06
 
 ## Summary
-Major implementation session completing the Dividendsomatic Master Plan phases 1-5.
+Frontend redesign with combined chart visualizations, seed data improvements, test expansion (42 → 69 tests), credo compliance, and design system token migration.
 
-## Evening Session: Branding & UI Refinement
-- **Brand header**: Own div at top using JetBrains Mono uppercase
-- **Font exploration**: Tested Dancing Script, Righteous, Bebas Neue, Archivo Black, Josefin Sans
-- **Final choice**: JetBrains Mono (matches holdings table aesthetic)
-- **UI tweaks**: Semi-transparent backgrounds (rgba 0.4), refined date text colors
-- **Layout**: Brand → Nav bar with date → Stats → Chart → Holdings
+## Frontend Design Overhaul
+- **Combined chart**: Portfolio value + cost basis lines + dividend bar overlay + Fear & Greed timeline
+- **Custom SVG rendering**: Replaced single Contex line chart with hand-built SVG for main chart
+- **Growth stats badge**: Absolute/percent change in chart header
+- **Dividend overlay**: Bars mapped to chart x-positions with cumulative orange line
+- **Sparkline**: Portfolio Value stat card (still uses Contex library)
+- **Design tokens**: Migrated all hardcoded Tailwind spacing to fluid tokens per DESIGN_SYSTEM_GUIDE.md
 
-## Completed Features
+## Seed Data Improvements
+- Added `buy_events` to stock definitions: `[{day_index, additional_qty, "purchase_price"}]`
+- Weighted average cost basis computation per day
+- Cost basis line now shows realistic step changes instead of flat line
+- Reduced initial quantities with buy events adding shares over time
 
-### Phase 1: Core UI Improvements
-- **Navigation Component**: Larger buttons (56x56px), First/Last buttons, duplicate nav at bottom, day counter
-- **Emerald Theme**: Added green accent colors with glow effects for gains
-- **Portfolio Growth Chart**: Contex-based SVG chart showing portfolio value history
+## Database Consolidation
+- Moved SQLite DB files from project root to `db/` folder
+- Updated `config/dev.exs` and `config/test.exs` paths
+- Cleaned up `.gitignore` (removed duplicate entries)
 
-### Phase 2: Gmail/Email Integration
-- **Gmail OAuth Module**: Full Google API integration for email search and CSV extraction
-- **Oban Worker**: Scheduled daily imports at 8 AM
-- **Configuration**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN` env vars
+## Testing (42 → 69 tests)
+- **10 LiveView tests**: Empty state, snapshot display, navigation (prev/next/first/last), keyboard hook, stats cards
+- **5 import.csv tests**: Successful import, missing file, no args, empty args, invalid date format
+- **12 chart component tests**: Sparkline (valid/empty/single/nil/custom), F&G gauge (valid/colors/extreme/nil/non-map)
 
-### Phase 3: Dividend Tracking
-- **Schema**: `dividends` table with symbol, ex_date, pay_date, amount, currency, source
-- **Context Functions**: CRUD, YTD totals, monthly breakdown, projected annual
-- **UI Display**: Dividend stats cards on portfolio view
-
-### Phase 4: Stock Data Integration
-- **Finnhub API**: Integration for real-time quotes and company profiles
-- **Caching**: `stock_quotes` and `company_profiles` tables with TTL (15min/7days)
-- **Configuration**: `FINNHUB_API_KEY` env var
-
-### Phase 5: Advanced Features
-- **Fear & Greed Index**: Alternative.me API integration with color-coded badge
-- **What-If Scenarios**: `sold_positions` table for tracking sold positions, hypothetical value calculations, opportunity cost analysis
+## Code Quality
+- Fixed all credo issues in portfolio_chart.ex (Enum.map_join, extracted functions, pattern matching)
+- Fixed nested module aliases in import_csv_test.exs
+- Credo --strict: only 4 pre-existing suggestions remain (TODO, generated code aliases)
 
 ## Files Created
-- `lib/dividendsomatic_web/components/portfolio_chart.ex`
-- `lib/dividendsomatic/portfolio/dividend.ex`
-- `lib/dividendsomatic/portfolio/sold_position.ex`
-- `lib/dividendsomatic/market_sentiment.ex`
-- `lib/dividendsomatic/stocks.ex`
-- `lib/dividendsomatic/stocks/stock_quote.ex`
-- `lib/dividendsomatic/stocks/company_profile.ex`
-- `priv/repo/migrations/*_create_dividends.exs`
-- `priv/repo/migrations/*_create_stock_quotes.exs`
-- `priv/repo/migrations/*_create_sold_positions.exs`
-- `test/dividendsomatic/gmail_test.exs`
-- `test/dividendsomatic/market_sentiment_test.exs`
-- `test/dividendsomatic/stocks_test.exs`
+- `test/dividendsomatic_web/live/portfolio_live_test.exs`
+- `test/dividendsomatic/import_csv_test.exs`
+- `test/dividendsomatic_web/components/portfolio_chart_test.exs`
+- `db/.gitkeep`
+- `PLAN_GMAIL_IMPORT.md`
+- `PLAN_CONTINUATION.md`
 
 ## Files Modified
-- `lib/dividendsomatic/portfolio.ex` - Added 80+ lines of new functions
-- `lib/dividendsomatic/gmail.ex` - Complete OAuth implementation
-- `lib/dividendsomatic/workers/gmail_import_worker.ex` - Uses new Gmail module
-- `lib/dividendsomatic_web/live/portfolio_live.ex` - New assigns for all features
-- `lib/dividendsomatic_web/live/portfolio_live.html.heex` - New UI components
-- `assets/css/app.css` - New styles (~100 lines)
-- `config/runtime.exs` - API key configurations
-- `test/dividendsomatic/portfolio_test.exs` - Added 100+ lines of tests
+- `lib/dividendsomatic_web/components/portfolio_chart.ex` - Dividend overlay, extracted functions, credo fixes
+- `lib/dividendsomatic_web/live/portfolio_live.html.heex` - Design token migration
+- `priv/repo/seeds.exs` - Buy events, weighted cost basis
+- `config/dev.exs` - DB path to db/ folder
+- `config/test.exs` - DB path to db/ folder
+- `.gitignore` - Cleaned up duplicates
 
 ## Test Results
-- **42 tests passing**
-- All new functionality covered
+- **69 tests, 0 failures**
+- Credo: 4 software design suggestions (all pre-existing)
 
-## GitHub Issues Closed
-- #1 Gmail MCP Integration
-- #2 Oban Background Jobs
-- #3 Charts & Visualizations
-- #4 Dividend Tracking
+## GitHub Issues
+- **Closed**: #8 (LiveView tests), #10 (import.csv tests)
+- **Updated**: #11 (coverage progress: 42 → 69 tests)
+- **Remaining**: #5 (Testing Suite), #9 (a11y tests), #11 (80% coverage)
 
-## Remaining Work
-- #5 Testing Suite (improve coverage)
-- #6 Production Deployment
-- #8-11 Additional test coverage items
-
-## Technical Notes
-- Contex library used for SVG chart generation
-- Alternative.me API for Fear & Greed (free, no auth)
-- Finnhub API for stock data (free tier: 60 calls/min)
-- SQLite for development, PostgreSQL recommended for production
+## Previous Session (2026-02-05)
+Major implementation session completing phases 1-5: Navigation, Gmail integration, Dividend tracking, Finnhub API, Fear & Greed, What-If scenarios. Branding with JetBrains Mono. 42 tests. Closed #1-#4.

@@ -7,7 +7,7 @@ import Config
 # Run `mix help test` for more information.
 config :dividendsomatic, Dividendsomatic.Repo,
   database:
-    Path.expand("../dividendsomatic_test#{System.get_env("MIX_TEST_PARTITION")}.db", __DIR__),
+    Path.expand("../db/dividendsomatic_test#{System.get_env("MIX_TEST_PARTITION")}.db", __DIR__),
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
 
