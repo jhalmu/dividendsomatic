@@ -11,12 +11,14 @@ config :dividendsomatic, Dividendsomatic.Repo,
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
 
-# We don't run a server during test. If one is required,
-# you can enable the server option below.
+# Enable server for Playwright E2E tests
 config :dividendsomatic, DividendsomaticWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
   secret_key_base: "faB4RqtmmWrIgdU28uiMqQEPpLNuXb6KoRzfkOzevh5CQdBkBngawZRSHnB0J0om",
-  server: false
+  server: true
+
+# Enable SQL sandbox for E2E/Playwright tests
+config :dividendsomatic, sql_sandbox: true
 
 # In test we don't send emails
 config :dividendsomatic, Dividendsomatic.Mailer, adapter: Swoosh.Adapters.Test
@@ -34,5 +36,13 @@ config :phoenix, :plug_init_mode, :runtime
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
 
-# Configure phoenix_test
-config :phoenix_test, :endpoint, DividendsomaticWeb.Endpoint
+# Configure phoenix_test with Playwright
+config :phoenix_test,
+  otp_app: :dividendsomatic,
+  endpoint: DividendsomaticWeb.Endpoint,
+  playwright: [
+    browser: :chromium,
+    browser_launch_timeout: 10_000,
+    trace: System.get_env("PLAYWRIGHT_TRACE", "false") in ~w(t true),
+    trace_dir: "tmp"
+  ]

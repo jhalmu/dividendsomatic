@@ -91,6 +91,8 @@ defmodule Dividendsomatic.MixProject do
 
       # Dev and Test
       {:phoenix_test, "~> 0.9.1", only: :test, runtime: false},
+      {:phoenix_test_playwright, "~> 0.10.1", only: :test, runtime: false},
+      {:playwright_ex, "~> 0.3.2", only: :test, runtime: false},
       {:floki, "~> 0.38.0", only: :test},
       {:a11y_audit, "~> 0.3.1", only: :test, runtime: false},
       {:esbuild, "~> 0.10.0", runtime: Mix.env() == :dev},

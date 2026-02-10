@@ -35,6 +35,10 @@ defmodule DividendsomaticWeb.Endpoint do
     plug Phoenix.Ecto.CheckRepoStatus, otp_app: :dividendsomatic
   end
 
+  if Application.compile_env(:dividendsomatic, :sql_sandbox) do
+    plug Phoenix.Ecto.SQL.Sandbox
+  end
+
   plug Phoenix.LiveDashboard.RequestLogger,
     param_key: "request_logger",
     cookie_key: "request_logger"
