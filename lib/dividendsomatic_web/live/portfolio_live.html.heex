@@ -1,108 +1,12 @@
 <main id="portfolio-view" class="terminal-theme terminal-grid" phx-hook="KeyboardNav" role="main">
   <div class="max-w-[var(--content-max-width)] mx-auto px-[var(--space-sm)] sm:px-[var(--space-md)] lg:px-[var(--space-lg)] py-[var(--space-md)]">
-    <!-- Brand -->
+    <!-- Brand + Motto -->
     <div class="terminal-branding">
       <h1 class="terminal-brand-name">dividends-o-matic</h1>
+      <div class="terminal-motto">sisu &amp; dividends</div>
     </div>
 
     <%= if @current_snapshot do %>
-      <!-- Navigation -->
-      <div class="terminal-nav-bar mb-[var(--space-md)] animate-fade-in">
-        <button
-          phx-click="navigate"
-          phx-value-direction="first"
-          class="terminal-nav-btn-sm"
-          disabled={!@has_prev}
-          title="First snapshot"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke-width="2"
-            stroke="currentColor"
-            class="w-3.5 h-3.5"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5"
-            />
-          </svg>
-        </button>
-
-        <button
-          phx-click="navigate"
-          phx-value-direction="prev"
-          class="terminal-nav-btn"
-          disabled={!@has_prev}
-          title="Previous (←)"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke-width="2.5"
-            stroke="currentColor"
-            class="w-4 h-4"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-          </svg>
-        </button>
-
-        <div class="terminal-nav-date">
-          <div class="terminal-nav-date-main">
-            {Calendar.strftime(@current_snapshot.report_date, "%Y-%m-%d")}
-          </div>
-          <div class="terminal-nav-date-sub">
-            {Calendar.strftime(@current_snapshot.report_date, "%A")}
-            <span class="mx-1.5 opacity-30">|</span>
-            {@snapshot_position}/{@total_snapshots}
-          </div>
-        </div>
-
-        <button
-          phx-click="navigate"
-          phx-value-direction="next"
-          class="terminal-nav-btn"
-          disabled={!@has_next}
-          title="Next (→)"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke-width="2.5"
-            stroke="currentColor"
-            class="w-4 h-4"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-          </svg>
-        </button>
-
-        <button
-          phx-click="navigate"
-          phx-value-direction="last"
-          class="terminal-nav-btn-sm"
-          disabled={!@has_next}
-          title="Latest snapshot"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke-width="2"
-            stroke="currentColor"
-            class="w-3.5 h-3.5"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M11.25 4.5l7.5 7.5-7.5 7.5m-6-15l7.5 7.5-7.5 7.5"
-            />
-          </svg>
-        </button>
-      </div>
       
 <!-- Stats Row -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-[var(--space-xs)] mb-[var(--space-md)]">
@@ -141,20 +45,29 @@
           </div>
         </div>
 
-        <div class="terminal-stat animate-fade-in animate-delay-4">
-          <div class="terminal-stat-label">Holdings</div>
-          <div class="terminal-stat-value">{length(@holdings)}</div>
+        <div class="terminal-stat terminal-stat-fg animate-fade-in animate-delay-4">
+          <%= if @fear_greed do %>
+            <div class="terminal-stat-label">Market Sentiment</div>
+            <div class="flex justify-center">
+              {DividendsomaticWeb.Components.PortfolioChart.render_fear_greed_gauge(@fear_greed,
+                id_suffix: "stats"
+              )}
+            </div>
+          <% else %>
+            <div class="terminal-stat-label">Holdings</div>
+            <div class="terminal-stat-value">{length(@holdings)}</div>
+          <% end %>
         </div>
       </div>
       
 <!-- Combined Chart Panel -->
       <%= if length(@chart_data) > 1 do %>
-        <div class="terminal-chart mb-[var(--space-md)] animate-fade-in animate-delay-3">
+        <div class="terminal-chart mb-[var(--space-xs)] animate-fade-in animate-delay-3">
           <!-- Chart Header: Legend + F&G Gauge + Growth Badge -->
           <div class="terminal-chart-header">
             <div>
-              <div class="terminal-chart-title">Portfolio Performance</div>
-              <div class="terminal-chart-legend">
+              <div class="terminal-chart-title" id="chart-title">Portfolio Performance</div>
+              <div class="terminal-chart-legend" id="chart-legend" aria-label="Chart legend">
                 <span class="terminal-legend-item">
                   <span class="terminal-legend-line" style="background: #10b981;"></span> Value
                 </span>
@@ -164,16 +77,6 @@
                 <span class="terminal-legend-item">
                   <span class="terminal-legend-bar" style="background: #f59e0b;"></span> Dividends
                 </span>
-                <%= if @fear_greed do %>
-                  <span class="terminal-legend-item">
-                    <span
-                      class="terminal-legend-bar"
-                      style="background: linear-gradient(90deg, #ef4444, #eab308, #22c55e); width: 14px; height: 3px;"
-                    >
-                    </span>
-                    F&G
-                  </span>
-                <% end %>
               </div>
             </div>
             <div class="flex items-center gap-[var(--space-sm)]">
@@ -220,6 +123,118 @@
         </div>
       <% end %>
       
+<!-- Compact Nav (before holdings) -->
+      <div class="mb-[var(--space-xs)] animate-fade-in animate-delay-3">
+        <.nav_bar
+          current_snapshot={@current_snapshot}
+          has_prev={@has_prev}
+          has_next={@has_next}
+          snapshot_position={@snapshot_position}
+          total_snapshots={@total_snapshots}
+          compact
+        />
+      </div>
+      
+<!-- Holdings Table -->
+      <div class="terminal-card animate-fade-in animate-delay-4">
+        <div class="p-[var(--space-sm)] pb-0">
+          <div class="flex items-center justify-between mb-[var(--space-xs)]">
+            <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+              Positions
+            </div>
+            <span class="terminal-holdings-count">
+              {length(@holdings)} holdings
+            </span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <div class="min-w-[780px]">
+            <table class="terminal-table">
+              <thead>
+                <tr>
+                  <th scope="col">Symbol</th>
+                  <th scope="col">Description</th>
+                  <th scope="col" class="text-right">Qty</th>
+                  <th scope="col" class="text-right">Price</th>
+                  <th scope="col" class="text-right">Value</th>
+                  <th scope="col" class="text-right">Cost</th>
+                  <th scope="col" class="text-right">P&L</th>
+                  <th scope="col" class="text-right">% NAV</th>
+                </tr>
+              </thead>
+              <tbody>
+                <%= for holding <- @holdings do %>
+                  <tr>
+                    <td>
+                      <.link
+                        navigate={~p"/stocks/#{holding.symbol}"}
+                        class="terminal-symbol hover:underline"
+                      >
+                        {holding.symbol}
+                      </.link>
+                    </td>
+                    <td>
+                      <span class="terminal-description">{holding.description}</span>
+                    </td>
+                    <td class="terminal-number">
+                      {format_integer(holding.quantity)}
+                    </td>
+                    <td class="terminal-number">
+                      {format_decimal(holding.mark_price)}
+                      <span style="color: var(--terminal-dim); font-size: 0.625rem; margin-left: 0.25rem;">
+                        {holding.currency_primary}
+                      </span>
+                    </td>
+                    <td class="terminal-number" style="font-weight: 500;">
+                      {format_decimal(holding.position_value)}
+                    </td>
+                    <td class="terminal-number" style="color: var(--terminal-dim);">
+                      {format_decimal(holding.cost_basis_money)}
+                    </td>
+                    <td class="terminal-number">
+                      <span
+                        class={pnl_badge_class(holding.fifo_pnl_unrealized)}
+                        aria-label={"#{if pnl_positive?(holding.fifo_pnl_unrealized), do: "Gain", else: "Loss"}: #{format_decimal(holding.fifo_pnl_unrealized)}"}
+                      >
+                        <%= if pnl_positive?(holding.fifo_pnl_unrealized) do %>
+                          +
+                        <% end %>
+                        {format_decimal(holding.fifo_pnl_unrealized)}
+                      </span>
+                    </td>
+                    <td class="terminal-number">
+                      <span style="color: var(--terminal-muted);">
+                        {format_decimal(holding.percent_of_nav)}%
+                      </span>
+                      <span class="terminal-percent-bar">
+                        <span
+                          class="terminal-percent-fill"
+                          style={"width: #{min(Decimal.to_float(holding.percent_of_nav || Decimal.new("0")), 100)}%"}
+                        >
+                        </span>
+                      </span>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      
+<!-- Compact Nav (after holdings) -->
+      <div class="mb-[var(--space-xs)] animate-fade-in animate-delay-4">
+        <.nav_bar
+          current_snapshot={@current_snapshot}
+          has_prev={@has_prev}
+          has_next={@has_next}
+          snapshot_position={@snapshot_position}
+          total_snapshots={@total_snapshots}
+          compact
+        />
+      </div>
+      
 <!-- Recent Dividends + Realized P&L side by side -->
       <%= if length(@recent_dividends) > 0 or Decimal.compare(@realized_pnl, Decimal.new("0")) != :eq do %>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-[var(--space-xs)] mb-[var(--space-md)]">
@@ -253,101 +268,22 @@
         </div>
       <% end %>
       
-<!-- Holdings Table -->
-      <div class="terminal-card animate-fade-in animate-delay-4">
-        <div class="p-[var(--space-sm)] pb-0">
-          <div class="flex items-center justify-between mb-[var(--space-xs)]">
-            <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
-              Positions
-            </div>
-            <span style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim); letter-spacing: 0.1em; text-transform: uppercase;">
-              {length(@holdings)} holdings
-            </span>
-          </div>
-        </div>
-
-        <div class="overflow-x-auto">
-          <div class="min-w-[780px]">
-            <table class="terminal-table">
-              <thead>
-                <tr>
-                  <th>Symbol</th>
-                  <th>Description</th>
-                  <th class="text-right">Qty</th>
-                  <th class="text-right">Price</th>
-                  <th class="text-right">Value</th>
-                  <th class="text-right">Cost</th>
-                  <th class="text-right">P&L</th>
-                  <th class="text-right">% NAV</th>
-                </tr>
-              </thead>
-              <tbody>
-                <%= for holding <- @holdings do %>
-                  <tr>
-                    <td>
-                      <span class="terminal-symbol">{holding.symbol}</span>
-                    </td>
-                    <td>
-                      <span class="terminal-description">{holding.description}</span>
-                    </td>
-                    <td class="terminal-number">
-                      {format_integer(holding.quantity)}
-                    </td>
-                    <td class="terminal-number">
-                      {format_decimal(holding.mark_price)}
-                      <span style="color: var(--terminal-dim); font-size: 0.625rem; margin-left: 0.25rem;">
-                        {holding.currency_primary}
-                      </span>
-                    </td>
-                    <td class="terminal-number" style="font-weight: 500;">
-                      {format_decimal(holding.position_value)}
-                    </td>
-                    <td class="terminal-number" style="color: var(--terminal-dim);">
-                      {format_decimal(holding.cost_basis_money)}
-                    </td>
-                    <td class="terminal-number">
-                      <span class={pnl_badge_class(holding.fifo_pnl_unrealized)}>
-                        <%= if pnl_positive?(holding.fifo_pnl_unrealized) do %>
-                          +
-                        <% end %>
-                        {format_decimal(holding.fifo_pnl_unrealized)}
-                      </span>
-                    </td>
-                    <td class="terminal-number">
-                      <span style="color: var(--terminal-muted);">
-                        {format_decimal(holding.percent_of_nav)}%
-                      </span>
-                      <span class="terminal-percent-bar">
-                        <span
-                          class="terminal-percent-fill"
-                          style={"width: #{min(Decimal.to_float(holding.percent_of_nav || Decimal.new("0")), 100)}%"}
-                        >
-                        </span>
-                      </span>
-                    </td>
-                  </tr>
-                <% end %>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      
 <!-- Footer -->
       <div
         class="mt-[var(--space-md)] flex items-center justify-between animate-fade-in animate-delay-5"
         style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim); letter-spacing: 0.02em;"
       >
-        <div>
+        <div aria-hidden="true">
           <span class="terminal-kbd">←</span>
           <span class="terminal-kbd ml-0.5">→</span>
           <span class="ml-1.5">navigate</span>
         </div>
+        <span class="sr-only">Use left and right arrow keys to navigate between snapshots</span>
         <div>dividends-o-matic</div>
       </div>
     <% else %>
       <!-- Empty State -->
-      <div class="terminal-card animate-fade-in">
+      <div class="terminal-card">
         <div class="terminal-empty">
           <div class="terminal-empty-icon">
             <svg
@@ -358,6 +294,7 @@
               stroke="currentColor"
               class="w-7 h-7"
               style="color: var(--terminal-muted);"
+              aria-hidden="true"
             >
               <path
                 stroke-linecap="round"

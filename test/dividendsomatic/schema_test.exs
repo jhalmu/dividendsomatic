@@ -194,12 +194,13 @@ defmodule Dividendsomatic.SchemaTest do
         |> Dividend.changeset(attrs)
         |> Repo.insert()
 
-      # Second insert with same key fields should raise
-      assert_raise Ecto.ConstraintError, fn ->
+      # Second insert with same key fields should fail
+      {:error, changeset} =
         %Dividend{}
         |> Dividend.changeset(attrs)
-        |> Repo.insert!()
-      end
+        |> Repo.insert()
+
+      assert {"has already been taken", _} = changeset.errors[:symbol]
     end
   end
 

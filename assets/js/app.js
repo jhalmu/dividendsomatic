@@ -41,6 +41,22 @@ const Hooks = {
     destroyed() {
       window.removeEventListener("keydown", this.handleKeydown)
     }
+  },
+  ChartAnimation: {
+    mounted() {
+      this.animatePaths()
+    },
+    updated() {
+      this.animatePaths()
+    },
+    animatePaths() {
+      const paths = this.el.querySelectorAll('svg path[stroke="#10b981"][stroke-width="2.5"]')
+      paths.forEach(path => {
+        const length = path.getTotalLength()
+        path.style.setProperty('--path-length', length)
+        path.classList.add('chart-line-animated')
+      })
+    }
   }
 }
 

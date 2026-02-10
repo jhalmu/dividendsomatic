@@ -13,7 +13,19 @@ defmodule Dividendsomatic.MixProject do
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
       listeners: [Phoenix.CodeReloader],
-      dialyzer: dialyzer()
+      dialyzer: dialyzer(),
+      test_coverage: [
+        summary: [threshold: 60],
+        ignore_modules: [
+          DividendsomaticWeb.CoreComponents,
+          DividendsomaticWeb.Gettext,
+          DividendsomaticWeb.Layouts,
+          DividendsomaticWeb.PageController,
+          DividendsomaticWeb.PageHTML,
+          DividendsomaticWeb.PlaywrightJsHelper,
+          DividendsomaticWeb.Telemetry
+        ]
+      ]
     ]
   end
 
@@ -61,7 +73,7 @@ defmodule Dividendsomatic.MixProject do
       {:phoenix, "~> 1.8.3"},
       {:phoenix_ecto, "~> 4.7.0"},
       {:ecto_sql, "~> 3.13.4"},
-      {:ecto_sqlite3, "~> 0.22.0"},
+      {:postgrex, "~> 0.19"},
       {:phoenix_html, "~> 4.3.0"},
       {:phoenix_live_view, "~> 1.1.22"},
       {:heroicons,

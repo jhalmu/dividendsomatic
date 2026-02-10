@@ -6,10 +6,15 @@ import Config
 # to provide built-in test partitioning in CI environment.
 # Run `mix help test` for more information.
 config :dividendsomatic, Dividendsomatic.Repo,
-  database:
-    Path.expand("../db/dividendsomatic_test#{System.get_env("MIX_TEST_PARTITION")}.db", __DIR__),
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "dividendsomatic_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
+
+# Oban testing mode - jobs run inline in tests
+config :dividendsomatic, Oban, testing: :inline
 
 # Enable server for Playwright E2E tests
 config :dividendsomatic, DividendsomaticWeb.Endpoint,

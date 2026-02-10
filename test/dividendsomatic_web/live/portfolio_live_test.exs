@@ -104,56 +104,40 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       %{conn: conn}
     end
 
-    test "should navigate to previous snapshot when clicking prev", %{conn: conn} do
+    test "should navigate to previous snapshot", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/")
 
       assert html =~ "2026-01-28"
 
-      html =
-        view
-        |> element(~s{button[phx-click="navigate"][phx-value-direction="prev"]})
-        |> render_click()
+      html = render_hook(view, "navigate", %{"direction" => "prev"})
 
       assert html =~ "2026-01-27"
     end
 
-    test "should navigate to next snapshot when clicking next", %{conn: conn} do
+    test "should navigate to next snapshot", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 
-      view
-      |> element(~s{button[phx-click="navigate"][phx-value-direction="prev"]})
-      |> render_click()
+      render_hook(view, "navigate", %{"direction" => "prev"})
 
-      html =
-        view
-        |> element(~s{button[phx-click="navigate"][phx-value-direction="next"]})
-        |> render_click()
+      html = render_hook(view, "navigate", %{"direction" => "next"})
 
       assert html =~ "2026-01-28"
     end
 
-    test "should navigate to first snapshot when clicking first", %{conn: conn} do
+    test "should navigate to first snapshot", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 
-      html =
-        view
-        |> element(~s{button[phx-click="navigate"][phx-value-direction="first"]})
-        |> render_click()
+      html = render_hook(view, "navigate", %{"direction" => "first"})
 
       assert html =~ "2026-01-27"
     end
 
-    test "should navigate to last snapshot when clicking last", %{conn: conn} do
+    test "should navigate to last snapshot", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 
-      view
-      |> element(~s{button[phx-click="navigate"][phx-value-direction="first"]})
-      |> render_click()
+      render_hook(view, "navigate", %{"direction" => "first"})
 
-      html =
-        view
-        |> element(~s{button[phx-click="navigate"][phx-value-direction="last"]})
-        |> render_click()
+      html = render_hook(view, "navigate", %{"direction" => "last"})
 
       assert html =~ "2026-01-28"
     end
@@ -162,12 +146,10 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       {:ok, view, _html} = live(conn, ~p"/")
 
       # Navigate to first
-      view
-      |> element(~s{button[phx-click="navigate"][phx-value-direction="first"]})
-      |> render_click()
+      render_hook(view, "navigate", %{"direction" => "first"})
 
       html = render(view)
-      # The first/prev buttons should be disabled when on first snapshot
+      # The prev buttons should be disabled when on first snapshot
       assert html =~ ~s{disabled}
     end
   end

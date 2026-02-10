@@ -2,7 +2,10 @@ import Config
 
 # Configure your database
 config :dividendsomatic, Dividendsomatic.Repo,
-  database: Path.expand("../db/dividendsomatic_dev.db", __DIR__),
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "dividendsomatic_dev",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10

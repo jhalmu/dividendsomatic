@@ -3,10 +3,17 @@ defmodule DividendsomaticWeb.PortfolioLive do
 
   alias Dividendsomatic.{MarketSentiment, Portfolio}
 
+  # F&G refresh interval: 30 minutes
+  @fg_refresh_interval :timer.minutes(30)
+
   @impl true
   def mount(_params, _session, socket) do
     snapshot = Portfolio.get_latest_snapshot()
     fear_greed = get_fear_greed_data()
+
+    if connected?(socket) do
+      Process.send_after(self(), :refresh_fear_greed, @fg_refresh_interval)
+    end
 
     socket =
       socket
@@ -68,6 +75,172 @@ defmodule DividendsomaticWeb.PortfolioLive do
   def handle_event("navigate", %{"direction" => "last"}, socket) do
     latest_snapshot = Portfolio.get_latest_snapshot()
     {:noreply, assign_snapshot(socket, latest_snapshot)}
+  end
+
+  @impl true
+  def handle_info(:refresh_fear_greed, socket) do
+    fear_greed = get_fear_greed_data()
+    Process.send_after(self(), :refresh_fear_greed, @fg_refresh_interval)
+    {:noreply, assign(socket, :fear_greed, fear_greed)}
+  end
+
+  # --- Function Components ---
+
+  attr :current_snapshot, :map, required: true
+  attr :has_prev, :boolean, required: true
+  attr :has_next, :boolean, required: true
+  attr :snapshot_position, :integer, required: true
+  attr :total_snapshots, :integer, required: true
+  attr :compact, :boolean, default: false
+
+  def nav_bar(assigns) do
+    ~H"""
+    <nav
+      class={if @compact, do: "terminal-nav-bar-compact", else: "terminal-nav-bar"}
+      aria-label="Snapshot navigation"
+    >
+      <%= unless @compact do %>
+        <button
+          phx-click="navigate"
+          phx-value-direction="first"
+          class="terminal-nav-btn-sm"
+          disabled={!@has_prev}
+          aria-label="First snapshot"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="2"
+            stroke="currentColor"
+            class="w-3.5 h-3.5"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5"
+            />
+          </svg>
+        </button>
+      <% end %>
+
+      <button
+        phx-click="navigate"
+        phx-value-direction="prev"
+        class={if @compact, do: "terminal-nav-btn-compact", else: "terminal-nav-btn"}
+        disabled={!@has_prev}
+        aria-label="Previous snapshot"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="2.5"
+          stroke="currentColor"
+          class={if @compact, do: "w-3 h-3", else: "w-4 h-4"}
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+        </svg>
+      </button>
+
+      <%= if @compact do %>
+        <svg
+          class="terminal-rose-flourish"
+          width="60"
+          height="8"
+          viewBox="0 0 60 8"
+          aria-hidden="true"
+        >
+          <path
+            d="M0 4 Q15 1, 30 4 Q45 7, 60 4"
+            stroke="#ffffff"
+            stroke-width="0.4"
+            fill="none"
+            opacity="0.15"
+          />
+          <circle cx="30" cy="4" r="1" fill="#ffffff" opacity="0.12" />
+        </svg>
+      <% end %>
+
+      <div class={if @compact, do: "terminal-nav-date-compact", else: "terminal-nav-date"}>
+        <div class={if @compact, do: "terminal-nav-date-main-compact", else: "terminal-nav-date-main"}>
+          {Calendar.strftime(@current_snapshot.report_date, "%Y-%m-%d")}
+        </div>
+        <div class="terminal-nav-date-sub">
+          {Calendar.strftime(@current_snapshot.report_date, "%A")}
+          <span class="mx-1.5 opacity-30">|</span>
+          {@snapshot_position}/{@total_snapshots}
+        </div>
+      </div>
+
+      <%= if @compact do %>
+        <svg
+          class="terminal-rose-flourish"
+          width="60"
+          height="8"
+          viewBox="0 0 60 8"
+          aria-hidden="true"
+        >
+          <path
+            d="M60 4 Q45 1, 30 4 Q15 7, 0 4"
+            stroke="#ffffff"
+            stroke-width="0.4"
+            fill="none"
+            opacity="0.15"
+          />
+          <circle cx="30" cy="4" r="1" fill="#ffffff" opacity="0.12" />
+        </svg>
+      <% end %>
+
+      <button
+        phx-click="navigate"
+        phx-value-direction="next"
+        class={if @compact, do: "terminal-nav-btn-compact", else: "terminal-nav-btn"}
+        disabled={!@has_next}
+        aria-label="Next snapshot"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="2.5"
+          stroke="currentColor"
+          class={if @compact, do: "w-3 h-3", else: "w-4 h-4"}
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+        </svg>
+      </button>
+
+      <%= unless @compact do %>
+        <button
+          phx-click="navigate"
+          phx-value-direction="last"
+          class="terminal-nav-btn-sm"
+          disabled={!@has_next}
+          aria-label="Latest snapshot"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="2"
+            stroke="currentColor"
+            class="w-3.5 h-3.5"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M11.25 4.5l7.5 7.5-7.5 7.5m-6-15l7.5 7.5-7.5 7.5"
+            />
+          </svg>
+        </button>
+      <% end %>
+    </nav>
+    """
   end
 
   defp assign_snapshot(socket, nil) do

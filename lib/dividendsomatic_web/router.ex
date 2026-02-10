@@ -19,6 +19,7 @@ defmodule DividendsomaticWeb.Router do
 
     live "/", PortfolioLive, :index
     live "/portfolio/:date", PortfolioLive, :show
+    live "/stocks/:symbol", StockLive, :show
   end
 
   # Other scopes may use custom stacks.

@@ -1,0 +1,131 @@
+<main class="terminal-theme terminal-grid" role="main">
+  <div class="max-w-[var(--content-max-width)] mx-auto px-[var(--space-sm)] sm:px-[var(--space-md)] lg:px-[var(--space-lg)] py-[var(--space-md)]">
+    <!-- Back Navigation -->
+    <div class="mb-[var(--space-md)]">
+      <.link navigate={~p"/"} class="terminal-back-link" aria-label="Back to portfolio">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="2"
+          stroke="currentColor"
+          class="w-3.5 h-3.5"
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+        </svg>
+        Portfolio
+      </.link>
+    </div>
+    
+<!-- Header -->
+    <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-md)] animate-fade-in">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="terminal-stock-symbol">{@symbol}</h1>
+          <%= if @company_profile do %>
+            <div class="terminal-stock-name">{@company_profile.name}</div>
+          <% end %>
+        </div>
+        <%= if @quote_data do %>
+          <div class="text-right">
+            <div class="terminal-stat-value">{format_decimal(@quote_data.current_price)}</div>
+          </div>
+        <% end %>
+      </div>
+    </div>
+    
+<!-- Company Info -->
+    <%= if @company_profile do %>
+      <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-md)] animate-fade-in animate-delay-1">
+        <div class="terminal-section-label">Company Info</div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)] mt-[var(--space-xs)]">
+          <%= if @company_profile.industry do %>
+            <div>
+              <div class="terminal-info-label">Industry</div>
+              <div class="terminal-info-value">{@company_profile.industry}</div>
+            </div>
+          <% end %>
+          <%= if @company_profile.country do %>
+            <div>
+              <div class="terminal-info-label">Country</div>
+              <div class="terminal-info-value">{@company_profile.country}</div>
+            </div>
+          <% end %>
+          <%= if @company_profile.exchange do %>
+            <div>
+              <div class="terminal-info-label">Exchange</div>
+              <div class="terminal-info-value">{@company_profile.exchange}</div>
+            </div>
+          <% end %>
+          <%= if @company_profile.ipo_date do %>
+            <div>
+              <div class="terminal-info-label">IPO</div>
+              <div class="terminal-info-value">{@company_profile.ipo_date}</div>
+            </div>
+          <% end %>
+          <%= if @company_profile.market_cap do %>
+            <div>
+              <div class="terminal-info-label">Market Cap</div>
+              <div class="terminal-info-value">
+                {format_decimal(@company_profile.market_cap)}M
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+    
+<!-- Dividend History -->
+    <%= if length(@dividends) > 0 do %>
+      <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-md)] animate-fade-in animate-delay-2">
+        <div class="terminal-section-label">Dividend History ({length(@dividends)} payments)</div>
+        <%= for div <- @dividends do %>
+          <div class="terminal-dividend-row">
+            <span class="terminal-dividend-date">
+              {Calendar.strftime(div.ex_date, "%Y-%m-%d")}
+            </span>
+            <span class="terminal-dividend-amount">
+              +{format_decimal(div.amount)} {div.currency}
+            </span>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+    
+<!-- External Links -->
+    <%= if length(@external_links) > 0 do %>
+      <div class="terminal-card p-[var(--space-sm)] animate-fade-in animate-delay-3">
+        <div class="terminal-section-label">External Links</div>
+        <div class="flex flex-wrap gap-[var(--space-xs)] mt-[var(--space-xs)]">
+          <%= for link <- @external_links do %>
+            <a
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="terminal-external-link"
+              aria-label={"#{link.name} (opens in new window)"}
+            >
+              {link.name}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="2"
+                stroke="currentColor"
+                class="w-3 h-3"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
+                />
+              </svg>
+            </a>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</main>

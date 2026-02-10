@@ -7,11 +7,16 @@ Session notes and progress tracking for the Dividendsomatic project.
 ## EOD Workflow
 
 When user says **"EOD"**: Execute immediately without confirmation:
-1. Run `mix test.all`
-2. Sync GitHub issues (`gh issue list/close/comment`)
-3. Update this MEMO.md with session summary
-4. Commit & push
-5. Check that CI/CD pipeline is green -> if not, investigate and fix issues
+1. Run linters and quality checks:
+   - `mix compile --warnings-as-errors`
+   - `mix format --check-formatted`
+   - `mix credo --strict`
+   - `mix sobelow --config`
+2. Run `mix test.all` (precommit + credo)
+3. Sync GitHub issues (`gh issue list/close/comment`)
+4. Update this MEMO.md with session summary
+5. Commit & push
+6. Check that CI/CD pipeline is green -> if not, investigate and fix issues
 
 ---
 
@@ -38,26 +43,90 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.2.0 (Feature Complete)
-**Status:** All planned features implemented, needs testing and production deployment
+**Version:** 0.3.0 (Evolution Complete)
+**Status:** 6-phase evolution plan fully implemented
 
 **Implemented:**
-- CSV import from Interactive Brokers (`mix import.csv`)
+- CSV import from Interactive Brokers (`mix import.csv` + `mix import.batch`)
+- Generic data ingestion pipeline (CSV directory + Gmail adapters)
+- Automated daily import via Oban cron (weekdays 12:00)
 - LiveView portfolio viewer with arrow-key navigation
-- DaisyUI components + fluid design tokens
+- Custom terminal-themed UI with tile background, fluid design tokens
+- Custom SVG combined chart (value + cost basis + dividends + animations)
+- Circular Fear & Greed arc gauge (market sentiment)
+- Stock detail pages with external links (Yahoo, SeekingAlpha, Nordnet)
+- PostgreSQL database with docker-compose
 - Gmail integration (auto-fetch CSV attachments)
-- Oban background worker (Gmail import scheduling)
-- Contex charts (portfolio value over time)
-- Dividend tracking
+- Oban background jobs enabled
+- Dividend tracking with area fill visualization
 - Sold positions tracking
 - Stock quotes & company profiles (Finnhub API)
-- Market sentiment data
-- What-if analysis
+- WCAG AA accessible (180 tests, 4 Playwright a11y tests)
 
 **Next priorities:**
-- Production deployment (#6 - reopened)
-- Enable Oban (needs SQLite notifier or PostgreSQL)
-- Fix remaining color contrast a11y issue on `.terminal-code` (1 Playwright test skipped)
+- Production deployment (#6)
+- Multi-provider market data architecture (#22)
+- Market data research document (#21)
+- Stock detail page enhancements (#20)
+
+---
+
+## 2026-02-10 - Evolution Plan Complete (Phases 1-5)
+
+### Session Summary
+
+Executed full 6-phase evolution plan: UI overhaul, PostgreSQL migration, generic data ingestion, stock detail pages, market data research, and comprehensive testing/quality improvements.
+
+### Changes Made
+
+**Phase 1 - UI Overhaul (Issues #12-16):**
+- Template restructured: brand + stats + chart + nav + holdings + nav + dividends + footer
+- Brand area with "sisu & dividends" tagline
+- Compact nav bars with white SVG flourishes flanking date display
+- Circular F&G arc gauge replacing holdings count in stats row
+- Stats cards with elevated background and backdrop blur
+- Tile grid background pattern restored
+- Enhanced dividend visualization (area fill + cumulative line + dots)
+- Chart animations (path drawing, pulsing current-date marker)
+- Removed F&G bar/background from chart SVG (kept in stats row only)
+
+**Phase 2 - PostgreSQL Migration (#17):**
+- Switched from SQLite to PostgreSQL (postgrex)
+- docker-compose.yml with PostgreSQL 18 Alpine
+- Updated all config files (dev, test, runtime)
+- Fixed SQL fragments (strftime → to_char)
+- Enabled Oban with cron scheduling
+
+**Phase 3 - Generic Data Ingestion (#18, #19):**
+- DataIngestion behaviour with source adapters
+- CSV directory adapter (scans csv_data/ folder)
+- Gmail adapter (wraps existing Gmail module)
+- DataImportWorker Oban job (cron: weekdays 12:00)
+- mix import.batch task for bulk CSV import
+
+**Phase 4 - Stock Detail Pages (#20):**
+- /stocks/:symbol route with StockLive
+- Company info, quote, holdings history, dividend history
+- External links (Yahoo Finance, SeekingAlpha, Nordnet) by exchange
+
+**Phase 5 - Market Data Research (#21):**
+- docs/MARKET_DATA_RESEARCH.md with provider comparison
+- Coverage matrix for Finnish, Japanese, HK, Chinese stocks
+
+**Testing & Quality:**
+- 180 tests, 0 failures (expanded from 125)
+- 63.81% code coverage (threshold: 60%)
+- 4 Playwright a11y tests passing (axe-core, 0 violations)
+- Credo --strict: 0 issues
+- All compiler warnings fixed
+- WCAG AA contrast compliance (--terminal-muted adjusted)
+- Design system tokens applied across all components
+
+### GitHub Issues Closed
+#12, #13, #14, #15, #16, #17, #18, #19
+
+### Remaining Open Issues
+#20 (Stock detail pages - implemented, can close), #21 (Market data research - documented), #22 (Multi-provider architecture - future)
 
 ---
 
@@ -272,19 +341,24 @@ mix import.csv flex.490027.PortfolioForWww.20260128.20260128.csv
 | [#9](https://github.com/jhalmu/dividendsomatic/issues/9) | Add accessibility tests with a11y_audit | MEDIUM | **Closed** |
 | [#10](https://github.com/jhalmu/dividendsomatic/issues/10) | Add Mix task tests for import.csv | MEDIUM | **Closed** |
 | [#11](https://github.com/jhalmu/dividendsomatic/issues/11) | Increase overall test coverage to 80% | MEDIUM | **Closed** |
+| [#12](https://github.com/jhalmu/dividendsomatic/issues/12) | Template restructure: dual compact nav | HIGH | **Closed** |
+| [#13](https://github.com/jhalmu/dividendsomatic/issues/13) | Brand area: tagline + decorative SVG | MEDIUM | **Closed** |
+| [#14](https://github.com/jhalmu/dividendsomatic/issues/14) | F&G gauge in stats row | HIGH | **Closed** |
+| [#15](https://github.com/jhalmu/dividendsomatic/issues/15) | Enhanced dividend visualization | MEDIUM | **Closed** |
+| [#16](https://github.com/jhalmu/dividendsomatic/issues/16) | Chart animations | MEDIUM | **Closed** |
+| [#17](https://github.com/jhalmu/dividendsomatic/issues/17) | PostgreSQL migration + Oban | HIGH | **Closed** |
+| [#18](https://github.com/jhalmu/dividendsomatic/issues/18) | Batch CSV re-import | HIGH | **Closed** |
+| [#19](https://github.com/jhalmu/dividendsomatic/issues/19) | Generic data ingestion pipeline | HIGH | **Closed** |
+| [#20](https://github.com/jhalmu/dividendsomatic/issues/20) | Stock detail pages | MEDIUM | Open |
+| [#21](https://github.com/jhalmu/dividendsomatic/issues/21) | Market data research document | LOW | Open |
+| [#22](https://github.com/jhalmu/dividendsomatic/issues/22) | Multi-provider market data architecture | LOW | Open |
 
 ## Technical Debt
 
-- [ ] Oban disabled (needs SQLite notifier or switch to PostgreSQL)
+- [x] PostgreSQL migration complete (Oban enabled)
 - [ ] Gmail integration needs OAuth env vars (`GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`)
 - [ ] Finnhub integration needs API key (`FINNHUB_API_KEY`)
 - [ ] No production deployment (Fly.io or similar)
-- [x] Test coverage: 125 tests (up from 69), issues #5/#9/#11 closed
-
-## Credo Issues (mix credo --strict)
-
-**Software Design (4):**
-- 1 TODO comment in application.ex (SQLite config)
-- 3 nested module alias suggestions (core_components.ex, data_case.ex) - Phoenix boilerplate
+- [x] Test coverage: 180 tests, 63.81% coverage, 0 credo issues
 
 ---

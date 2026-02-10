@@ -29,21 +29,29 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="combined-chart-container">
+    <div
+      class="combined-chart-container"
+      id="chart-anim"
+      phx-hook="ChartAnimation"
+      role="img"
+      aria-labelledby="chart-title"
+      aria-describedby="chart-legend"
+    >
       {render_combined(@chart_data, @current_date, @dividend_data, @fear_greed)}
+      <p class="sr-only">
+        Portfolio value and cost basis chart showing {length(@chart_data)} data points.
+      </p>
     </div>
     """
   end
 
   # --- Main combined chart renderer ---
 
-  defp render_combined(chart_data, current_date, dividend_data, fear_greed)
+  defp render_combined(chart_data, current_date, dividend_data, _fear_greed)
        when is_list(chart_data) and length(chart_data) > 1 do
-    has_fg = is_map(fear_greed)
     has_div = is_list(dividend_data) and dividend_data != []
 
-    fg_space = if has_fg, do: 22, else: 0
-    mt = 20 + fg_space
+    mt = 20
     main_h = 250
     chart_bottom = mt + main_h
     total_h = chart_bottom + 25
@@ -72,7 +80,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
 
     parts =
       [
-        svg_defs(has_fg),
+        svg_defs(false),
         svg_grid(mt, main_h, y_lo, y_range),
         svg_area_fill(chart_data, x_fn, y_fn, chart_bottom),
         div_overlay,
@@ -81,8 +89,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
         svg_current_marker(chart_data, current_date, x_fn, y_fn, mt, chart_bottom),
         svg_x_labels(chart_data, x_fn, chart_bottom + 15),
         svg_y_labels(mt, main_h, y_lo, y_range),
-        svg_annotations(chart_data, x_fn, y_fn),
-        if(has_fg, do: svg_fear_greed(fear_greed), else: "")
+        svg_annotations(chart_data, x_fn, y_fn)
       ]
       |> Enum.join("\n")
 
@@ -124,6 +131,10 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
       <linearGradient id="val-area" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="#10b981" stop-opacity="0.15"/>
         <stop offset="100%" stop-color="#10b981" stop-opacity="0.02"/>
+      </linearGradient>
+      <linearGradient id="div-area" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.20"/>
+        <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.03"/>
       </linearGradient>
       #{fg_grad}
     </defs>
@@ -190,7 +201,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
 
         """
         <line x1="#{cx}" y1="#{mt}" x2="#{cx}" y2="#{bottom}" stroke="#10b981" stroke-width="1" stroke-dasharray="3 3" opacity="0.25"/>
-        <circle cx="#{cx}" cy="#{cy}" r="3.5" fill="#10b981" stroke="#0a0e17" stroke-width="2"/>
+        <circle cx="#{cx}" cy="#{cy}" r="3.5" fill="#10b981" stroke="#0a0e17" stroke-width="2" class="chart-current-marker"/>
         """
     end
   end
@@ -243,21 +254,6 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     """
   end
 
-  defp svg_fear_greed(fear_greed) do
-    value = fear_greed.value
-    color = fg_color_hex(fear_greed.color)
-    needle_x = r(@ml + @pw * value / 100)
-
-    """
-    <text x="#{@ml - 8}" y="10" fill="#475569" font-size="7" text-anchor="end" letter-spacing="0.04em">F&amp;G</text>
-    <rect x="#{@ml}" y="6" width="#{@pw}" height="5" rx="2.5" fill="#1e293b"/>
-    <rect x="#{@ml}" y="6" width="#{@pw}" height="5" rx="2.5" fill="url(#fg-bar-grad)" opacity="0.2"/>
-    <rect x="#{@ml}" y="6" width="#{r(needle_x - @ml)}" height="5" rx="2.5" fill="url(#fg-bar-grad)"/>
-    <circle cx="#{needle_x}" cy="8.5" r="5" fill="#{color}" stroke="#0a0e17" stroke-width="2"/>
-    <text x="#{needle_x}" y="-1" fill="#{color}" font-size="8" text-anchor="middle" font-weight="600">#{value}</text>
-    """
-  end
-
   # Dividend bars overlaid at the bottom of the main chart area + cumulative orange line
   defp svg_dividend_overlay(dividend_data, chart_data, x_fn, mt, main_h, chart_bottom) do
     # Map each dividend month to the chart x-position
@@ -300,23 +296,46 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     end
   end
 
-  defp svg_dividend_bars(positions, x_fn, main_h, chart_bottom, chart_data) do
+  defp svg_dividend_bars(positions, x_fn, main_h, chart_bottom, _chart_data) do
     totals = Enum.map(positions, fn {_, t, _} -> t end)
     max_total = Enum.max(totals)
     bar_zone_h = main_h * 0.18
-    bar_w = max(@pw / length(chart_data) * 2.5, 12)
 
-    Enum.map_join(positions, "\n", fn {idx, total, _month} ->
-      cx = r(x_fn.(idx))
-      bh = if max_total > 0, do: r(total / max_total * bar_zone_h), else: 0
-      bx = r(cx - bar_w / 2)
-      by = r(chart_bottom - bh)
+    # Build area fill path from bar tops
+    area_points =
+      Enum.map(positions, fn {idx, total, _} ->
+        cx = r(x_fn.(idx))
+        bh = if max_total > 0, do: r(total / max_total * bar_zone_h), else: 0
+        by = r(chart_bottom - bh)
+        {cx, by}
+      end)
 
-      """
-      <rect x="#{bx}" y="#{by}" width="#{r(bar_w)}" height="#{bh}" rx="2" fill="#f59e0b" opacity="0.3"/>
-      <text x="#{cx}" y="#{r(by - 4)}" fill="#f59e0b" font-size="7" text-anchor="middle" font-weight="500" opacity="0.7">€#{format_compact(total)}</text>
-      """
-    end)
+    area_path =
+      case area_points do
+        [{first_x, first_y} | rest] ->
+          moves = Enum.map_join(rest, " ", fn {x, y} -> "L#{x} #{y}" end)
+          {last_x, _} = List.last(area_points)
+
+          ~s[<path d="M#{first_x} #{chart_bottom} L#{first_x} #{first_y} #{moves} L#{last_x} #{chart_bottom} Z" fill="url(#div-area)"/>]
+
+        _ ->
+          ""
+      end
+
+    # Value labels at each point
+    labels =
+      Enum.map_join(positions, "\n", fn {idx, total, _month} ->
+        cx = r(x_fn.(idx))
+        bh = if max_total > 0, do: r(total / max_total * bar_zone_h), else: 0
+        by = r(chart_bottom - bh)
+
+        ~s[<text x="#{cx}" y="#{r(by - 4)}" fill="#f59e0b" font-size="7" text-anchor="middle" font-weight="500" opacity="0.7">€#{format_compact(total)}</text>]
+      end)
+
+    """
+    #{area_path}
+    #{labels}
+    """
   end
 
   # Cumulative dividend orange line with dots and label
@@ -354,11 +373,35 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     cum_label =
       ~s[<text x="#{label_x}" y="#{r(last_y - 4)}" fill="#f59e0b" font-size="7" font-weight="600" text-anchor="#{anchor}">€#{format_compact(last_cum)} div</text>]
 
+    cum_area = svg_cumulative_area(cumulative, x_fn, cum_y_fn, cum_base + cum_zone_h)
+
     """
+    #{cum_area}
     #{cum_path}
     #{cum_dots}
     #{cum_label}
     """
+  end
+
+  defp svg_cumulative_area(cumulative, _x_fn, _cum_y_fn, _baseline) when length(cumulative) <= 1,
+    do: ""
+
+  defp svg_cumulative_area(cumulative, x_fn, cum_y_fn, baseline) do
+    points =
+      Enum.map(cumulative, fn {idx, cum, _} ->
+        {r(x_fn.(idx)), r(cum_y_fn.(cum))}
+      end)
+
+    case points do
+      [{first_x, first_y} | rest] ->
+        moves = Enum.map_join(rest, " ", fn {x, y} -> "L#{x} #{y}" end)
+        {last_x, _} = List.last(points)
+
+        ~s[<path d="M#{first_x} #{baseline} L#{first_x} #{first_y} #{moves} L#{last_x} #{baseline} Z" fill="url(#div-area)" opacity="0.6"/>]
+
+      _ ->
+        ""
+    end
   end
 
   defp svg_cumulative_path(cumulative, _x_fn, _cum_y_fn) when length(cumulative) <= 1, do: ""
@@ -423,7 +466,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     svg_string = IO.iodata_to_binary(svg_iolist)
 
     Phoenix.HTML.raw("""
-    <span class="sparkline-inline">#{svg_string}</span>
+    <span class="sparkline-inline" aria-hidden="true">#{svg_string}</span>
     """)
   end
 
@@ -434,16 +477,31 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
   @doc """
   Renders a Fear & Greed Index gauge as an inline SVG.
   """
-  def render_fear_greed_gauge(fear_greed) when is_map(fear_greed) do
+  def render_fear_greed_gauge(fear_greed, opts \\ [])
+
+  def render_fear_greed_gauge(fear_greed, opts) when is_map(fear_greed) do
     value = fear_greed.value
     color_hex = fg_color_hex(fear_greed.color)
-    needle_x = round(value * 1.4)
+    label_text = fear_greed_label(value)
+    # Unique ID suffix to avoid duplicate SVG ids
+    suffix = Keyword.get(opts, :id_suffix, System.unique_integer([:positive]))
+
+    # Arc gauge: semicircle from 180deg to 0deg (left to right)
+    cx = 60
+    cy = 58
+    radius = 46
+    angle = :math.pi() * (1 - value / 100)
+    needle_x = r(cx + radius * :math.cos(angle))
+    needle_y = r(cy - radius * :math.sin(angle))
+
+    aria_label = "Fear and Greed Index: #{value} out of 100, #{label_text}"
+    grad_id = "fg-arc-grad-#{suffix}"
 
     Phoenix.HTML.raw("""
-    <div class="fear-greed-gauge">
-      <svg width="140" height="40" viewBox="0 0 140 40" xmlns="http://www.w3.org/2000/svg">
+    <div class="fear-greed-gauge" role="img" aria-label="#{aria_label}">
+      <svg width="120" height="72" viewBox="0 0 120 72" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <defs>
-          <linearGradient id="fg-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <linearGradient id="#{grad_id}" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stop-color="#ef4444"/>
             <stop offset="30%" stop-color="#f97316"/>
             <stop offset="50%" stop-color="#eab308"/>
@@ -451,18 +509,34 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
             <stop offset="100%" stop-color="#22c55e"/>
           </linearGradient>
         </defs>
-        <text x="0" y="10" fill="#475569" font-size="8" font-family="JetBrains Mono, monospace" letter-spacing="0.05em">FEAR &amp; GREED</text>
-        <text x="140" y="11" fill="#{color_hex}" font-size="12" font-family="JetBrains Mono, monospace" text-anchor="end" font-weight="600">#{value}</text>
-        <rect x="0" y="18" width="140" height="6" rx="3" fill="#1e293b"/>
-        <rect x="0" y="18" width="140" height="6" rx="3" fill="url(#fg-grad)" opacity="0.25"/>
-        <rect x="0" y="18" width="#{needle_x}" height="6" rx="3" fill="url(#fg-grad)"/>
-        <circle cx="#{needle_x}" cy="21" r="5" fill="#{color_hex}" stroke="#0a0e17" stroke-width="2"/>
-        <text x="0" y="36" fill="#334155" font-size="7" font-family="JetBrains Mono, monospace">FEAR</text>
-        <text x="140" y="36" fill="#334155" font-size="7" font-family="JetBrains Mono, monospace" text-anchor="end">GREED</text>
+        <!-- Background arc track -->
+        <path d="M #{cx - radius} #{cy} A #{radius} #{radius} 0 0 1 #{cx + radius} #{cy}"
+              fill="none" stroke="#1e293b" stroke-width="8" stroke-linecap="round"/>
+        <!-- Colored arc track (dim) -->
+        <path d="M #{cx - radius} #{cy} A #{radius} #{radius} 0 0 1 #{cx + radius} #{cy}"
+              fill="none" stroke="url(##{grad_id})" stroke-width="8" stroke-linecap="round" opacity="0.25"/>
+        <!-- Active arc (filled to value position) -->
+        <path d="M #{cx - radius} #{cy} A #{radius} #{radius} 0 #{if value > 50, do: 1, else: 0} 1 #{needle_x} #{needle_y}"
+              fill="none" stroke="url(##{grad_id})" stroke-width="8" stroke-linecap="round"/>
+        <!-- Needle dot -->
+        <circle cx="#{needle_x}" cy="#{needle_y}" r="5" fill="#{color_hex}" stroke="#0a0e17" stroke-width="2"/>
+        <!-- Center value -->
+        <text x="#{cx}" y="#{cy - 6}" fill="#{color_hex}" font-size="18" font-family="JetBrains Mono, monospace" text-anchor="middle" font-weight="700">#{value}</text>
+        <!-- Label -->
+        <text x="#{cx}" y="#{cy + 6}" fill="#475569" font-size="7" font-family="JetBrains Mono, monospace" text-anchor="middle" letter-spacing="0.08em">#{String.upcase(label_text)}</text>
+        <!-- FEAR / GREED labels -->
+        <text x="#{cx - radius - 2}" y="#{cy + 10}" fill="#334155" font-size="6" font-family="JetBrains Mono, monospace" text-anchor="middle">FEAR</text>
+        <text x="#{cx + radius + 2}" y="#{cy + 10}" fill="#334155" font-size="6" font-family="JetBrains Mono, monospace" text-anchor="middle">GREED</text>
       </svg>
     </div>
     """)
   end
 
-  def render_fear_greed_gauge(_), do: Phoenix.HTML.raw("")
+  def render_fear_greed_gauge(_, _), do: Phoenix.HTML.raw("")
+
+  defp fear_greed_label(value) when value <= 25, do: "Extreme Fear"
+  defp fear_greed_label(value) when value <= 45, do: "Fear"
+  defp fear_greed_label(value) when value <= 55, do: "Neutral"
+  defp fear_greed_label(value) when value <= 75, do: "Greed"
+  defp fear_greed_label(_), do: "Extreme Greed"
 end

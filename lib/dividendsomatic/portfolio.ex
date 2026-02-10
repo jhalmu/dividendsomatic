@@ -296,6 +296,17 @@ defmodule Dividendsomatic.Portfolio do
   ## Dividends
 
   @doc """
+  Lists all holdings for a specific symbol (from most recent snapshots).
+  Returns the latest holding record per snapshot for the given symbol.
+  """
+  def list_holdings_by_symbol(symbol) do
+    Holding
+    |> where([h], h.symbol == ^symbol)
+    |> order_by([h], desc: h.report_date)
+    |> Repo.all()
+  end
+
+  @doc """
   Lists all dividends ordered by ex_date descending.
   """
   def list_dividends do
@@ -346,12 +357,12 @@ defmodule Dividendsomatic.Portfolio do
 
     Dividend
     |> where([d], d.ex_date >= ^year_start)
-    |> group_by([d], fragment("strftime('%Y-%m', ?)", d.ex_date))
+    |> group_by([d], fragment("to_char(?, 'YYYY-MM')", d.ex_date))
     |> select([d], %{
-      month: fragment("strftime('%Y-%m', ?)", d.ex_date),
+      month: fragment("to_char(?, 'YYYY-MM')", d.ex_date),
       total: sum(d.amount)
     })
-    |> order_by([d], fragment("strftime('%Y-%m', ?)", d.ex_date))
+    |> order_by([d], fragment("to_char(?, 'YYYY-MM')", d.ex_date))
     |> Repo.all()
   end
 

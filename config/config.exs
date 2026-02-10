@@ -64,15 +64,15 @@ config :phoenix, :json_library, Jason
 config :dividendsomatic, Oban,
   repo: Dividendsomatic.Repo,
   plugins: [
-    # Keep jobs for 7 days
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
     {Oban.Plugins.Cron,
      crontab: [
-       # Daily CSV import at 8 AM (adjust timezone as needed)
-       {"0 8 * * *", Dividendsomatic.Workers.GmailImportWorker}
+       {"0 8 * * *", Dividendsomatic.Workers.GmailImportWorker},
+       {"0 12 * * 1-5", Dividendsomatic.Workers.DataImportWorker,
+        args: %{"source" => "csv_directory"}}
      ]}
   ],
-  queues: [default: 10, gmail_import: 1]
+  queues: [default: 10, gmail_import: 1, data_import: 1]
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
