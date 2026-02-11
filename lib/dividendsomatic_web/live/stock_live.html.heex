@@ -298,18 +298,19 @@
       </div>
     <% end %>
     
-<!-- Investment Notes -->
+<!-- Investment Notes (disabled until auth) -->
     <%= if @isin do %>
-      <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-5">
+      <div
+        class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-5"
+        style="opacity: 0.5;"
+      >
         <div class="flex items-center justify-between mb-[var(--space-xs)]">
           <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
             Investment Notes
           </div>
-          <%= if @note_saved do %>
-            <span style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-gain); text-transform: uppercase; letter-spacing: 0.05em;">
-              Saved
-            </span>
-          <% end %>
+          <span style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">
+            Requires auth
+          </span>
         </div>
         <div>
           <label
@@ -321,8 +322,8 @@
           <textarea
             id="note-thesis"
             rows="2"
-            phx-blur="save_thesis"
-            style="width: 100%; background: var(--terminal-surface); color: var(--terminal-text); border: 1px solid var(--terminal-border); font-family: var(--font-mono); font-size: 0.75rem; padding: var(--space-xs); border-radius: 0.25rem; resize: vertical;"
+            disabled
+            style="width: 100%; background: var(--terminal-surface); color: var(--terminal-dim); border: 1px solid var(--terminal-border); font-family: var(--font-mono); font-size: 0.75rem; padding: var(--space-xs); border-radius: 0.25rem; resize: none; cursor: not-allowed;"
             placeholder={thesis_placeholder(@company_note)}
           >{note_thesis(@company_note)}</textarea>
         </div>
@@ -336,8 +337,8 @@
           <textarea
             id="note-markdown"
             rows="3"
-            phx-blur="save_notes"
-            style="width: 100%; background: var(--terminal-surface); color: var(--terminal-text); border: 1px solid var(--terminal-border); font-family: var(--font-mono); font-size: 0.75rem; padding: var(--space-xs); border-radius: 0.25rem; resize: vertical;"
+            disabled
+            style="width: 100%; background: var(--terminal-surface); color: var(--terminal-dim); border: 1px solid var(--terminal-border); font-family: var(--font-mono); font-size: 0.75rem; padding: var(--space-xs); border-radius: 0.25rem; resize: none; cursor: not-allowed;"
             placeholder="Research notes, key metrics, earnings dates..."
           >{note_markdown(@company_note)}</textarea>
         </div>

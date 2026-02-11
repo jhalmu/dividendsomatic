@@ -59,14 +59,13 @@ defmodule DividendsomaticWeb.StockLiveTest do
       assert html =~ "1,000"
     end
 
-    test "should show editable investment notes section", %{conn: conn} do
+    test "should show disabled investment notes section until auth", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
 
       assert html =~ "Investment Notes"
       assert html =~ "Investment Thesis"
-      assert html =~ "phx-blur=\"save_thesis\""
-      assert html =~ "phx-blur=\"save_notes\""
-      refute html =~ "Coming soon"
+      assert html =~ "Requires auth"
+      assert html =~ "disabled"
     end
 
     test "should show external links for HEX exchange stock", %{conn: conn} do
@@ -131,28 +130,28 @@ defmodule DividendsomaticWeb.StockLiveTest do
       {:ok, _view, html} = live(conn, ~p"/stocks/NONEXISTENT")
 
       refute html =~ "Investment Thesis"
-      refute html =~ "Coming soon"
     end
   end
 
-  describe "investment notes" do
+  describe "investment notes (disabled until auth)" do
     setup %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
       %{conn: conn}
     end
 
-    test "should save thesis on blur", %{conn: conn} do
+    @tag :requires_auth
+    test "should save thesis on blur when auth enabled", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/stocks/KESKOB")
 
       view |> element("#note-thesis") |> render_blur(%{value: "Great dividend stock"})
 
-      # Re-render should show the saved text
       html = render(view)
       assert html =~ "Great dividend stock"
       assert html =~ "Saved"
     end
 
-    test "should save notes on blur", %{conn: conn} do
+    @tag :requires_auth
+    test "should save notes on blur when auth enabled", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/stocks/KESKOB")
 
       view |> element("#note-markdown") |> render_blur(%{value: "Key metrics: P/E 12"})
@@ -161,12 +160,12 @@ defmodule DividendsomaticWeb.StockLiveTest do
       assert html =~ "Key metrics: P/E 12"
     end
 
-    test "should persist notes to database", %{conn: conn} do
+    @tag :requires_auth
+    test "should persist notes to database when auth enabled", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/stocks/KESKOB")
 
       view |> element("#note-thesis") |> render_blur(%{value: "Long-term hold"})
 
-      # Verify persisted
       note = Dividendsomatic.Stocks.get_company_note_by_isin("FI0009000202")
       assert note.thesis == "Long-term hold"
       assert note.symbol == "KESKOB"
@@ -175,8 +174,15 @@ defmodule DividendsomaticWeb.StockLiveTest do
     test "should show asset-type-specific placeholder", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
 
-      # Default stock placeholder
       assert html =~ "Growth potential"
+    end
+
+    test "should show notes section as disabled", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "Requires auth"
+      assert html =~ "disabled"
+      assert html =~ "opacity: 0.5"
     end
   end
 

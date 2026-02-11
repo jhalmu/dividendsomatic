@@ -7,6 +7,6 @@ Application.put_env(:phoenix_test, :base_url, DividendsomaticWeb.Endpoint.url())
 
 # Exclude playwright and external tests by default
 # Run with: mix test --include playwright --include external
-ExUnit.configure(exclude: [playwright: true, external: true])
+ExUnit.configure(exclude: [playwright: true, external: true, requires_auth: true])
 ExUnit.start()
 Ecto.Adapters.SQL.Sandbox.mode(Dividendsomatic.Repo, :manual)
