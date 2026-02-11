@@ -327,15 +327,19 @@ defmodule Dividendsomatic.Portfolio do
 
     dividends =
       Dividend
-      |> where([d], d.ex_date >= ^year_start)
+      |> where([d], d.ex_date >= ^year_start and d.ex_date <= ^today)
       |> order_by([d], desc: d.ex_date)
       |> Repo.all()
 
     holdings_data = build_holdings_map(year_start, today)
 
-    Enum.map(dividends, fn div ->
+    dividends
+    |> Enum.map(fn div ->
       income = compute_dividend_income(div, holdings_data)
       %{dividend: div, income: income}
+    end)
+    |> Enum.filter(fn entry ->
+      Decimal.compare(entry.income, Decimal.new("0")) == :gt
     end)
   end
 

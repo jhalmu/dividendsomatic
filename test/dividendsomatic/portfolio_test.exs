@@ -238,7 +238,7 @@ defmodule Dividendsomatic.PortfolioTest do
       assert Decimal.equal?(entry.income, Decimal.new("50.0"))
     end
 
-    test "should return zero income when no matching holdings" do
+    test "should exclude dividends with no matching holdings" do
       today = Date.utc_today()
 
       {:ok, _} =
@@ -249,8 +249,7 @@ defmodule Dividendsomatic.PortfolioTest do
           currency: "EUR"
         })
 
-      [entry] = Portfolio.list_dividends_with_income()
-      assert Decimal.equal?(entry.income, Decimal.new("0"))
+      assert Portfolio.list_dividends_with_income() == []
     end
 
     test "should apply FX rate to income calculation" do
