@@ -27,9 +27,9 @@ defmodule DividendsomaticWeb.StockLive do
     dividend_analytics =
       compute_dividend_analytics(dividends_with_income, quote_data, holding_stats)
 
-    # Rule of 72 calculator
-    default_rate = default_rule72_rate(dividend_analytics)
-    rule72 = compute_rule72(default_rate)
+    # Dividend payback progress
+    payback_data =
+      compute_payback_data(holdings, dividends_with_income, holding_stats, dividend_analytics)
 
     # Price chart data from holdings history (oldest first)
     price_chart_data = build_price_chart_data(holdings)
@@ -48,7 +48,7 @@ defmodule DividendsomaticWeb.StockLive do
       |> assign(:note_saved, false)
       |> assign(:holding_stats, holding_stats)
       |> assign(:price_chart_data, price_chart_data)
-      |> assign(:rule72, rule72)
+      |> assign(:payback_data, payback_data)
       |> assign(:external_links, build_external_links(symbol, holdings, company_profile))
 
     {:ok, socket}
@@ -64,17 +64,6 @@ defmodule DividendsomaticWeb.StockLive do
   @impl true
   def handle_event("save_notes", %{"value" => value}, socket) do
     save_note(socket, :notes_markdown, value)
-  end
-
-  @impl true
-  def handle_event("update_rule72_rate", %{"value" => value}, socket) do
-    case Float.parse(value) do
-      {rate, _} when rate > 0 and rate < 100 ->
-        {:noreply, assign(socket, :rule72, compute_rule72(rate))}
-
-      _ ->
-        {:noreply, socket}
-    end
   end
 
   defp save_note(socket, field, value) do
@@ -258,16 +247,142 @@ defmodule DividendsomaticWeb.StockLive do
     end
   end
 
-  # --- Rule of 72 ---
+  # --- Dividend Payback ---
 
-  defp default_rule72_rate(nil), do: 8.0
+  @doc false
+  def compute_payback_data([], _divs, _stats, _analytics), do: nil
+  def compute_payback_data(_holdings, _divs, nil, _analytics), do: nil
 
-  defp default_rule72_rate(%{yield: nil}), do: 8.0
+  def compute_payback_data(holdings, dividends_with_income, holding_stats, dividend_analytics) do
+    periods = holding_stats.ownership_periods
+    total_invested = holding_stats.total_invested
 
-  defp default_rule72_rate(%{yield: yield}) do
-    val = Decimal.to_float(yield)
-    if val > 0, do: val, else: 8.0
+    period_breakdowns =
+      Enum.map(periods, fn period ->
+        compute_period_payback(period, holdings, dividends_with_income)
+      end)
+
+    total_income =
+      Enum.reduce(period_breakdowns, Decimal.new("0"), fn pb, acc ->
+        Decimal.add(acc, pb.income)
+      end)
+
+    overall_pct =
+      if Decimal.compare(total_invested, Decimal.new("0")) == :gt do
+        total_income
+        |> Decimal.div(total_invested)
+        |> Decimal.mult(Decimal.new("100"))
+        |> Decimal.round(1)
+      else
+        Decimal.new("0")
+      end
+
+    # Prefer yield_on_cost from analytics (TTM-based, reliable) over
+    # annualized partial-year rates which inflate on short holding periods
+    {weighted_rate, rate_source} = pick_best_rate(dividend_analytics)
+
+    rule72 =
+      if weighted_rate > 0,
+        do: compute_rule72(weighted_rate),
+        else: nil
+
+    %{
+      overall_pct: overall_pct,
+      total_income: total_income,
+      total_invested: total_invested,
+      weighted_rate: weighted_rate,
+      rate_source: rate_source,
+      rule72: rule72,
+      periods: period_breakdowns
+    }
   end
+
+  defp pick_best_rate(%{yield_on_cost: yoc}) when not is_nil(yoc) do
+    val = Decimal.to_float(yoc)
+    if val > 0, do: {Float.round(val, 2), "yield on cost"}, else: {0.0, nil}
+  end
+
+  defp pick_best_rate(%{yield: yield}) when not is_nil(yield) do
+    val = Decimal.to_float(yield)
+    if val > 0, do: {Float.round(val, 2), "current yield"}, else: {0.0, nil}
+  end
+
+  defp pick_best_rate(_), do: {0.0, nil}
+
+  defp compute_period_payback(period, holdings, dividends_with_income) do
+    period_holdings = filter_holdings_to_period(holdings, period)
+    period_divs = filter_dividends_to_period(dividends_with_income, period)
+
+    cost_basis = compute_period_cost_basis(period_holdings)
+
+    income =
+      Enum.reduce(period_divs, Decimal.new("0"), fn entry, acc ->
+        Decimal.add(acc, entry.income)
+      end)
+
+    pct =
+      if Decimal.compare(cost_basis, Decimal.new("0")) == :gt do
+        income
+        |> Decimal.div(cost_basis)
+        |> Decimal.mult(Decimal.new("100"))
+        |> Decimal.round(1)
+      else
+        Decimal.new("0")
+      end
+
+    %{
+      start_date: period.start_date,
+      end_date: period.end_date,
+      days: period.days,
+      cost_basis: cost_basis,
+      income: income,
+      pct: pct
+    }
+  end
+
+  defp filter_holdings_to_period(holdings, period) do
+    Enum.filter(holdings, fn h ->
+      Date.compare(h.report_date, period.start_date) != :lt &&
+        Date.compare(h.report_date, period.end_date) != :gt
+    end)
+  end
+
+  defp filter_dividends_to_period(dividends_with_income, period) do
+    Enum.filter(dividends_with_income, fn entry ->
+      Date.compare(entry.dividend.ex_date, period.start_date) != :lt &&
+        Date.compare(entry.dividend.ex_date, period.end_date) != :gt
+    end)
+  end
+
+  defp compute_period_cost_basis([]), do: Decimal.new("0")
+
+  defp compute_period_cost_basis(holdings) do
+    # Use the latest holding in the period for cost basis
+    latest = hd(holdings)
+    cost = latest.cost_basis_money || Decimal.new("0")
+    fx = latest.fx_rate_to_base || Decimal.new("1")
+    Decimal.mult(cost, fx)
+  end
+
+  defp remaining_payback_years(%{overall_pct: pct, weighted_rate: rate}) when rate > 0 do
+    recovered = Decimal.to_float(pct) / 100.0
+    remaining_fraction = max(1.0 - recovered, 0.0)
+
+    if remaining_fraction <= 0 do
+      "0y"
+    else
+      # Years = remaining_fraction * (100 / rate)
+      years = remaining_fraction * (100.0 / rate)
+      format_years(years)
+    end
+  end
+
+  defp remaining_payback_years(_), do: ""
+
+  defp format_years(years) when years < 1, do: "#{round(years * 12)}m"
+  defp format_years(years), do: "#{Float.round(years, 1)}y"
+
+  # --- Rule of 72 ---
 
   @doc false
   def compute_rule72(rate) when is_number(rate) and rate > 0 do

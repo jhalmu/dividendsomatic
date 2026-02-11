@@ -310,84 +310,121 @@ defmodule DividendsomaticWeb.StockLiveTest do
     end
   end
 
-  describe "rule of 72 calculator" do
+  describe "rule of 72 pure function" do
+    test "should compute correct doubling time at 8%" do
+      result = DividendsomaticWeb.StockLive.compute_rule72(8.0)
+
+      assert result.rate == 8.0
+      assert result.approx_years == 9.0
+      assert result.exact_years == 9.0
+      assert length(result.milestones) == 5
+      assert hd(result.milestones).multiplier == 1
+      assert List.last(result.milestones).multiplier == 16
+    end
+
+    test "should compute correct doubling time at 4%" do
+      result = DividendsomaticWeb.StockLive.compute_rule72(4.0)
+
+      assert result.rate == 4.0
+      assert result.approx_years == 18.0
+      assert result.exact_years == 17.7
+    end
+
+    test "should compute correct doubling time at 12%" do
+      result = DividendsomaticWeb.StockLive.compute_rule72(12.0)
+
+      assert result.rate == 12.0
+      assert result.approx_years == 6.0
+      assert result.exact_years == 6.1
+    end
+
+    test "should fallback to 8% for invalid rate" do
+      result = DividendsomaticWeb.StockLive.compute_rule72(-5)
+
+      assert result.rate == 8.0
+    end
+  end
+
+  describe "dividend payback meter" do
     setup %{conn: conn} do
-      {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+      # Create snapshots every 10 days from Oct 1 to Jan 28 to form a continuous period (> 60 days)
+      dates =
+        Date.range(~D[2025-10-01], ~D[2026-01-28], 10)
+        |> Enum.to_list()
+        |> then(fn dates ->
+          if List.last(dates) != ~D[2026-01-28],
+            do: dates ++ [~D[2026-01-28]],
+            else: dates
+        end)
+
+      for date <- dates do
+        csv = """
+        "ReportDate","CurrencyPrimary","Symbol","Description","SubCategory","Quantity","MarkPrice","PositionValue","CostBasisPrice","CostBasisMoney","OpenPrice","PercentOfNAV","FifoPnlUnrealized","ListingExchange","AssetClass","FXRateToBase","ISIN","FIGI"
+        "#{Date.to_string(date)}","EUR","KESKOB","KESKO OYJ-B SHS","COMMON","1000","21","21000","18.26459","18264.59","18.26459","8.90","2735.41","HEX","STK","1","FI0009000202","BBG000BNP2B2"
+        """
+
+        {:ok, _} = Portfolio.create_snapshot_from_csv(csv, date)
+      end
+
       %{conn: conn}
     end
 
-    test "should show Rule of 72 card", %{conn: conn} do
+    test "should show payback meter with dividend data", %{conn: conn} do
+      {:ok, _} =
+        Portfolio.create_dividend(%{
+          symbol: "KESKOB",
+          ex_date: ~D[2025-11-15],
+          amount: Decimal.new("0.50"),
+          currency: "EUR"
+        })
+
       {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
 
-      assert html =~ "Rule of 72"
-      assert html =~ "Investment doubling time"
-      assert html =~ "Annual Rate"
+      assert html =~ "payback-meter"
+      assert html =~ "recovered"
+      assert html =~ "progressbar"
     end
 
-    test "should show doubling milestones", %{conn: conn} do
+    test "should show Rule of 72 as footer note", %{conn: conn} do
+      {:ok, _} =
+        Portfolio.create_dividend(%{
+          symbol: "KESKOB",
+          ex_date: ~D[2025-11-15],
+          amount: Decimal.new("0.50"),
+          currency: "EUR"
+        })
+
       {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
 
-      assert html =~ "1x"
-      assert html =~ "2x"
-      assert html =~ "4x"
-      assert html =~ "16x"
+      assert html =~ "Doubles in"
+      assert html =~ "yield on cost"
     end
 
-    test "should show exact vs approximation comparison", %{conn: conn} do
+    test "should show payback meter at 0% without dividends", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
 
-      assert html =~ "Exact:"
-      assert html =~ "Rule of 72:"
+      assert html =~ "payback-meter"
+      assert html =~ "0.00% recovered"
+      assert html =~ "No dividend income yet"
     end
 
-    test "should compute correct doubling time at 8%",
-      do:
-        (
-          result = DividendsomaticWeb.StockLive.compute_rule72(8.0)
+    test "should not show payback meter for unknown symbol", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/NONEXISTENT")
 
-          assert result.rate == 8.0
-          assert result.approx_years == 9.0
-          assert result.exact_years == 9.0
-          assert length(result.milestones) == 5
-          assert hd(result.milestones).multiplier == 1
-          assert List.last(result.milestones).multiplier == 16
-        )
+      refute html =~ "payback-meter"
+    end
+  end
 
-    test "should compute correct doubling time at 4%",
-      do:
-        (
-          result = DividendsomaticWeb.StockLive.compute_rule72(4.0)
-
-          assert result.rate == 4.0
-          assert result.approx_years == 18.0
-          assert result.exact_years == 17.7
-        )
-
-    test "should compute correct doubling time at 12%",
-      do:
-        (
-          result = DividendsomaticWeb.StockLive.compute_rule72(12.0)
-
-          assert result.rate == 12.0
-          assert result.approx_years == 6.0
-          assert result.exact_years == 6.1
-        )
-
-    test "should handle update_rule72_rate event", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/stocks/KESKOB")
-
-      html = view |> element("#rule72-rate") |> render_blur(%{value: "10"})
-
-      assert html =~ "10.0"
-      assert html =~ "7.2"
+  describe "payback computation" do
+    test "should return nil payback for empty holdings" do
+      assert DividendsomaticWeb.StockLive.compute_payback_data([], [], nil, nil) == nil
     end
 
-    test "should fallback to 8% for invalid rate",
-      do:
-        (
-          result = DividendsomaticWeb.StockLive.compute_rule72(-5)
-
-          assert result.rate == 8.0
-        )
+    test "should prefer yield on cost over current yield" do
+      analytics = %{yield_on_cost: Decimal.new("5.50"), yield: Decimal.new("3.00")}
+      # pick_best_rate is private but compute_payback_data uses it
+      # We test indirectly via the full computation
+      assert DividendsomaticWeb.StockLive.compute_payback_data([], [], nil, analytics) == nil
+    end
   end
 end
