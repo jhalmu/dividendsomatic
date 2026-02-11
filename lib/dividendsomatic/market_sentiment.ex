@@ -1,8 +1,8 @@
 defmodule Dividendsomatic.MarketSentiment do
   @moduledoc """
-  Fetches market sentiment data including Fear & Greed Index.
+  Fetches market sentiment data including CNN Fear & Greed Index.
 
-  Uses Alternative.me API which is free and requires no authentication.
+  Uses CNN's stock market Fear & Greed Index (equity-focused).
   Stores historical values in the database for per-snapshot display.
   """
 
@@ -12,65 +12,72 @@ defmodule Dividendsomatic.MarketSentiment do
   alias Dividendsomatic.MarketSentiment.FearGreedRecord
   alias Dividendsomatic.Repo
 
-  @fear_greed_url "https://api.alternative.me/fng/"
+  @cnn_fg_url "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+  @cnn_headers [
+    {"user-agent",
+     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"},
+    {"accept", "application/json"},
+    {"referer", "https://edition.cnn.com/markets/fear-and-greed"}
+  ]
 
   @doc """
-  Fetches the current Fear & Greed Index.
+  Fetches the current Fear & Greed Index from CNN.
 
   Returns a map with:
   - `value` - Numeric value (0-100)
   - `classification` - Text classification ("Extreme Fear", "Fear", "Neutral", "Greed", "Extreme Greed")
   - `timestamp` - When the data was last updated
   - `color` - Suggested display color
-
-  ## Examples
-
-      iex> Dividendsomatic.MarketSentiment.get_fear_greed_index()
-      {:ok, %{value: 62, classification: "Greed", timestamp: ~U[2026-02-05 12:00:00Z], color: "emerald"}}
   """
   def get_fear_greed_index do
-    case Req.get(@fear_greed_url, params: [limit: 1]) do
-      {:ok, %{status: 200, body: %{"data" => [data | _]}}} ->
-        value = String.to_integer(data["value"])
-        classification = data["value_classification"]
-        timestamp = parse_timestamp(data["timestamp"])
+    # CNN endpoint returns current + historical when given a start date
+    start_date = Date.to_iso8601(Date.add(Date.utc_today(), -1))
+    url = "#{@cnn_fg_url}/#{start_date}"
+
+    case Req.get(url, headers: @cnn_headers) do
+      {:ok, %{status: 200, body: %{"fear_and_greed" => fg}}} when is_map(fg) ->
+        value = round(fg["score"])
+        classification = classify_value(value)
 
         {:ok,
          %{
            value: value,
            classification: classification,
-           timestamp: timestamp,
+           timestamp: DateTime.utc_now(),
            color: get_color(value)
          }}
 
       {:ok, %{status: status, body: body}} ->
-        Logger.error("Fear & Greed API failed: #{status} - #{inspect(body)}")
+        Logger.error("CNN F&G API failed: #{status} - #{inspect(body)}")
         {:error, :api_error}
 
       {:error, reason} ->
-        Logger.error("Fear & Greed request failed: #{inspect(reason)}")
+        Logger.error("CNN F&G request failed: #{inspect(reason)}")
         {:error, reason}
     end
   end
 
   @doc """
-  Fetches historical F&G data from the API and stores in DB.
-  `days` controls how many days to fetch (max ~365 on free API).
+  Fetches historical F&G data from CNN and stores in DB.
+  Fetches from `start_date` (default: 2 years ago) to today.
   """
-  def fetch_and_store_history(days \\ 365) do
-    case Req.get(@fear_greed_url, params: [limit: days]) do
-      {:ok, %{status: 200, body: %{"data" => data_list}}} ->
+  def fetch_and_store_history(start_date \\ nil) do
+    start_date = start_date || Date.to_iso8601(Date.add(Date.utc_today(), -730))
+    url = "#{@cnn_fg_url}/#{start_date}"
+
+    case Req.get(url, headers: @cnn_headers) do
+      {:ok, %{status: 200, body: %{"fear_and_greed_historical" => %{"data" => data_list}}}} ->
         results =
-          Enum.map(data_list, fn data ->
-            value = String.to_integer(data["value"])
-            timestamp = parse_timestamp(data["timestamp"])
-            date = DateTime.to_date(timestamp)
+          Enum.map(data_list, fn point ->
+            value = round(point["y"])
+            # CNN timestamps are milliseconds
+            date = DateTime.from_unix!(round(point["x"] / 1000)) |> DateTime.to_date()
 
             %FearGreedRecord{}
             |> FearGreedRecord.changeset(%{
               date: date,
               value: value,
-              classification: data["value_classification"]
+              classification: point["rating"] || classify_value(value)
             })
             |> Repo.insert(on_conflict: :nothing, conflict_target: :date)
           end)
@@ -81,15 +88,18 @@ defmodule Dividendsomatic.MarketSentiment do
             _ -> false
           end)
 
-        Logger.info("F&G history: #{new_count} new records stored (#{length(data_list)} fetched)")
+        Logger.info(
+          "CNN F&G history: #{new_count} new records stored (#{length(data_list)} fetched)"
+        )
+
         {:ok, new_count}
 
       {:ok, %{status: status, body: body}} ->
-        Logger.error("F&G history API failed: #{status} - #{inspect(body)}")
+        Logger.error("CNN F&G history API failed: #{status} - #{inspect(body)}")
         {:error, :api_error}
 
       {:error, reason} ->
-        Logger.error("F&G history request failed: #{inspect(reason)}")
+        Logger.error("CNN F&G history request failed: #{inspect(reason)}")
         {:error, reason}
     end
   end
@@ -169,10 +179,11 @@ defmodule Dividendsomatic.MarketSentiment do
     end
   end
 
-  defp parse_timestamp(timestamp_str) when is_binary(timestamp_str) do
-    timestamp_int = String.to_integer(timestamp_str)
-    DateTime.from_unix!(timestamp_int)
-  end
+  defp classify_value(value) when value <= 25, do: "Extreme Fear"
+  defp classify_value(value) when value <= 45, do: "Fear"
+  defp classify_value(value) when value <= 55, do: "Neutral"
+  defp classify_value(value) when value <= 75, do: "Greed"
+  defp classify_value(_value), do: "Extreme Greed"
 
   @doc false
   def get_color(value) when value <= 25, do: "red"

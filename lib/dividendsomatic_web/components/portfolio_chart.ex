@@ -516,7 +516,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
         <path d="M #{cx - radius} #{cy} A #{radius} #{radius} 0 0 1 #{cx + radius} #{cy}"
               fill="none" stroke="url(##{grad_id})" stroke-width="8" stroke-linecap="round" opacity="0.25"/>
         <!-- Active arc (filled to value position) -->
-        <path d="M #{cx - radius} #{cy} A #{radius} #{radius} 0 #{if value > 50, do: 1, else: 0} 1 #{needle_x} #{needle_y}"
+        <path d="M #{cx - radius} #{cy} A #{radius} #{radius} 0 0 1 #{needle_x} #{needle_y}"
               fill="none" stroke="url(##{grad_id})" stroke-width="8" stroke-linecap="round"/>
         <!-- Needle dot -->
         <circle cx="#{needle_x}" cy="#{needle_y}" r="5" fill="#{color_hex}" stroke="#0a0e17" stroke-width="2"/>

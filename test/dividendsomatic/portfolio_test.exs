@@ -177,8 +177,19 @@ defmodule Dividendsomatic.PortfolioTest do
       assert length(dividends) == 1
     end
 
-    test "total_dividends_this_year/0 sums dividend amounts" do
+    test "total_dividends_this_year/0 sums dividend income (per-share * qty * fx)" do
       today = Date.utc_today()
+
+      # Create a snapshot with holdings so income can be calculated
+      {:ok, snapshot} =
+        %Portfolio.PortfolioSnapshot{}
+        |> Portfolio.PortfolioSnapshot.changeset(%{report_date: Date.new!(today.year, 1, 10)})
+        |> Dividendsomatic.Repo.insert()
+
+      # KESKOB: 100 shares, fx 1.0 (EUR)
+      insert_test_holding(snapshot.id, Date.new!(today.year, 1, 10), "KESKOB", 100, "1")
+      # TELIA1: 200 shares, fx 1.0 (EUR)
+      insert_test_holding(snapshot.id, Date.new!(today.year, 1, 10), "TELIA1", 200, "1")
 
       {:ok, _} =
         Portfolio.create_dividend(%{
@@ -196,8 +207,9 @@ defmodule Dividendsomatic.PortfolioTest do
           currency: "EUR"
         })
 
+      # KESKOB: 1.00 * 100 * 1.0 = 100, TELIA1: 2.00 * 200 * 1.0 = 400
       total = Portfolio.total_dividends_this_year()
-      assert Decimal.equal?(total, Decimal.new("3.00"))
+      assert Decimal.equal?(total, Decimal.new("500"))
     end
   end
 
@@ -283,5 +295,25 @@ defmodule Dividendsomatic.PortfolioTest do
       # Opportunity cost: 15000 - 20000 = -5000 (bad decision)
       assert Decimal.equal?(opportunity, Decimal.new("-5000.00"))
     end
+  end
+
+  defp insert_test_holding(snapshot_id, report_date, symbol, qty, fx_rate) do
+    %Portfolio.Holding{}
+    |> Portfolio.Holding.changeset(%{
+      portfolio_snapshot_id: snapshot_id,
+      report_date: report_date,
+      symbol: symbol,
+      currency_primary: "EUR",
+      quantity: qty,
+      mark_price: "10",
+      position_value: "1000",
+      cost_basis_price: "10",
+      cost_basis_money: "1000",
+      percent_of_nav: "50",
+      listing_exchange: "HEX",
+      asset_class: "STK",
+      fx_rate_to_base: fx_rate
+    })
+    |> Dividendsomatic.Repo.insert!()
   end
 end

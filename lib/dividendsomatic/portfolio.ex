@@ -318,15 +318,14 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   @doc """
-  Gets total dividend income for the current year.
+  Gets total dividend income for the current year (base currency).
   """
   def total_dividends_this_year do
     year_start = Date.new!(Date.utc_today().year, 1, 1)
+    today = Date.utc_today()
 
-    Dividend
-    |> where([d], d.ex_date >= ^year_start)
-    |> select([d], sum(d.amount))
-    |> Repo.one() || Decimal.new("0")
+    dividends_by_month(year_start, today)
+    |> Enum.reduce(Decimal.new("0"), fn %{total: t}, acc -> Decimal.add(acc, t) end)
   end
 
   @doc """
@@ -334,16 +333,74 @@ defmodule Dividendsomatic.Portfolio do
   """
   def dividends_by_month do
     year_start = Date.new!(Date.utc_today().year, 1, 1)
+    dividends_by_month(year_start, Date.utc_today())
+  end
 
-    Dividend
-    |> where([d], d.ex_date >= ^year_start)
-    |> group_by([d], fragment("to_char(?, 'YYYY-MM')", d.ex_date))
-    |> select([d], %{
-      month: fragment("to_char(?, 'YYYY-MM')", d.ex_date),
-      total: sum(d.amount)
-    })
-    |> order_by([d], fragment("to_char(?, 'YYYY-MM')", d.ex_date))
+  @doc """
+  Gets dividend income grouped by month for a date range.
+  Multiplies per-share amounts by shares held and converts to base currency.
+  """
+  def dividends_by_month(from_date, to_date) do
+    # Get dividends in range
+    dividends =
+      Dividend
+      |> where([d], d.ex_date >= ^from_date and d.ex_date <= ^to_date)
+      |> order_by([d], asc: d.ex_date)
+      |> Repo.all()
+
+    # Get holdings snapshots in range to know shares held
+    holdings_map = build_holdings_map(from_date, to_date)
+
+    # Calculate actual income per dividend
+    dividends
+    |> Enum.map(fn div ->
+      month = Calendar.strftime(div.ex_date, "%Y-%m")
+      income = compute_dividend_income(div, holdings_map)
+      {month, income}
+    end)
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+    |> Enum.map(fn {month, incomes} ->
+      %{month: month, total: Enum.reduce(incomes, Decimal.new("0"), &Decimal.add/2)}
+    end)
+    |> Enum.sort_by(& &1.month)
+  end
+
+  # Build a map of {symbol -> %{quantity, fx_rate}} for the nearest snapshot per month
+  defp build_holdings_map(from_date, to_date) do
+    PortfolioSnapshot
+    |> where([s], s.report_date >= ^from_date and s.report_date <= ^to_date)
+    |> preload(:holdings)
+    |> order_by([s], asc: s.report_date)
     |> Repo.all()
+    |> Enum.flat_map(fn snapshot ->
+      Enum.map(snapshot.holdings, fn h ->
+        {snapshot.report_date, h.symbol, h.quantity, h.fx_rate_to_base}
+      end)
+    end)
+  end
+
+  defp compute_dividend_income(dividend, holdings_data) do
+    # Find the nearest holding with matching symbol, closest to ex_date
+    matching =
+      holdings_data
+      |> Enum.filter(fn {_date, symbol, _qty, _fx} -> symbol == dividend.symbol end)
+      |> Enum.min_by(
+        fn {date, _, _, _} -> abs(Date.diff(date, dividend.ex_date)) end,
+        fn -> nil end
+      )
+
+    case matching do
+      {_date, _symbol, quantity, fx_rate} ->
+        qty = quantity || Decimal.new("0")
+        fx = fx_rate || Decimal.new("1")
+        amount = dividend.amount || Decimal.new("0")
+        # income = per_share_amount * shares * fx_rate_to_base
+        Decimal.mult(Decimal.mult(amount, qty), fx)
+
+      nil ->
+        # No matching holding found - return 0 (user didn't hold this stock)
+        Decimal.new("0")
+    end
   end
 
   @doc """

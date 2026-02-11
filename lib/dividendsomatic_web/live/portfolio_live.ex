@@ -335,11 +335,18 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:dividends_ytd, Portfolio.total_dividends_this_year())
     |> assign(:projected_dividends, Portfolio.projected_annual_dividends())
     |> assign(:recent_dividends, Portfolio.list_dividends_this_year() |> Enum.take(5))
-    |> assign(:dividend_by_month, Portfolio.dividends_by_month())
+    |> assign(:dividend_by_month, dividends_for_chart(chart_data))
     |> assign(:sparkline_values, sparkline_values)
     |> assign(:realized_pnl, Portfolio.total_realized_pnl())
     |> assign(:fear_greed, get_fear_greed_for_snapshot(socket, snapshot))
   end
+
+  defp dividends_for_chart([first | _] = chart_data) do
+    last_date = List.last(chart_data).date
+    Portfolio.dividends_by_month(first.date, last_date)
+  end
+
+  defp dividends_for_chart(_), do: []
 
   defp format_decimal(nil), do: "0.00"
 
