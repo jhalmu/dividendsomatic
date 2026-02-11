@@ -27,6 +27,10 @@ defmodule DividendsomaticWeb.StockLive do
     dividend_analytics =
       compute_dividend_analytics(dividends_with_income, quote_data, holding_stats)
 
+    # Rule of 72 calculator
+    default_rate = default_rule72_rate(dividend_analytics)
+    rule72 = compute_rule72(default_rate)
+
     # Price chart data from holdings history (oldest first)
     price_chart_data = build_price_chart_data(holdings)
 
@@ -44,6 +48,7 @@ defmodule DividendsomaticWeb.StockLive do
       |> assign(:note_saved, false)
       |> assign(:holding_stats, holding_stats)
       |> assign(:price_chart_data, price_chart_data)
+      |> assign(:rule72, rule72)
       |> assign(:external_links, build_external_links(symbol, holdings, company_profile))
 
     {:ok, socket}
@@ -59,6 +64,17 @@ defmodule DividendsomaticWeb.StockLive do
   @impl true
   def handle_event("save_notes", %{"value" => value}, socket) do
     save_note(socket, :notes_markdown, value)
+  end
+
+  @impl true
+  def handle_event("update_rule72_rate", %{"value" => value}, socket) do
+    case Float.parse(value) do
+      {rate, _} when rate > 0 and rate < 100 ->
+        {:noreply, assign(socket, :rule72, compute_rule72(rate))}
+
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   defp save_note(socket, field, value) do
@@ -241,6 +257,42 @@ defmodule DividendsomaticWeb.StockLive do
       nil
     end
   end
+
+  # --- Rule of 72 ---
+
+  defp default_rule72_rate(nil), do: 8.0
+
+  defp default_rule72_rate(%{yield: nil}), do: 8.0
+
+  defp default_rule72_rate(%{yield: yield}) do
+    val = Decimal.to_float(yield)
+    if val > 0, do: val, else: 8.0
+  end
+
+  @doc false
+  def compute_rule72(rate) when is_number(rate) and rate > 0 do
+    # Exact formula: ln(2) / ln(1 + r/100)
+    exact_years = :math.log(2) / :math.log(1 + rate / 100)
+    # Rule of 72 approximation
+    approx_years = 72 / rate
+
+    # Build doubling milestones (1x, 2x, 4x, 8x, 16x)
+    milestones =
+      for n <- 0..4 do
+        multiplier = :math.pow(2, n)
+        years = exact_years * n
+        %{multiplier: round(multiplier), years: Float.round(years, 1)}
+      end
+
+    %{
+      rate: Float.round(rate + 0.0, 2),
+      exact_years: Float.round(exact_years, 1),
+      approx_years: Float.round(approx_years, 1),
+      milestones: milestones
+    }
+  end
+
+  def compute_rule72(_), do: compute_rule72(8.0)
 
   # --- Dividend Chart ---
 

@@ -309,4 +309,85 @@ defmodule DividendsomaticWeb.StockLiveTest do
       assert DividendsomaticWeb.StockLive.detect_dividend_frequency(divs) == "unknown"
     end
   end
+
+  describe "rule of 72 calculator" do
+    setup %{conn: conn} do
+      {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+      %{conn: conn}
+    end
+
+    test "should show Rule of 72 card", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "Rule of 72"
+      assert html =~ "Investment doubling time"
+      assert html =~ "Annual Rate"
+    end
+
+    test "should show doubling milestones", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "1x"
+      assert html =~ "2x"
+      assert html =~ "4x"
+      assert html =~ "16x"
+    end
+
+    test "should show exact vs approximation comparison", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "Exact:"
+      assert html =~ "Rule of 72:"
+    end
+
+    test "should compute correct doubling time at 8%",
+      do:
+        (
+          result = DividendsomaticWeb.StockLive.compute_rule72(8.0)
+
+          assert result.rate == 8.0
+          assert result.approx_years == 9.0
+          assert result.exact_years == 9.0
+          assert length(result.milestones) == 5
+          assert hd(result.milestones).multiplier == 1
+          assert List.last(result.milestones).multiplier == 16
+        )
+
+    test "should compute correct doubling time at 4%",
+      do:
+        (
+          result = DividendsomaticWeb.StockLive.compute_rule72(4.0)
+
+          assert result.rate == 4.0
+          assert result.approx_years == 18.0
+          assert result.exact_years == 17.7
+        )
+
+    test "should compute correct doubling time at 12%",
+      do:
+        (
+          result = DividendsomaticWeb.StockLive.compute_rule72(12.0)
+
+          assert result.rate == 12.0
+          assert result.approx_years == 6.0
+          assert result.exact_years == 6.1
+        )
+
+    test "should handle update_rule72_rate event", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/stocks/KESKOB")
+
+      html = view |> element("#rule72-rate") |> render_blur(%{value: "10"})
+
+      assert html =~ "10.0"
+      assert html =~ "7.2"
+    end
+
+    test "should fallback to 8% for invalid rate",
+      do:
+        (
+          result = DividendsomaticWeb.StockLive.compute_rule72(-5)
+
+          assert result.rate == 8.0
+        )
+  end
 end

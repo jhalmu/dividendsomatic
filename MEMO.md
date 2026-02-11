@@ -43,8 +43,8 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.6.0 (Company Notes + Dividend Analytics)
-**Status:** Phase 1-3 complete + market sentiment history
+**Version:** 0.7.0 (Rule of 72 + Dividend Fix)
+**Status:** Phase 1-4 complete + market sentiment history
 
 **Implemented (cumulative):**
 - **Phase 2: Company Notes** - Editable investment thesis & notes per stock (ISIN-keyed)
@@ -79,10 +79,12 @@ mix ecto.reset              # Drop + create + migrate
 - Dividend tracking with area fill visualization
 - Sold positions tracking
 - Stock quotes & company profiles (Finnhub API)
-- WCAG AA accessible (251 tests, 4 Playwright a11y tests)
+- Rule of 72 calculator (interactive rate input, doubling milestones, exact vs approximation)
+- Dividend income fix (lookback snapshot for pre-year holdings)
+- WCAG AA accessible (257 tests, 4 Playwright a11y tests)
 
 **Next priorities (from development plan):**
-- Phase 4: Rule of 72 calculator
+- ~~Phase 4: Rule of 72 calculator~~ ✅
 - Phase 5A: GetLynxPortfolio automation
 - Phase 5B: Costs, Cash Flows & Short Positions
 - Phase 7: Testing & Quality (target 280+ tests, 70%+ coverage)
@@ -90,6 +92,44 @@ mix ecto.reset              # Drop + create + migrate
 - Production deployment
 - Gmail OAuth setup (env vars needed, see GMAIL_OAUTH_SETUP.md)
 - Finnhub API key setup (env vars needed)
+
+---
+
+## 2026-02-11 - Rule of 72 & Dividend Income Fix (Phase 4)
+
+### Session Summary
+
+Implemented Phase 4 (Rule of 72 calculator) on stock detail page and fixed dividend income calculation bug where Recent Dividends showed 0,00 € for stocks held since previous year.
+
+### Changes Made
+
+**Dividend Income Fix (portfolio.ex):**
+- Root cause: `build_holdings_map/2` only queried snapshots from year start, missing stocks held since previous year
+- Added lookback query to fetch the most recent snapshot before `from_date`
+- Holdings from lookback snapshot now included in the map, ensuring FX rate and quantity are available for all dividends
+
+**Rule of 72 Calculator (stock_live.ex):**
+- `compute_rule72/1` - exact formula `ln(2)/ln(1+r/100)` + Rule of 72 approximation `72/r`
+- `default_rule72_rate/1` - uses dividend yield if available, else 8%
+- Doubling milestones: 1x, 2x, 4x, 8x, 16x with years
+- `update_rule72_rate` event handler with debounced input
+
+**Rule of 72 UI (stock_live.html.heex):**
+- New "Rule of 72" card with investment doubling time theme
+- Interactive rate input (phx-blur, phx-keyup with 500ms debounce)
+- Milestone visualization with progress dots
+- Exact vs approximation comparison display
+
+**Tests (251 → 257):**
+- 3 Rule of 72 UI tests (card rendering, milestones, exact vs approx)
+- 3 computation tests (8%, 4%, 12% rates)
+- 1 event handler test (update_rule72_rate)
+- 1 fallback test (invalid rate defaults to 8%)
+
+### Test Results
+- 257 tests, 0 failures (8 excluded)
+- Credo --strict: 0 issues
+- Compile: 0 warnings
 
 ---
 
@@ -473,6 +513,6 @@ mix import.csv flex.490027.PortfolioForWww.20260128.20260128.csv
 - [ ] Gmail integration needs OAuth env vars (`GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`)
 - [ ] Finnhub integration needs API key (`FINNHUB_API_KEY`)
 - [ ] No production deployment (Fly.io or similar)
-- [x] Test coverage: 180 tests, 63.81% coverage, 0 credo issues
+- [x] Test coverage: 257 tests, 0 credo issues
 
 ---

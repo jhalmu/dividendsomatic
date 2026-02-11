@@ -387,13 +387,26 @@ defmodule Dividendsomatic.Portfolio do
     |> Enum.sort_by(& &1.month)
   end
 
-  # Build a map of {symbol -> %{quantity, fx_rate}} for the nearest snapshot per month
+  # Build a list of {date, symbol, quantity, fx_rate} tuples for dividend income lookup.
+  # Includes the most recent snapshot before from_date so early dividends can find holdings.
   defp build_holdings_map(from_date, to_date) do
-    PortfolioSnapshot
-    |> where([s], s.report_date >= ^from_date and s.report_date <= ^to_date)
-    |> preload(:holdings)
-    |> order_by([s], asc: s.report_date)
-    |> Repo.all()
+    # Include the last snapshot before the range for lookback
+    lookback_snapshot =
+      PortfolioSnapshot
+      |> where([s], s.report_date < ^from_date)
+      |> order_by([s], desc: s.report_date)
+      |> limit(1)
+      |> preload(:holdings)
+      |> Repo.all()
+
+    range_snapshots =
+      PortfolioSnapshot
+      |> where([s], s.report_date >= ^from_date and s.report_date <= ^to_date)
+      |> preload(:holdings)
+      |> order_by([s], asc: s.report_date)
+      |> Repo.all()
+
+    (lookback_snapshot ++ range_snapshots)
     |> Enum.flat_map(fn snapshot ->
       Enum.map(snapshot.holdings, fn h ->
         {snapshot.report_date, h.symbol, h.quantity, h.fx_rate_to_base}
