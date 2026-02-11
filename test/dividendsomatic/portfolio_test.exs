@@ -361,6 +361,83 @@ defmodule Dividendsomatic.PortfolioTest do
     end
   end
 
+  describe "FX exposure (Feature 3)" do
+    test "compute_fx_exposure/1 groups by currency with correct percentages" do
+      # Build mock holdings
+      holdings = [
+        %Portfolio.Holding{
+          currency_primary: "EUR",
+          position_value: Decimal.new("21000"),
+          fx_rate_to_base: Decimal.new("1"),
+          symbol: "KESKOB"
+        },
+        %Portfolio.Holding{
+          currency_primary: "USD",
+          position_value: Decimal.new("15000"),
+          fx_rate_to_base: Decimal.new("0.92"),
+          symbol: "AAPL"
+        }
+      ]
+
+      result = Portfolio.compute_fx_exposure(holdings)
+
+      assert length(result) == 2
+      eur_entry = Enum.find(result, &(&1.currency == "EUR"))
+      usd_entry = Enum.find(result, &(&1.currency == "USD"))
+
+      assert eur_entry.holdings_count == 1
+      assert Decimal.equal?(eur_entry.local_value, Decimal.new("21000"))
+      assert usd_entry.holdings_count == 1
+      # Total EUR: 21000 + 15000*0.92 = 21000 + 13800 = 34800
+      total_eur = Decimal.add(Decimal.new("21000"), Decimal.new("13800"))
+
+      expected_eur_pct =
+        Decimal.new("21000")
+        |> Decimal.div(total_eur)
+        |> Decimal.mult(Decimal.new("100"))
+        |> Decimal.round(1)
+
+      assert Decimal.equal?(eur_entry.pct, expected_eur_pct)
+    end
+  end
+
+  describe "dividend cash flow summary (Feature 5)" do
+    test "dividend_cash_flow_summary/0 returns cumulative totals" do
+      today = Date.utc_today()
+
+      {:ok, snapshot} =
+        %Portfolio.PortfolioSnapshot{}
+        |> Portfolio.PortfolioSnapshot.changeset(%{report_date: Date.new!(today.year, 1, 5)})
+        |> Repo.insert()
+
+      insert_test_holding(snapshot.id, Date.new!(today.year, 1, 5), "KESKOB", 100, "1")
+
+      {:ok, _} =
+        Portfolio.create_dividend(%{
+          symbol: "KESKOB",
+          ex_date: Date.new!(today.year, 1, 15),
+          amount: Decimal.new("1.00"),
+          currency: "EUR"
+        })
+
+      {:ok, _} =
+        Portfolio.create_dividend(%{
+          symbol: "KESKOB",
+          ex_date: Date.new!(today.year, 2, 10),
+          amount: Decimal.new("0.50"),
+          currency: "EUR"
+        })
+
+      result = Portfolio.dividend_cash_flow_summary()
+
+      assert result != []
+      # Verify cumulative: last entry's cumulative should equal sum of all incomes
+      last = List.last(result)
+      total = Enum.reduce(result, Decimal.new("0"), fn e, acc -> Decimal.add(acc, e.income) end)
+      assert Decimal.equal?(last.cumulative, total)
+    end
+  end
+
   defp insert_test_holding(snapshot_id, report_date, symbol, qty, fx_rate) do
     %Portfolio.Holding{}
     |> Portfolio.Holding.changeset(%{

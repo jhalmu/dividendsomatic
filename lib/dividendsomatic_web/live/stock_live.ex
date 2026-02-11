@@ -37,6 +37,8 @@ defmodule DividendsomaticWeb.StockLive do
     # Price chart data from holdings history (oldest first)
     price_chart_data = build_price_chart_data(holdings)
 
+    sold_for_symbol = Portfolio.list_sold_positions_by_symbol(symbol)
+
     socket =
       socket
       |> assign(:symbol, symbol)
@@ -52,6 +54,7 @@ defmodule DividendsomaticWeb.StockLive do
       |> assign(:holding_stats, holding_stats)
       |> assign(:price_chart_data, price_chart_data)
       |> assign(:payback_data, payback_data)
+      |> assign(:sold_for_symbol, sold_for_symbol)
       |> assign(:external_links, build_external_links(symbol, holdings, company_profile))
 
     {:ok, socket}
@@ -585,6 +588,8 @@ defmodule DividendsomaticWeb.StockLive do
     periods = detect_ownership_periods(holdings)
     total_owned_days = Enum.reduce(periods, 0, fn p, acc -> acc + p.days end)
 
+    extended = compute_extended_stats(cost_basis, qty, unrealized_pnl, latest)
+
     %{
       quantity: qty,
       avg_cost: latest.cost_basis_price || Decimal.new("0"),
@@ -600,6 +605,40 @@ defmodule DividendsomaticWeb.StockLive do
       total_owned_days: total_owned_days,
       snapshots_count: length(holdings)
     }
+    |> Map.merge(extended)
+  end
+
+  defp compute_extended_stats(cost_basis, qty, unrealized_pnl, latest) do
+    return_pct = compute_return_pct(cost_basis, unrealized_pnl)
+    pnl_per_share = compute_pnl_per_share(qty, unrealized_pnl)
+
+    %{
+      return_pct: return_pct,
+      pnl_per_share: pnl_per_share,
+      break_even: latest.cost_basis_price || Decimal.new("0"),
+      is_short: Decimal.compare(qty, Decimal.new("0")) == :lt
+    }
+  end
+
+  defp compute_return_pct(cost_basis, unrealized_pnl) do
+    abs_cost = Decimal.abs(cost_basis)
+
+    if Decimal.compare(abs_cost, Decimal.new("0")) == :gt do
+      unrealized_pnl
+      |> Decimal.div(abs_cost)
+      |> Decimal.mult(Decimal.new("100"))
+      |> Decimal.round(2)
+    else
+      Decimal.new("0")
+    end
+  end
+
+  defp compute_pnl_per_share(qty, unrealized_pnl) do
+    if Decimal.compare(qty, Decimal.new("0")) != :eq do
+      unrealized_pnl |> Decimal.div(qty) |> Decimal.round(2)
+    else
+      Decimal.new("0")
+    end
   end
 
   # Detect separate ownership periods by finding gaps > 14 days in holdings history
@@ -639,7 +678,8 @@ defmodule DividendsomaticWeb.StockLive do
       %{
         date: h.report_date,
         price: Decimal.to_float(h.mark_price || Decimal.new("0")),
-        quantity: Decimal.to_float(h.quantity || Decimal.new("0"))
+        quantity: Decimal.to_float(h.quantity || Decimal.new("0")),
+        cost_basis: Decimal.to_float(h.cost_basis_price || Decimal.new("0"))
       }
     end)
   end
@@ -703,13 +743,16 @@ defmodule DividendsomaticWeb.StockLive do
     x_fn = fn idx -> ml + idx / max(n - 1, 1) * pw end
 
     prices = Enum.map(chart_data, & &1.price)
-    y_lo = Enum.min(prices) * 0.97
-    y_hi = Enum.max(prices) * 1.03
+    cost_bases = Enum.map(chart_data, & &1.cost_basis)
+    all_values = prices ++ Enum.filter(cost_bases, &(&1 > 0))
+    y_lo = Enum.min(all_values) * 0.97
+    y_hi = Enum.max(all_values) * 1.03
     y_range = max(y_hi - y_lo, 0.01)
     y_fn = fn v -> mt + main_h - (v - y_lo) / y_range * main_h end
 
     area = svg_area(chart_data, x_fn, y_fn, chart_bottom, n)
     line = svg_price_line(chart_data, x_fn, y_fn)
+    cost_basis_line = svg_cost_basis_line(chart_data, x_fn, y_fn)
     x_labels = svg_x_labels(chart_data, x_fn, chart_bottom + 15, n)
     y_labels = svg_y_labels(mt, main_h, y_lo, y_range)
     grid = svg_grid(mt, main_h)
@@ -720,6 +763,7 @@ defmodule DividendsomaticWeb.StockLive do
       #{grid}
       #{area}
       #{line}
+      #{cost_basis_line}
       #{x_labels}
       #{y_labels}
       #{annotation}
@@ -764,6 +808,29 @@ defmodule DividendsomaticWeb.StockLive do
       end)
 
     ~s[<path d="#{d}" fill="none" stroke="#f97316" stroke-width="0.5" stroke-linejoin="round"/>]
+  end
+
+  defp svg_cost_basis_line(chart_data, x_fn, y_fn) do
+    has_cost_basis = Enum.any?(chart_data, &(&1.cost_basis > 0))
+    do_svg_cost_basis_line(has_cost_basis, chart_data, x_fn, y_fn)
+  end
+
+  defp do_svg_cost_basis_line(false, _chart_data, _x_fn, _y_fn), do: ""
+
+  defp do_svg_cost_basis_line(true, chart_data, x_fn, y_fn) do
+    d = svg_path_d(chart_data, x_fn, fn p -> y_fn.(p.cost_basis) end)
+
+    ~s[<path d="#{d}" fill="none" stroke="#94a3b8" stroke-width="0.5" stroke-dasharray="4 3" stroke-linejoin="round" data-testid="cost-basis-line"/>]
+  end
+
+  defp svg_path_d(chart_data, x_fn, y_val_fn) do
+    chart_data
+    |> Enum.with_index()
+    |> Enum.map_join(" ", fn {p, i} ->
+      x = r(x_fn.(i))
+      y = r(y_val_fn.(p))
+      if i == 0, do: "M#{x} #{y}", else: "L#{x} #{y}"
+    end)
   end
 
   defp svg_x_labels(chart_data, x_fn, label_y, n) do

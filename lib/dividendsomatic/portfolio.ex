@@ -491,6 +491,80 @@ defmodule Dividendsomatic.Portfolio do
     end
   end
 
+  ## FX Exposure
+
+  @doc """
+  Computes FX exposure breakdown from holdings.
+  Groups by currency, calculates EUR value, FX rate, and % of portfolio.
+  Returns list sorted by EUR value descending.
+  """
+  def compute_fx_exposure(holdings) do
+    total_eur =
+      Enum.reduce(holdings, Decimal.new("0"), fn h, acc ->
+        fx = h.fx_rate_to_base || Decimal.new("1")
+        Decimal.add(acc, Decimal.mult(h.position_value || Decimal.new("0"), fx))
+      end)
+
+    holdings
+    |> Enum.group_by(& &1.currency_primary)
+    |> Enum.map(fn {currency, group} -> build_currency_group(currency, group, total_eur) end)
+    |> Enum.sort_by(fn e -> Decimal.to_float(e.eur_value) end, :desc)
+  end
+
+  defp build_currency_group(currency, group, total_eur) do
+    local_value =
+      Enum.reduce(group, Decimal.new("0"), fn h, acc ->
+        Decimal.add(acc, h.position_value || Decimal.new("0"))
+      end)
+
+    eur_value =
+      Enum.reduce(group, Decimal.new("0"), fn h, acc ->
+        fx = h.fx_rate_to_base || Decimal.new("1")
+        Decimal.add(acc, Decimal.mult(h.position_value || Decimal.new("0"), fx))
+      end)
+
+    %{
+      currency: currency || "EUR",
+      holdings_count: length(group),
+      local_value: local_value,
+      eur_value: eur_value,
+      fx_rate: weighted_fx_rate(local_value, eur_value, hd(group)),
+      pct: decimal_pct(eur_value, total_eur)
+    }
+  end
+
+  defp weighted_fx_rate(local_value, eur_value, fallback_holding) do
+    if Decimal.compare(local_value, Decimal.new("0")) != :eq,
+      do: eur_value |> Decimal.div(local_value) |> Decimal.round(4),
+      else: fallback_holding.fx_rate_to_base || Decimal.new("1")
+  end
+
+  defp decimal_pct(value, total) do
+    if Decimal.compare(total, Decimal.new("0")) == :gt,
+      do: value |> Decimal.div(total) |> Decimal.mult(Decimal.new("100")) |> Decimal.round(1),
+      else: Decimal.new("0")
+  end
+
+  ## Dividend Cash Flow
+
+  @doc """
+  Returns YTD monthly dividend income with cumulative totals.
+  """
+  def dividend_cash_flow_summary do
+    today = Date.utc_today()
+    year_start = Date.new!(today.year, 1, 1)
+
+    months = dividends_by_month(year_start, today)
+
+    {entries, _} =
+      Enum.map_reduce(months, Decimal.new("0"), fn %{month: month, total: total}, acc ->
+        cumulative = Decimal.add(acc, total)
+        {%{month: month, income: total, cumulative: cumulative}, cumulative}
+      end)
+
+    entries
+  end
+
   ## Sold Positions (What-If Analysis)
 
   @doc """
@@ -498,6 +572,16 @@ defmodule Dividendsomatic.Portfolio do
   """
   def list_sold_positions do
     SoldPosition
+    |> order_by([s], desc: s.sale_date)
+    |> Repo.all()
+  end
+
+  @doc """
+  Lists sold positions for a specific symbol.
+  """
+  def list_sold_positions_by_symbol(symbol) do
+    SoldPosition
+    |> where([s], s.symbol == ^symbol)
     |> order_by([s], desc: s.sale_date)
     |> Repo.all()
   end

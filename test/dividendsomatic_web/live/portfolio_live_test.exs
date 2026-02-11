@@ -241,4 +241,146 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       assert html =~ "trading days"
     end
   end
+
+  describe "FX exposure breakdown (Feature 3)" do
+    @multi_currency_csv """
+    "ReportDate","CurrencyPrimary","Symbol","Description","SubCategory","Quantity","MarkPrice","PositionValue","CostBasisPrice","CostBasisMoney","OpenPrice","PercentOfNAV","FifoPnlUnrealized","ListingExchange","AssetClass","FXRateToBase","ISIN","FIGI"
+    "2026-01-28","EUR","KESKOB","KESKO OYJ-B SHS","COMMON","1000","21","21000","18","18000","18","40","3000","HEX","STK","1","FI0009000202","BBG000BNP2B2"
+    "2026-01-28","USD","AAPL","APPLE INC","COMMON","100","150","15000","120","12000","120","60","3000","NASDAQ","STK","0.92","US0378331005","BBG000B9XRY4"
+    """
+
+    test "should show FX exposure table when multiple currencies exist", %{conn: conn} do
+      {:ok, _} = Portfolio.create_snapshot_from_csv(@multi_currency_csv, ~D[2026-01-28])
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ "Currency Exposure"
+      assert html =~ "fx-exposure"
+      assert html =~ "EUR"
+      assert html =~ "USD"
+    end
+
+    test "should hide FX exposure when single currency", %{conn: conn} do
+      {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      refute html =~ "fx-exposure"
+      refute html =~ "Currency Exposure"
+    end
+  end
+
+  describe "realized P&L with sold positions (Feature 4)" do
+    test "should show sold positions table with details", %{conn: conn} do
+      {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+
+      {:ok, _} =
+        Portfolio.create_sold_position(%{
+          symbol: "AAPL",
+          quantity: Decimal.new("100"),
+          purchase_price: Decimal.new("150.00"),
+          purchase_date: ~D[2025-01-01],
+          sale_price: Decimal.new("175.00"),
+          sale_date: ~D[2026-01-15]
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ "Realized P&amp;L"
+      assert html =~ "1 sold"
+      assert html =~ "AAPL"
+    end
+
+    test "should link sold symbol to stock page", %{conn: conn} do
+      {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+
+      {:ok, _} =
+        Portfolio.create_sold_position(%{
+          symbol: "AAPL",
+          quantity: Decimal.new("100"),
+          purchase_price: Decimal.new("150.00"),
+          purchase_date: ~D[2025-01-01],
+          sale_price: Decimal.new("175.00"),
+          sale_date: ~D[2026-01-15]
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ ~s{href="/stocks/AAPL"}
+    end
+
+    test "should show holding period", %{conn: conn} do
+      {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+
+      {:ok, _} =
+        Portfolio.create_sold_position(%{
+          symbol: "AAPL",
+          quantity: Decimal.new("100"),
+          purchase_price: Decimal.new("150.00"),
+          purchase_date: ~D[2025-01-01],
+          sale_price: Decimal.new("175.00"),
+          sale_date: ~D[2026-01-15]
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      # Date.diff(~D[2026-01-15], ~D[2025-01-01]) = 379
+      assert html =~ "379d"
+    end
+  end
+
+  describe "cash flow summary (Feature 5)" do
+    test "should show cash flow section when dividends exist", %{conn: conn} do
+      today = Date.utc_today()
+
+      {:ok, snapshot} =
+        %Portfolio.PortfolioSnapshot{}
+        |> Portfolio.PortfolioSnapshot.changeset(%{report_date: Date.new!(today.year, 1, 10)})
+        |> Dividendsomatic.Repo.insert()
+
+      %Portfolio.Holding{}
+      |> Portfolio.Holding.changeset(%{
+        portfolio_snapshot_id: snapshot.id,
+        report_date: Date.new!(today.year, 1, 10),
+        symbol: "KESKOB",
+        currency_primary: "EUR",
+        quantity: "1000",
+        mark_price: "21",
+        position_value: "21000",
+        cost_basis_price: "18",
+        cost_basis_money: "18000",
+        percent_of_nav: "100",
+        listing_exchange: "HEX",
+        asset_class: "STK",
+        fx_rate_to_base: "1"
+      })
+      |> Dividendsomatic.Repo.insert!()
+
+      {:ok, _} =
+        Portfolio.create_dividend(%{
+          symbol: "KESKOB",
+          ex_date: Date.new!(today.year, 1, 15),
+          amount: Decimal.new("0.50"),
+          currency: "EUR"
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ "Dividend Cash Flow"
+      assert html =~ "cash-flow"
+    end
+  end
+
+  describe "short position support (Feature 6)" do
+    @short_csv """
+    "ReportDate","CurrencyPrimary","Symbol","Description","SubCategory","Quantity","MarkPrice","PositionValue","CostBasisPrice","CostBasisMoney","OpenPrice","PercentOfNAV","FifoPnlUnrealized","ListingExchange","AssetClass","FXRateToBase","ISIN","FIGI"
+    "2026-01-28","USD","TSLA","TESLA INC","COMMON","-50","200","-10000","180","-9000","180","5","-1000","NASDAQ","STK","0.92","US88160R1014","BBG000N9MNX3"
+    """
+
+    test "should show SHORT badge for negative quantity", %{conn: conn} do
+      {:ok, _} = Portfolio.create_snapshot_from_csv(@short_csv, ~D[2026-01-28])
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ "short-badge"
+      assert html =~ "SHORT"
+    end
+  end
 end

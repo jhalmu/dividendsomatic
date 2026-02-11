@@ -43,10 +43,11 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.7.0 (Rule of 72 + Dividend Fix)
-**Status:** Phase 1-4 complete + market sentiment history
+**Version:** 0.8.0 (Phase 5B: Costs, Cash Flows & Short Positions)
+**Status:** Phase 1-4 + 5B complete + market sentiment history
 
 **Implemented (cumulative):**
+- **Phase 5B: Costs, Cash Flows & Short Positions** - Enhanced cost basis, cost basis chart line, FX exposure, realized P&L table, cash flow summary, short position support
 - **Phase 2: Company Notes** - Editable investment thesis & notes per stock (ISIN-keyed)
 - **Phase 3: Dividend Analytics** - Yield, yield-on-cost, YoY growth, frequency detection, dividend chart
 - Dividend chart on stock detail page (per-share bars + cumulative income line)
@@ -86,12 +87,38 @@ mix ecto.reset              # Drop + create + migrate
 **Next priorities (from development plan):**
 - ~~Phase 4: Rule of 72 calculator~~ ✅
 - Phase 5A: GetLynxPortfolio automation
-- Phase 5B: Costs, Cash Flows & Short Positions
+- ~~Phase 5B: Costs, Cash Flows & Short Positions~~ ✅
 - Phase 7: Testing & Quality (target 280+ tests, 70%+ coverage)
 - Multi-provider market data architecture (#22 - only open issue)
 - Production deployment
 - Gmail OAuth setup (env vars needed, see GMAIL_OAUTH_SETUP.md)
 - Finnhub API key setup (env vars needed)
+
+---
+
+## 2026-02-12 - Phase 5B: Costs, Cash Flows & Short Positions
+
+### Session Summary
+
+Implemented all 6 features from Phase 5B plan. Code reviewed and all issues resolved. 17 new tests (276 total).
+
+### Features
+1. Enhanced Cost Basis (return %, P&L/share, break-even on stock page)
+2. Cost Basis Evolution (dashed line on price chart)
+3. FX Exposure Breakdown (currency table on portfolio page)
+4. Realized P&L Display (sold positions table on both pages)
+5. Cash Flow Summary (monthly dividend bar chart + cumulative table)
+6. Short Position Support (SHORT badge, negative quantity handling)
+
+### Code Review Fixes
+- Short position return % → `Decimal.abs`
+- FX rate accuracy → weighted average
+- N+1 query → `list_sold_positions_by_symbol/1`
+- Credo complexity → extracted helper functions
+
+### Test Results
+- 276 tests, 0 failures (8 excluded)
+- Credo --strict: 0 issues
 
 ---
 
@@ -513,6 +540,6 @@ mix import.csv flex.490027.PortfolioForWww.20260128.20260128.csv
 - [ ] Gmail integration needs OAuth env vars (`GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`)
 - [ ] Finnhub integration needs API key (`FINNHUB_API_KEY`)
 - [ ] No production deployment (Fly.io or similar)
-- [x] Test coverage: 257 tests, 0 credo issues
+- [x] Test coverage: 276 tests, 0 credo issues
 
 ---

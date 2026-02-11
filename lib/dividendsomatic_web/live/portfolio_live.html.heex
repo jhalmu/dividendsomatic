@@ -176,6 +176,14 @@
                       >
                         {holding.symbol}
                       </.link>
+                      <%= if Decimal.compare(holding.quantity, Decimal.new("0")) == :lt do %>
+                        <span
+                          style="display: inline-block; background: #ef4444; color: #fff; font-size: 0.45rem; font-weight: 700; padding: 0px 4px; border-radius: 2px; margin-left: 4px; vertical-align: middle; letter-spacing: 0.05em;"
+                          data-testid="short-badge"
+                        >
+                          SHORT
+                        </span>
+                      <% end %>
                     </td>
                     <td>
                       <span class="terminal-description">{holding.description}</span>
@@ -234,9 +242,56 @@
         />
       </div>
       
+<!-- FX Exposure -->
+      <%= if length(@fx_exposure) > 1 do %>
+        <div
+          class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-4"
+          data-testid="fx-exposure"
+        >
+          <div class="terminal-section-label">Currency Exposure</div>
+          <div class="overflow-x-auto mt-[var(--space-xs)]">
+            <table class="terminal-table">
+              <thead>
+                <tr>
+                  <th scope="col">Currency</th>
+                  <th scope="col">Holdings</th>
+                  <th scope="col" style="text-align: right;">Local Value</th>
+                  <th scope="col" style="text-align: right;">EUR Value</th>
+                  <th scope="col" style="text-align: right;">FX Rate</th>
+                  <th scope="col" style="text-align: right;">% Portfolio</th>
+                </tr>
+              </thead>
+              <tbody>
+                <%= for fx <- @fx_exposure do %>
+                  <tr>
+                    <td style="font-weight: 500;">{fx.currency}</td>
+                    <td class="terminal-number">{fx.holdings_count}</td>
+                    <td class="terminal-number" style="text-align: right;">
+                      {format_decimal(fx.local_value)}
+                    </td>
+                    <td class="terminal-number" style="text-align: right;">
+                      {format_euro_decimal(fx.eur_value)}
+                    </td>
+                    <td
+                      class="terminal-number"
+                      style="text-align: right; color: var(--terminal-dim);"
+                    >
+                      {format_decimal(fx.fx_rate)}
+                    </td>
+                    <td class="terminal-number" style="text-align: right;">
+                      {format_decimal(fx.pct)}%
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      <% end %>
+      
 <!-- Recent Dividends + Realized P&L side by side -->
       <%= if length(@recent_dividends) > 0 or Decimal.compare(@realized_pnl, Decimal.new("0")) != :eq do %>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-[var(--space-xs)] mb-[var(--space-md)]">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-[var(--space-xs)] mb-[var(--space-xs)]">
           <%= if length(@recent_dividends) > 0 do %>
             <div class="terminal-card p-[var(--space-sm)] animate-fade-in animate-delay-4">
               <div class="terminal-section-label">Recent Dividends</div>
@@ -255,13 +310,145 @@
           <% end %>
 
           <%= if Decimal.compare(@realized_pnl, Decimal.new("0")) != :eq do %>
-            <div class="terminal-card p-[var(--space-sm)] animate-fade-in animate-delay-5">
-              <div class="terminal-section-label">Realized P&L (Sold)</div>
-              <div class={"terminal-stat-value mt-[var(--space-xs)] #{if pnl_positive?(@realized_pnl), do: "gain", else: "loss"}"}>
-                {format_euro_signed(@realized_pnl)}
+            <div
+              class="terminal-card p-[var(--space-sm)] animate-fade-in animate-delay-5"
+              data-testid="realized-pnl-card"
+            >
+              <div class="flex items-center justify-between">
+                <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+                  Realized P&L ({length(@sold_positions)} sold)
+                </div>
+                <div
+                  class={"terminal-stat-value #{if pnl_positive?(@realized_pnl), do: "gain", else: "loss"}"}
+                  style="font-size: 0.875rem;"
+                >
+                  {format_euro_signed(@realized_pnl)}
+                </div>
               </div>
+              <%= if length(@sold_positions) > 0 do %>
+                <div class="overflow-x-auto mt-[var(--space-xs)]">
+                  <table class="terminal-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Symbol</th>
+                        <th scope="col">Qty</th>
+                        <th scope="col" style="text-align: right;">Buy</th>
+                        <th scope="col" style="text-align: right;">Sell</th>
+                        <th scope="col" style="text-align: right;">P&L</th>
+                        <th scope="col">Held</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <%= for sp <- @sold_positions do %>
+                        <tr>
+                          <td>
+                            <.link
+                              navigate={~p"/stocks/#{sp.symbol}"}
+                              class="terminal-symbol hover:underline"
+                            >
+                              {sp.symbol}
+                            </.link>
+                          </td>
+                          <td class="terminal-number">{format_integer(sp.quantity)}</td>
+                          <td
+                            class="terminal-number"
+                            style="text-align: right; color: var(--terminal-dim);"
+                          >
+                            {format_decimal(sp.purchase_price)}
+                          </td>
+                          <td class="terminal-number" style="text-align: right;">
+                            {format_decimal(sp.sale_price)}
+                          </td>
+                          <td class="terminal-number" style="text-align: right;">
+                            <span class={pnl_badge_class(sp.realized_pnl)}>
+                              <%= if pnl_positive?(sp.realized_pnl) do %>
+                                +
+                              <% end %>
+                              {format_euro_decimal(sp.realized_pnl)}
+                            </span>
+                          </td>
+                          <td class="terminal-number" style="color: var(--terminal-dim);">
+                            {Date.diff(sp.sale_date, sp.purchase_date)}d
+                          </td>
+                        </tr>
+                      <% end %>
+                    </tbody>
+                  </table>
+                </div>
+              <% end %>
             </div>
           <% end %>
+        </div>
+      <% end %>
+      
+<!-- Dividend Cash Flow -->
+      <%= if length(@cash_flow) > 0 do %>
+        <div
+          class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-5"
+          data-testid="cash-flow"
+        >
+          <div class="flex items-center justify-between">
+            <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+              Dividend Cash Flow {Date.utc_today().year}
+            </div>
+            <div
+              class="gain"
+              style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: 500;"
+            >
+              {format_euro_decimal(List.last(@cash_flow).cumulative)}
+            </div>
+          </div>
+          <!-- Mini Bar Chart -->
+          <div
+            class="mt-[var(--space-xs)]"
+            style="display: flex; align-items: flex-end; gap: 2px; height: 60px;"
+          >
+            <% max_income =
+              @cash_flow |> Enum.map(&Decimal.to_float(&1.income)) |> Enum.max() |> max(0.01) %>
+            <%= for entry <- @cash_flow do %>
+              <% bar_h = Decimal.to_float(entry.income) / max_income * 100 %>
+              <div
+                style={"flex: 1; height: #{max(bar_h, 2)}%; background: #10b981; border-radius: 2px 2px 0 0; min-width: 8px;"}
+                title={"#{entry.month}: #{format_euro_decimal(entry.income)}"}
+              >
+              </div>
+            <% end %>
+          </div>
+          <div
+            class="mt-1"
+            style="display: flex; gap: 2px; font-family: var(--font-mono); font-size: 0.5rem; color: var(--terminal-dim);"
+          >
+            <%= for entry <- @cash_flow do %>
+              <div style="flex: 1; text-align: center; min-width: 8px;">
+                {String.slice(entry.month, 5, 2)}
+              </div>
+            <% end %>
+          </div>
+          <!-- Cash Flow Table -->
+          <div class="overflow-x-auto mt-[var(--space-xs)]">
+            <table class="terminal-table">
+              <thead>
+                <tr>
+                  <th scope="col">Month</th>
+                  <th scope="col" style="text-align: right;">Income</th>
+                  <th scope="col" style="text-align: right;">Cumulative</th>
+                </tr>
+              </thead>
+              <tbody>
+                <%= for entry <- @cash_flow do %>
+                  <tr>
+                    <td>{entry.month}</td>
+                    <td class="terminal-number gain" style="text-align: right;">
+                      +{format_euro_decimal(entry.income)}
+                    </td>
+                    <td class="terminal-number" style="text-align: right; font-weight: 500;">
+                      {format_euro_decimal(entry.cumulative)}
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
         </div>
       <% end %>
       

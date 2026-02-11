@@ -300,6 +300,9 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:sparkline_values, [])
     |> assign(:realized_pnl, Decimal.new("0"))
     |> assign(:fear_greed, nil)
+    |> assign(:fx_exposure, [])
+    |> assign(:sold_positions, [])
+    |> assign(:cash_flow, [])
   end
 
   defp assign_snapshot(socket, snapshot) do
@@ -341,6 +344,9 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:sparkline_values, sparkline_values)
     |> assign(:realized_pnl, Portfolio.total_realized_pnl())
     |> assign(:fear_greed, get_fear_greed_for_snapshot(socket, snapshot))
+    |> assign(:fx_exposure, Portfolio.compute_fx_exposure(holdings))
+    |> assign(:sold_positions, Portfolio.list_sold_positions())
+    |> assign(:cash_flow, Portfolio.dividend_cash_flow_summary())
   end
 
   defp dividends_for_chart([first | _] = chart_data) do

@@ -1,3 +1,75 @@
+# Session Report - 2026-02-12
+
+## Summary
+Phase 5B: Costs, Cash Flows & Short Positions. 6 features implemented with 17 new tests (276 total, 0 failures, 0 credo issues). Code reviewed and all issues resolved.
+
+## Phase 5B Features Implemented
+
+**Feature 1: Enhanced Cost Basis on Stock Page**
+- Added return %, P&L/share, break-even price to Position Summary card
+- Extracted `compute_extended_stats/4`, `compute_return_pct/2`, `compute_pnl_per_share/2`
+- Color-coded values (green positive, red negative)
+
+**Feature 2: Cost Basis Evolution on Stock Page**
+- Added dashed cost basis line to existing Price History chart
+- Cost basis values included in y-axis range calculation
+- Legend with Price (orange) + Cost Basis (dashed gray) indicators
+- Extracted `svg_cost_basis_line/3`, `do_svg_cost_basis_line/4`, `svg_path_d/3`
+
+**Feature 3: FX Exposure Breakdown**
+- New "Currency Exposure" table on portfolio page (only when 2+ currencies)
+- `compute_fx_exposure/1` groups by currency with weighted-average FX rate
+- Columns: Currency, Holdings, Local Value, EUR Value, FX Rate, % Portfolio
+- Extracted `build_currency_group/3`, `weighted_fx_rate/3`, `decimal_pct/2`
+
+**Feature 4: Realized P&L Display**
+- Expanded simple P&L card into full sold positions table on portfolio page
+- Added "Previous Positions (Sold)" section on stock detail page
+- Added `list_sold_positions_by_symbol/1` context function (DB-filtered)
+- Columns: Symbol (linked), Qty, Buy, Sell, P&L (color-coded), Held (days)
+
+**Feature 5: Cash Flow Summary**
+- New "Dividend Cash Flow" card with mini bar chart + cumulative table
+- `dividend_cash_flow_summary/0` returns YTD monthly income with cumulative totals
+- Flexbox bar visualization proportional to max month
+
+**Feature 6: Short Position Support**
+- SHORT badge on portfolio holdings table and stock detail page
+- `is_short` flag in holding stats for negative quantity detection
+- Short-safe return % calculation using `Decimal.abs`
+
+## Code Review Fixes
+- Short position return % always 0% → Fixed with `Decimal.abs(cost_basis)`
+- FX rate used first holding only → Fixed with weighted average `eur_value / local_value`
+- `list_sold_positions()` loaded ALL then filtered → Added `list_sold_positions_by_symbol/1`
+- `Date.utc_today()` called twice → Reordered to bind once
+- Credo complexity in `compute_fx_exposure` → Extracted `build_currency_group/3`
+- Credo complexity in `compute_holding_stats` → Extracted helper functions
+- Credo nesting in `svg_cost_basis_line` → Extracted with pattern matching
+
+## Tests (259 → 276)
+- 3 enhanced cost basis tests (return %, P&L/share, break-even)
+- 2 cost basis chart tests (stroke-dasharray, legend)
+- 3 FX exposure tests (multi-currency table, single-currency hidden, unit test)
+- 3 realized P&L tests (table details, linked symbol, holding period)
+- 3 cash flow tests (section appears, cumulative totals, unit test)
+- 3 short position tests (portfolio badge, stock badge, return %)
+
+## Files Modified
+- `lib/dividendsomatic/portfolio.ex` — compute_fx_exposure, dividend_cash_flow_summary, list_sold_positions_by_symbol
+- `lib/dividendsomatic_web/live/portfolio_live.ex` — fx_exposure, sold_positions, cash_flow assigns
+- `lib/dividendsomatic_web/live/portfolio_live.html.heex` — FX table, sold positions table, cash flow card, SHORT badge
+- `lib/dividendsomatic_web/live/stock_live.ex` — extended holding stats, cost basis chart, sold_for_symbol
+- `lib/dividendsomatic_web/live/stock_live.html.heex` — enhanced cost basis, cost basis legend, sold positions, SHORT badge
+- `test/dividendsomatic/portfolio_test.exs` — 2 new unit tests
+- `test/dividendsomatic_web/live/portfolio_live_test.exs` — 8 new LiveView tests
+- `test/dividendsomatic_web/live/stock_live_test.exs` — 7 new LiveView tests
+
+## Remaining Open Issues
+- #22 Multi-provider market data architecture (future)
+
+---
+
 # Session Report - 2026-02-11
 
 ## Summary

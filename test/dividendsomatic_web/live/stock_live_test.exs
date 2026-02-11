@@ -427,4 +427,106 @@ defmodule DividendsomaticWeb.StockLiveTest do
       assert DividendsomaticWeb.StockLive.compute_payback_data([], [], nil, analytics) == nil
     end
   end
+
+  describe "enhanced cost basis (Feature 1)" do
+    setup %{conn: conn} do
+      {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+      %{conn: conn}
+    end
+
+    test "should show return percentage", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "Return"
+      # 2735.41 / 18264.59 * 100 ≈ 14.98%
+      assert html =~ "14.98"
+    end
+
+    test "should show P&L per share", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "P&amp;L/Share"
+      # 2735.41 / 1000 = 2.74
+      assert html =~ "2.74"
+    end
+
+    test "should show break-even price", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "Break-even"
+      assert html =~ "18.26"
+    end
+  end
+
+  describe "cost basis evolution chart (Feature 2)" do
+    setup %{conn: conn} do
+      # Need 2 snapshots for chart to render
+      {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-27])
+      {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+      %{conn: conn}
+    end
+
+    test "should include cost basis line in price chart", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "stroke-dasharray"
+      assert html =~ "cost-basis-line"
+    end
+
+    test "should show cost basis legend", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "cost-basis-legend"
+      assert html =~ "Cost Basis"
+    end
+  end
+
+  describe "sold positions on stock page (Feature 4)" do
+    setup %{conn: conn} do
+      {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+
+      {:ok, _} =
+        Portfolio.create_sold_position(%{
+          symbol: "KESKOB",
+          quantity: Decimal.new("500"),
+          purchase_price: Decimal.new("15.00"),
+          purchase_date: ~D[2025-06-01],
+          sale_price: Decimal.new("19.00"),
+          sale_date: ~D[2025-12-15],
+          currency: "EUR"
+        })
+
+      %{conn: conn}
+    end
+
+    test "should show sold positions section for stock with sales", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "Previous Positions"
+      assert html =~ "1 sold"
+      assert html =~ "sold-positions"
+    end
+
+    test "should show holding period in days", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      # Date.diff(~D[2025-12-15], ~D[2025-06-01]) = 197
+      assert html =~ "197d"
+    end
+  end
+
+  describe "short position support (Feature 6)" do
+    @short_csv """
+    "ReportDate","CurrencyPrimary","Symbol","Description","SubCategory","Quantity","MarkPrice","PositionValue","CostBasisPrice","CostBasisMoney","OpenPrice","PercentOfNAV","FifoPnlUnrealized","ListingExchange","AssetClass","FXRateToBase","ISIN","FIGI"
+    "2026-01-28","USD","TSLA","TESLA INC","COMMON","-50","200","-10000","180","-9000","180","5","-1000","NASDAQ","STK","0.92","US88160R1014","BBG000N9MNX3"
+    """
+
+    test "should indicate short position on stock page", %{conn: conn} do
+      {:ok, _} = Portfolio.create_snapshot_from_csv(@short_csv, ~D[2026-01-28])
+      {:ok, _view, html} = live(conn, ~p"/stocks/TSLA")
+
+      assert html =~ "short-badge"
+      assert html =~ "SHORT"
+    end
+  end
 end

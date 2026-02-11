@@ -63,6 +63,14 @@
         <div class="flex items-center justify-between">
           <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
             Position
+            <%= if @holding_stats.is_short do %>
+              <span
+                style="display: inline-block; background: #ef4444; color: #fff; font-size: 0.5rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; margin-left: 6px; vertical-align: middle; letter-spacing: 0.05em;"
+                data-testid="short-badge"
+              >
+                SHORT
+              </span>
+            <% end %>
           </div>
           <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-muted);">
             Data as of {Date.to_string(@holding_stats.latest_date)}
@@ -108,9 +116,95 @@
               {format_decimal(@holding_stats.percent_of_nav)}% NAV
             </div>
           </div>
+          <div>
+            <div class="terminal-info-label">Return</div>
+            <div class={"terminal-info-value #{if pnl_positive?(@holding_stats.return_pct), do: "gain", else: "loss"}"}>
+              <%= if pnl_positive?(@holding_stats.return_pct) do %>
+                +
+              <% end %>
+              {format_decimal(@holding_stats.return_pct)}%
+            </div>
+          </div>
+          <div>
+            <div class="terminal-info-label">P&L/Share</div>
+            <div class={"terminal-info-value #{if pnl_positive?(@holding_stats.pnl_per_share), do: "gain", else: "loss"}"}>
+              <%= if pnl_positive?(@holding_stats.pnl_per_share) do %>
+                +
+              <% end %>
+              {format_decimal(@holding_stats.pnl_per_share)}
+              <span style="color: var(--terminal-dim); font-size: 0.625rem;">
+                {@holding_stats.currency}
+              </span>
+            </div>
+          </div>
+          <div>
+            <div class="terminal-info-label">Break-even</div>
+            <div class="terminal-info-value">
+              {format_decimal(@holding_stats.break_even)}
+              <span style="color: var(--terminal-dim); font-size: 0.625rem;">
+                {@holding_stats.currency}
+              </span>
+            </div>
+          </div>
         </div>
         <!-- Ownership Duration Bar -->
         {render_ownership_bar(@holding_stats)}
+      </div>
+    <% end %>
+    
+<!-- Previous Positions (Sold) -->
+    <%= if length(@sold_for_symbol) > 0 do %>
+      <div
+        class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-1"
+        data-testid="sold-positions"
+      >
+        <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+          Previous Positions ({length(@sold_for_symbol)} sold)
+        </div>
+        <div class="overflow-x-auto mt-[var(--space-xs)]">
+          <table class="terminal-table">
+            <thead>
+              <tr>
+                <th scope="col">Qty</th>
+                <th scope="col" style="text-align: right;">Buy</th>
+                <th scope="col" style="text-align: right;">Sell</th>
+                <th scope="col" style="text-align: right;">P&L</th>
+                <th scope="col">Date</th>
+                <th scope="col">Held</th>
+              </tr>
+            </thead>
+            <tbody>
+              <%= for sp <- @sold_for_symbol do %>
+                <tr>
+                  <td class="terminal-number">{format_integer(sp.quantity)}</td>
+                  <td
+                    class="terminal-number"
+                    style="text-align: right; color: var(--terminal-dim);"
+                  >
+                    {format_decimal(sp.purchase_price)}
+                  </td>
+                  <td class="terminal-number" style="text-align: right;">
+                    {format_decimal(sp.sale_price)}
+                  </td>
+                  <td class="terminal-number" style="text-align: right;">
+                    <span class={pnl_badge_class(sp.realized_pnl)}>
+                      <%= if pnl_positive?(sp.realized_pnl) do %>
+                        +
+                      <% end %>
+                      {format_euro_decimal(sp.realized_pnl)}
+                    </span>
+                  </td>
+                  <td style="color: var(--terminal-dim); font-size: 0.625rem;">
+                    {Date.to_string(sp.sale_date)}
+                  </td>
+                  <td class="terminal-number" style="color: var(--terminal-dim);">
+                    {Date.diff(sp.sale_date, sp.purchase_date)}d
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
       </div>
     <% end %>
     
@@ -135,8 +229,21 @@
           <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
             Price History
           </div>
-          <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);">
-            {length(@price_chart_data)} data points
+          <div
+            class="flex items-center gap-[var(--space-sm)]"
+            style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);"
+          >
+            <span class="flex items-center gap-1">
+              <span style="display: inline-block; width: 12px; height: 2px; background: #f97316;">
+              </span>
+              Price
+            </span>
+            <span class="flex items-center gap-1" data-testid="cost-basis-legend">
+              <span style="display: inline-block; width: 12px; height: 2px; background: #94a3b8; border-top: 1px dashed #94a3b8;">
+              </span>
+              Cost Basis
+            </span>
+            <span>{length(@price_chart_data)} pts</span>
           </div>
         </div>
         <div class="overflow-x-auto">
