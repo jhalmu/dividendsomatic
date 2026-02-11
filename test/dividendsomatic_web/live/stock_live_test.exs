@@ -59,13 +59,14 @@ defmodule DividendsomaticWeb.StockLiveTest do
       assert html =~ "1,000"
     end
 
-    test "should show disabled investment notes section", %{conn: conn} do
+    test "should show editable investment notes section", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
 
       assert html =~ "Investment Notes"
       assert html =~ "Investment Thesis"
-      assert html =~ "Coming soon"
-      refute html =~ "Save Notes"
+      assert html =~ "phx-blur=\"save_thesis\""
+      assert html =~ "phx-blur=\"save_notes\""
+      refute html =~ "Coming soon"
     end
 
     test "should show external links for HEX exchange stock", %{conn: conn} do
@@ -134,6 +135,51 @@ defmodule DividendsomaticWeb.StockLiveTest do
     end
   end
 
+  describe "investment notes" do
+    setup %{conn: conn} do
+      {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+      %{conn: conn}
+    end
+
+    test "should save thesis on blur", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/stocks/KESKOB")
+
+      view |> element("#note-thesis") |> render_blur(%{value: "Great dividend stock"})
+
+      # Re-render should show the saved text
+      html = render(view)
+      assert html =~ "Great dividend stock"
+      assert html =~ "Saved"
+    end
+
+    test "should save notes on blur", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/stocks/KESKOB")
+
+      view |> element("#note-markdown") |> render_blur(%{value: "Key metrics: P/E 12"})
+
+      html = render(view)
+      assert html =~ "Key metrics: P/E 12"
+    end
+
+    test "should persist notes to database", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/stocks/KESKOB")
+
+      view |> element("#note-thesis") |> render_blur(%{value: "Long-term hold"})
+
+      # Verify persisted
+      note = Dividendsomatic.Stocks.get_company_note_by_isin("FI0009000202")
+      assert note.thesis == "Long-term hold"
+      assert note.symbol == "KESKOB"
+    end
+
+    test "should show asset-type-specific placeholder", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      # Default stock placeholder
+      assert html =~ "Growth potential"
+    end
+  end
+
   describe "dividend display" do
     setup %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
@@ -167,6 +213,13 @@ defmodule DividendsomaticWeb.StockLiveTest do
       assert html =~ "Total:"
     end
 
+    test "should show dividend analytics section", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "Dividend Analytics"
+      assert html =~ "TTM Per Share"
+    end
+
     test "should filter out dividends before ownership", %{conn: conn} do
       # Add a dividend before the holding date - should not appear
       {:ok, _} =
@@ -182,6 +235,72 @@ defmodule DividendsomaticWeb.StockLiveTest do
       # Should still show only 1 dividend (the one from setup), not the pre-ownership one
       assert html =~ "Dividends Received"
       assert html =~ "(1)"
+    end
+  end
+
+  describe "dividend analytics calculations" do
+    test "should detect quarterly frequency" do
+      divs = [
+        %{
+          dividend: %{ex_date: ~D[2025-03-15], amount: Decimal.new("0.50")},
+          income: Decimal.new("500")
+        },
+        %{
+          dividend: %{ex_date: ~D[2025-06-15], amount: Decimal.new("0.50")},
+          income: Decimal.new("500")
+        },
+        %{
+          dividend: %{ex_date: ~D[2025-09-15], amount: Decimal.new("0.50")},
+          income: Decimal.new("500")
+        },
+        %{
+          dividend: %{ex_date: ~D[2025-12-15], amount: Decimal.new("0.50")},
+          income: Decimal.new("500")
+        }
+      ]
+
+      assert DividendsomaticWeb.StockLive.detect_dividend_frequency(divs) == "quarterly"
+    end
+
+    test "should detect annual frequency" do
+      divs = [
+        %{
+          dividend: %{ex_date: ~D[2024-06-01], amount: Decimal.new("1.00")},
+          income: Decimal.new("1000")
+        },
+        %{
+          dividend: %{ex_date: ~D[2025-06-01], amount: Decimal.new("1.10")},
+          income: Decimal.new("1100")
+        }
+      ]
+
+      assert DividendsomaticWeb.StockLive.detect_dividend_frequency(divs) == "annual"
+    end
+
+    test "should detect semi-annual frequency" do
+      divs = [
+        %{
+          dividend: %{ex_date: ~D[2025-01-15], amount: Decimal.new("0.50")},
+          income: Decimal.new("500")
+        },
+        %{
+          dividend: %{ex_date: ~D[2025-07-15], amount: Decimal.new("0.50")},
+          income: Decimal.new("500")
+        }
+      ]
+
+      assert DividendsomaticWeb.StockLive.detect_dividend_frequency(divs) == "semi-annual"
+    end
+
+    test "should return unknown for single dividend" do
+      divs = [
+        %{
+          dividend: %{ex_date: ~D[2025-06-01], amount: Decimal.new("1.00")},
+          income: Decimal.new("1000")
+        }
+      ]
+
+      assert DividendsomaticWeb.StockLive.detect_dividend_frequency(divs) == "unknown"
     end
   end
 end

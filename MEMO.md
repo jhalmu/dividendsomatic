@@ -43,10 +43,14 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.5.0 (FX Conversion + Dynamic Stats + Dividend Import)
-**Status:** Phase 1 complete + partial Phase 3 (dividends) + market sentiment history
+**Version:** 0.6.0 (Company Notes + Dividend Analytics)
+**Status:** Phase 1-3 complete + market sentiment history
 
 **Implemented (cumulative):**
+- **Phase 2: Company Notes** - Editable investment thesis & notes per stock (ISIN-keyed)
+- **Phase 3: Dividend Analytics** - Yield, yield-on-cost, YoY growth, frequency detection, dividend chart
+- Dividend chart on stock detail page (per-share bars + cumulative income line)
+- Asset-type-specific thesis placeholders (stock/ETF/REIT/BDC)
 - FX conversion: all portfolio values converted to EUR via fx_rate_to_base
 - Dynamic growth stats (changes with snapshot navigation)
 - Dynamic market sentiment (historical F&G per snapshot date)
@@ -75,19 +79,64 @@ mix ecto.reset              # Drop + create + migrate
 - Dividend tracking with area fill visualization
 - Sold positions tracking
 - Stock quotes & company profiles (Finnhub API)
-- WCAG AA accessible (201 tests, 4 Playwright a11y tests)
+- WCAG AA accessible (251 tests, 4 Playwright a11y tests)
 
 **Next priorities (from development plan):**
-- Phase 2: Company Information (ISIN-keyed company notes, real stock/ETF templates)
-- Phase 3: Dividend Calculations & Charts (enhanced schema, analytics, opaque softcolor charts)
 - Phase 4: Rule of 72 calculator
 - Phase 5A: GetLynxPortfolio automation
 - Phase 5B: Costs, Cash Flows & Short Positions
-- Phase 7: Testing & Quality (target 220+ tests, 70%+ coverage)
+- Phase 7: Testing & Quality (target 280+ tests, 70%+ coverage)
 - Multi-provider market data architecture (#22 - only open issue)
 - Production deployment
 - Gmail OAuth setup (env vars needed, see GMAIL_OAUTH_SETUP.md)
 - Finnhub API key setup (env vars needed)
+
+---
+
+## 2026-02-11 - Company Notes & Dividend Analytics (Phase 2 + 3)
+
+### Session Summary
+
+Completed Phase 2 (Company Information) and Phase 3 (Dividend Calculations & Charts). Activated investment notes UI with save-on-blur persistence, added dividend yield/growth analytics with SVG chart on stock detail page.
+
+### Changes Made
+
+**Phase 2 - Company Notes (stock_live.ex/html.heex):**
+- Activated disabled Investment Notes section (removed opacity, disabled, "Coming soon")
+- Added `phx-blur` event handlers for thesis and notes textareas
+- Save-on-blur persistence via `Stocks.upsert_company_note/1`
+- Temporary "Saved" indicator with 2s auto-clear
+- Asset-type-specific thesis placeholders (stock, ETF, REIT, BDC)
+- Pre-populated textareas with existing company_note data
+
+**Phase 3 - Dividend Analytics (stock_live.ex):**
+- `compute_dividend_analytics/3` - orchestrates all analytics
+- `detect_dividend_frequency/1` - classifies as monthly/quarterly/semi-annual/annual/irregular
+- `compute_annual_dividend_per_share/1` - trailing 12-month per-share total
+- `compute_dividend_yield/2` - annual_per_share / current_price * 100
+- `compute_yield_on_cost/2` - annual_per_share / avg_cost * 100
+- `compute_dividend_growth_rate/1` - YoY comparison of per-share totals
+
+**Phase 3 - Dividend Chart (stock_live.ex/html.heex):**
+- SVG bar chart: per-share dividend amounts as green bars
+- Cumulative income line overlay (orange with dots)
+- Grid, axis labels, annotation for latest cumulative value
+- Positioned above dividend history table in Dividend Analytics card
+
+**Phase 3 - Dividend Analytics UI (stock_live.html.heex):**
+- New "Dividend Analytics" card with frequency badge
+- Stats grid: TTM Per Share, Yield %, Yield on Cost %, YoY Growth %
+- Growth rate color-coded (green positive, red negative)
+
+**Tests (242 → 251):**
+- 4 investment notes tests (save thesis, save notes, DB persistence, placeholder)
+- 4 dividend frequency detection tests (quarterly, annual, semi-annual, unknown)
+- 1 dividend analytics display test
+
+### Test Results
+- 251 tests, 0 failures (5 excluded)
+- Credo --strict: 0 issues
+- Compile: 0 warnings
 
 ---
 

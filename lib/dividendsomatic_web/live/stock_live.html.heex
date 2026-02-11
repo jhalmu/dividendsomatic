@@ -192,6 +192,61 @@
       </div>
     <% end %>
     
+<!-- Dividend Analytics -->
+    <%= if @dividend_analytics do %>
+      <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-4">
+        <div class="flex items-center justify-between">
+          <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+            Dividend Analytics
+          </div>
+          <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim); text-transform: uppercase;">
+            {@dividend_analytics.frequency}
+          </div>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-[var(--space-xs)] mt-[var(--space-xs)]">
+          <div>
+            <div class="terminal-info-label">TTM Per Share</div>
+            <div class="terminal-info-value">
+              {format_decimal(@dividend_analytics.annual_per_share)}
+            </div>
+          </div>
+          <%= if @dividend_analytics.yield do %>
+            <div>
+              <div class="terminal-info-label">Yield</div>
+              <div class="terminal-info-value gain">
+                {format_decimal(@dividend_analytics.yield)}%
+              </div>
+            </div>
+          <% end %>
+          <%= if @dividend_analytics.yield_on_cost do %>
+            <div>
+              <div class="terminal-info-label">Yield on Cost</div>
+              <div class="terminal-info-value gain">
+                {format_decimal(@dividend_analytics.yield_on_cost)}%
+              </div>
+            </div>
+          <% end %>
+          <%= if @dividend_analytics.growth_rate do %>
+            <div>
+              <div class="terminal-info-label">YoY Growth</div>
+              <div class={"terminal-info-value #{if Decimal.compare(@dividend_analytics.growth_rate, Decimal.new("0")) != :lt, do: "gain", else: "loss"}"}>
+                <%= if Decimal.compare(@dividend_analytics.growth_rate, Decimal.new("0")) != :lt do %>
+                  +
+                <% end %>
+                {format_decimal(@dividend_analytics.growth_rate)}%
+              </div>
+            </div>
+          <% end %>
+        </div>
+        <!-- Dividend Chart -->
+        <%= if length(@dividends_with_income) > 1 do %>
+          <div class="overflow-x-auto mt-[var(--space-xs)]">
+            {render_dividend_chart(@dividends_with_income)}
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+    
 <!-- Dividend History (only during ownership) -->
     <%= if length(@dividends_with_income) > 0 do %>
       <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-4">
@@ -243,19 +298,18 @@
       </div>
     <% end %>
     
-<!-- Investment Notes (disabled) -->
+<!-- Investment Notes -->
     <%= if @isin do %>
-      <div
-        class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-5"
-        style="opacity: 0.5;"
-      >
+      <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-5">
         <div class="flex items-center justify-between mb-[var(--space-xs)]">
           <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
             Investment Notes
           </div>
-          <span style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">
-            Coming soon
-          </span>
+          <%= if @note_saved do %>
+            <span style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-gain); text-transform: uppercase; letter-spacing: 0.05em;">
+              Saved
+            </span>
+          <% end %>
         </div>
         <div>
           <label
@@ -267,10 +321,10 @@
           <textarea
             id="note-thesis"
             rows="2"
-            disabled
-            style="width: 100%; background: var(--terminal-surface); color: var(--terminal-dim); border: 1px solid var(--terminal-border); font-family: var(--font-mono); font-size: 0.75rem; padding: var(--space-xs); border-radius: 0.25rem; resize: none; cursor: not-allowed;"
-            placeholder="Why do you hold this position?"
-          ></textarea>
+            phx-blur="save_thesis"
+            style="width: 100%; background: var(--terminal-surface); color: var(--terminal-text); border: 1px solid var(--terminal-border); font-family: var(--font-mono); font-size: 0.75rem; padding: var(--space-xs); border-radius: 0.25rem; resize: vertical;"
+            placeholder={thesis_placeholder(@company_note)}
+          >{note_thesis(@company_note)}</textarea>
         </div>
         <div class="mt-[var(--space-xs)]">
           <label
@@ -282,10 +336,10 @@
           <textarea
             id="note-markdown"
             rows="3"
-            disabled
-            style="width: 100%; background: var(--terminal-surface); color: var(--terminal-dim); border: 1px solid var(--terminal-border); font-family: var(--font-mono); font-size: 0.75rem; padding: var(--space-xs); border-radius: 0.25rem; resize: none; cursor: not-allowed;"
+            phx-blur="save_notes"
+            style="width: 100%; background: var(--terminal-surface); color: var(--terminal-text); border: 1px solid var(--terminal-border); font-family: var(--font-mono); font-size: 0.75rem; padding: var(--space-xs); border-radius: 0.25rem; resize: vertical;"
             placeholder="Research notes, key metrics, earnings dates..."
-          ></textarea>
+          >{note_markdown(@company_note)}</textarea>
         </div>
       </div>
     <% end %>

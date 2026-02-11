@@ -23,6 +23,10 @@ defmodule DividendsomaticWeb.StockLive do
     dividends_with_income = compute_dividends_with_income(owned_dividends, holdings)
     total_dividend_income = sum_dividend_income(dividends_with_income)
 
+    # Dividend analytics
+    dividend_analytics =
+      compute_dividend_analytics(dividends_with_income, quote_data, holding_stats)
+
     # Price chart data from holdings history (oldest first)
     price_chart_data = build_price_chart_data(holdings)
 
@@ -32,16 +36,358 @@ defmodule DividendsomaticWeb.StockLive do
       |> assign(:holdings_history, holdings)
       |> assign(:dividends_with_income, dividends_with_income)
       |> assign(:total_dividend_income, total_dividend_income)
+      |> assign(:dividend_analytics, dividend_analytics)
       |> assign(:company_profile, company_profile)
       |> assign(:quote_data, quote_data)
       |> assign(:isin, isin)
       |> assign(:company_note, company_note)
+      |> assign(:note_saved, false)
       |> assign(:holding_stats, holding_stats)
       |> assign(:price_chart_data, price_chart_data)
       |> assign(:external_links, build_external_links(symbol, holdings, company_profile))
 
     {:ok, socket}
   end
+
+  # --- Event Handlers ---
+
+  @impl true
+  def handle_event("save_thesis", %{"value" => value}, socket) do
+    save_note(socket, :thesis, value)
+  end
+
+  @impl true
+  def handle_event("save_notes", %{"value" => value}, socket) do
+    save_note(socket, :notes_markdown, value)
+  end
+
+  defp save_note(socket, field, value) do
+    isin = socket.assigns.isin
+
+    if isin do
+      attrs =
+        Map.merge(
+          %{isin: isin, symbol: socket.assigns.symbol},
+          %{field => value}
+        )
+
+      case Stocks.upsert_company_note(attrs) do
+        {:ok, note} ->
+          Process.send_after(self(), :clear_note_saved, 2000)
+          {:noreply, socket |> assign(:company_note, note) |> assign(:note_saved, true)}
+
+        {:error, _changeset} ->
+          {:noreply, socket}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_info(:clear_note_saved, socket) do
+    {:noreply, assign(socket, :note_saved, false)}
+  end
+
+  # --- Note Helpers ---
+
+  defp note_thesis(nil), do: ""
+  defp note_thesis(%{thesis: nil}), do: ""
+  defp note_thesis(%{thesis: thesis}), do: thesis
+
+  defp note_markdown(nil), do: ""
+  defp note_markdown(%{notes_markdown: nil}), do: ""
+  defp note_markdown(%{notes_markdown: notes}), do: notes
+
+  defp thesis_placeholder(%{asset_type: "etf"}),
+    do: "Fund composition, asset allocation target, dividend strategy, rebalancing rules"
+
+  defp thesis_placeholder(%{asset_type: "reit"}),
+    do: "Dividend frequency, occupancy rate, management quality, leverage"
+
+  defp thesis_placeholder(%{asset_type: "bdc"}),
+    do: "Leverage, interest coverage, distribution sustainability"
+
+  defp thesis_placeholder(_),
+    do: "Why do you hold this? Growth potential, dividend yield, competitive advantage?"
+
+  # --- Dividend Analytics ---
+
+  defp compute_dividend_analytics([], _quote_data, _holding_stats), do: nil
+
+  defp compute_dividend_analytics(dividends_with_income, quote_data, holding_stats) do
+    frequency = detect_dividend_frequency(dividends_with_income)
+    annual_per_share = compute_annual_dividend_per_share(dividends_with_income)
+    yield = compute_dividend_yield(annual_per_share, quote_data)
+    growth_rate = compute_dividend_growth_rate(dividends_with_income)
+    yield_on_cost = compute_yield_on_cost(annual_per_share, holding_stats)
+
+    %{
+      frequency: frequency,
+      annual_per_share: annual_per_share,
+      yield: yield,
+      yield_on_cost: yield_on_cost,
+      growth_rate: growth_rate
+    }
+  end
+
+  @doc false
+  def detect_dividend_frequency(dividends_with_income) when length(dividends_with_income) < 2,
+    do: "unknown"
+
+  def detect_dividend_frequency(dividends_with_income) do
+    dates =
+      dividends_with_income
+      |> Enum.map(& &1.dividend.ex_date)
+      |> Enum.sort(Date)
+
+    gaps =
+      dates
+      |> Enum.chunk_every(2, 1, :discard)
+      |> Enum.map(fn [a, b] -> Date.diff(b, a) end)
+
+    avg_gap = Enum.sum(gaps) / length(gaps)
+
+    cond do
+      avg_gap < 50 -> "monthly"
+      avg_gap < 120 -> "quarterly"
+      avg_gap < 220 -> "semi-annual"
+      avg_gap < 420 -> "annual"
+      true -> "irregular"
+    end
+  end
+
+  defp compute_annual_dividend_per_share(dividends_with_income) do
+    # Use last 12 months of dividends to compute trailing annual per-share
+    cutoff = Date.add(Date.utc_today(), -365)
+
+    recent =
+      Enum.filter(dividends_with_income, fn entry ->
+        Date.compare(entry.dividend.ex_date, cutoff) != :lt
+      end)
+
+    if recent == [] do
+      Decimal.new("0")
+    else
+      Enum.reduce(recent, Decimal.new("0"), fn entry, acc ->
+        Decimal.add(acc, entry.dividend.amount || Decimal.new("0"))
+      end)
+    end
+  end
+
+  defp compute_dividend_yield(_annual_per_share, nil), do: nil
+
+  defp compute_dividend_yield(annual_per_share, quote_data) do
+    price = quote_data.current_price
+
+    if price && Decimal.compare(price, Decimal.new("0")) == :gt do
+      annual_per_share
+      |> Decimal.div(price)
+      |> Decimal.mult(Decimal.new("100"))
+      |> Decimal.round(2)
+    else
+      nil
+    end
+  end
+
+  defp compute_yield_on_cost(_annual_per_share, nil), do: nil
+
+  defp compute_yield_on_cost(annual_per_share, holding_stats) do
+    avg_cost = holding_stats.avg_cost
+
+    if avg_cost && Decimal.compare(avg_cost, Decimal.new("0")) == :gt do
+      annual_per_share
+      |> Decimal.div(avg_cost)
+      |> Decimal.mult(Decimal.new("100"))
+      |> Decimal.round(2)
+    else
+      nil
+    end
+  end
+
+  defp compute_dividend_growth_rate(dividends_with_income) when length(dividends_with_income) < 2,
+    do: nil
+
+  defp compute_dividend_growth_rate(dividends_with_income) do
+    by_year =
+      dividends_with_income
+      |> Enum.group_by(fn entry -> entry.dividend.ex_date.year end)
+      |> Enum.map(fn {year, entries} ->
+        total =
+          Enum.reduce(entries, Decimal.new("0"), fn e, acc ->
+            Decimal.add(acc, e.dividend.amount || Decimal.new("0"))
+          end)
+
+        {year, total}
+      end)
+      |> Enum.sort_by(&elem(&1, 0))
+
+    compute_yoy_growth(by_year)
+  end
+
+  defp compute_yoy_growth(by_year) when length(by_year) < 2, do: nil
+
+  defp compute_yoy_growth(by_year) do
+    {_prev_year, prev_total} = Enum.at(by_year, -2)
+    {_curr_year, curr_total} = Enum.at(by_year, -1)
+
+    if Decimal.compare(prev_total, Decimal.new("0")) == :gt do
+      curr_total
+      |> Decimal.sub(prev_total)
+      |> Decimal.div(prev_total)
+      |> Decimal.mult(Decimal.new("100"))
+      |> Decimal.round(1)
+    else
+      nil
+    end
+  end
+
+  # --- Dividend Chart ---
+
+  defp render_dividend_chart(dividends_with_income) when length(dividends_with_income) < 2 do
+    Phoenix.HTML.raw("")
+  end
+
+  defp render_dividend_chart(dividends_with_income) do
+    w = 900
+    ml = 62
+    mr = 20
+    pw = w - ml - mr
+    mt = 20
+    main_h = 140
+    chart_bottom = mt + main_h
+    total_h = chart_bottom + 25
+
+    # Sort chronologically
+    sorted =
+      dividends_with_income
+      |> Enum.sort_by(& &1.dividend.ex_date, Date)
+
+    n = length(sorted)
+    x_fn = fn idx -> ml + idx / max(n - 1, 1) * pw end
+    bar_w = max(pw / max(n, 1) * 0.7, 4)
+
+    # Per-share amounts for bar heights
+    amounts =
+      Enum.map(sorted, fn e -> Decimal.to_float(e.dividend.amount || Decimal.new("0")) end)
+
+    a_max = Enum.max(amounts) * 1.15
+    a_max = max(a_max, 0.01)
+
+    # Cumulative income for line
+    cumulative =
+      sorted
+      |> Enum.scan(Decimal.new("0"), fn e, acc -> Decimal.add(acc, e.income) end)
+      |> Enum.map(&Decimal.to_float/1)
+
+    c_max = Enum.max(cumulative) * 1.15
+    c_max = max(c_max, 0.01)
+    c_fn = fn v -> mt + main_h - v / c_max * main_h end
+
+    # Bars (per-share amount)
+    bars =
+      sorted
+      |> Enum.with_index()
+      |> Enum.map_join("\n", fn {e, i} ->
+        amt = Decimal.to_float(e.dividend.amount || Decimal.new("0"))
+        cx = x_fn.(i)
+        bx = cx - bar_w / 2
+        bar_h = max(amt / a_max * main_h, 1)
+        y = chart_bottom - bar_h
+
+        ~s[<rect x="#{r(bx)}" y="#{r(y)}" width="#{r(bar_w)}" height="#{r(bar_h)}" fill="#10b981" fill-opacity="0.6" rx="1"/>]
+      end)
+
+    # Cumulative income line
+    line_d =
+      cumulative
+      |> Enum.with_index()
+      |> Enum.map_join(" ", fn {v, i} ->
+        x = r(x_fn.(i))
+        y = r(c_fn.(v))
+        if i == 0, do: "M#{x} #{y}", else: "L#{x} #{y}"
+      end)
+
+    line =
+      ~s[<path d="#{line_d}" fill="none" stroke="#f97316" stroke-width="1.5" stroke-linejoin="round"/>]
+
+    # Dots on cumulative line
+    dots =
+      cumulative
+      |> Enum.with_index()
+      |> Enum.map_join("\n", fn {v, i} ->
+        x = r(x_fn.(i))
+        y = r(c_fn.(v))
+        ~s[<circle cx="#{x}" cy="#{y}" r="2" fill="#f97316"/>]
+      end)
+
+    # X labels
+    x_labels = svg_div_x_labels(sorted, x_fn, chart_bottom + 15, n)
+
+    # Y labels (per-share amounts on left)
+    y_labels =
+      for i <- 0..3 do
+        gy = r(mt + main_h - i / 3 * main_h + 3)
+        val = a_max * i / 3
+
+        ~s[<text x="#{ml - 8}" y="#{gy}" fill="#475569" font-size="8" text-anchor="end">#{format_chart_val(val)}</text>]
+      end
+      |> Enum.join("\n")
+
+    # Grid
+    grid =
+      for i <- 0..3 do
+        gy = r(mt + main_h - i / 3 * main_h)
+
+        ~s[<line x1="#{ml}" y1="#{gy}" x2="#{ml + pw}" y2="#{gy}" stroke="#1e293b" stroke-width="1"/>]
+      end
+      |> Enum.join("\n")
+
+    # Annotation: last cumulative value
+    last_cum = List.last(cumulative)
+    last_x = r(x_fn.(n - 1))
+    last_y = r(c_fn.(last_cum))
+
+    {label_x, anchor} =
+      if last_x > w - 80, do: {last_x - 8, "end"}, else: {last_x + 8, "start"}
+
+    annotation =
+      ~s[<text x="#{label_x}" y="#{last_y - 6}" fill="#f97316" font-size="8" font-weight="600" text-anchor="#{anchor}">#{format_chart_val(last_cum)}</text>]
+
+    Phoenix.HTML.raw("""
+    <svg width="#{w}" height="#{round(total_h)}" viewBox="0 0 #{w} #{round(total_h)}" xmlns="http://www.w3.org/2000/svg" style="font-family: 'JetBrains Mono', monospace;">
+      #{grid}
+      #{bars}
+      #{line}
+      #{dots}
+      #{x_labels}
+      #{y_labels}
+      #{annotation}
+    </svg>
+    """)
+  end
+
+  defp svg_div_x_labels(sorted, x_fn, label_y, n) do
+    count = min(6, n)
+    step = max(div(n - 1, count), 1)
+
+    for i <- 0..count, idx = min(i * step, n - 1), reduce: [] do
+      acc ->
+        entry = Enum.at(sorted, idx)
+        lx = r(x_fn.(idx))
+        date_str = Calendar.strftime(entry.dividend.ex_date, "%b %y")
+
+        [
+          ~s[<text x="#{lx}" y="#{r(label_y)}" fill="#475569" font-size="8" text-anchor="middle">#{date_str}</text>]
+          | acc
+        ]
+    end
+    |> Enum.reverse()
+    |> Enum.uniq()
+    |> Enum.join("\n")
+  end
+
+  # --- Ownership & Holdings ---
 
   defp filter_dividends_to_ownership(dividends, []), do: dividends
 
@@ -447,6 +793,8 @@ defmodule DividendsomaticWeb.StockLive do
   end
 
   defp format_chart_val(_), do: "0"
+
+  # --- External Data ---
 
   defp get_company_profile(symbol) do
     case Stocks.get_company_profile(symbol) do
