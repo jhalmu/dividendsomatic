@@ -213,6 +213,71 @@ defmodule Dividendsomatic.PortfolioTest do
     end
   end
 
+  describe "list_dividends_with_income/0" do
+    test "should return enriched records with computed income" do
+      today = Date.utc_today()
+
+      {:ok, snapshot} =
+        %Portfolio.PortfolioSnapshot{}
+        |> Portfolio.PortfolioSnapshot.changeset(%{report_date: Date.new!(today.year, 1, 10)})
+        |> Dividendsomatic.Repo.insert()
+
+      insert_test_holding(snapshot.id, Date.new!(today.year, 1, 10), "KESKOB", 100, "1")
+
+      {:ok, _} =
+        Portfolio.create_dividend(%{
+          symbol: "KESKOB",
+          ex_date: Date.new!(today.year, 1, 15),
+          amount: Decimal.new("0.50"),
+          currency: "EUR"
+        })
+
+      [entry] = Portfolio.list_dividends_with_income()
+      assert entry.dividend.symbol == "KESKOB"
+      # 0.50 * 100 * 1.0 = 50.0
+      assert Decimal.equal?(entry.income, Decimal.new("50.0"))
+    end
+
+    test "should return zero income when no matching holdings" do
+      today = Date.utc_today()
+
+      {:ok, _} =
+        Portfolio.create_dividend(%{
+          symbol: "ORPHAN",
+          ex_date: Date.new!(today.year, 1, 15),
+          amount: Decimal.new("1.00"),
+          currency: "EUR"
+        })
+
+      [entry] = Portfolio.list_dividends_with_income()
+      assert Decimal.equal?(entry.income, Decimal.new("0"))
+    end
+
+    test "should apply FX rate to income calculation" do
+      today = Date.utc_today()
+
+      {:ok, snapshot} =
+        %Portfolio.PortfolioSnapshot{}
+        |> Portfolio.PortfolioSnapshot.changeset(%{report_date: Date.new!(today.year, 1, 10)})
+        |> Dividendsomatic.Repo.insert()
+
+      # USD stock with fx_rate 0.92
+      insert_test_holding(snapshot.id, Date.new!(today.year, 1, 10), "AAPL", 50, "0.92")
+
+      {:ok, _} =
+        Portfolio.create_dividend(%{
+          symbol: "AAPL",
+          ex_date: Date.new!(today.year, 1, 15),
+          amount: Decimal.new("1.00"),
+          currency: "USD"
+        })
+
+      [entry] = Portfolio.list_dividends_with_income()
+      # 1.00 * 50 * 0.92 = 46.00
+      assert Decimal.equal?(entry.income, Decimal.new("46.00"))
+    end
+  end
+
   describe "sold positions (what-if)" do
     test "create_sold_position/1 creates a sold position record" do
       attrs = %{

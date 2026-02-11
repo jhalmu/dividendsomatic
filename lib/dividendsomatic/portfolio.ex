@@ -318,6 +318,28 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   @doc """
+  Lists dividends for the current year with computed income (per-share * qty * fx).
+  Returns list of `%{dividend: %Dividend{}, income: Decimal}`.
+  """
+  def list_dividends_with_income do
+    year_start = Date.new!(Date.utc_today().year, 1, 1)
+    today = Date.utc_today()
+
+    dividends =
+      Dividend
+      |> where([d], d.ex_date >= ^year_start)
+      |> order_by([d], desc: d.ex_date)
+      |> Repo.all()
+
+    holdings_data = build_holdings_map(year_start, today)
+
+    Enum.map(dividends, fn div ->
+      income = compute_dividend_income(div, holdings_data)
+      %{dividend: div, income: income}
+    end)
+  end
+
+  @doc """
   Gets total dividend income for the current year (base currency).
   """
   def total_dividends_this_year do

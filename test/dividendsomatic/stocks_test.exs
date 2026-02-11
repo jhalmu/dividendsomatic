@@ -3,7 +3,7 @@ defmodule Dividendsomatic.StocksTest do
 
   alias Dividendsomatic.Repo
   alias Dividendsomatic.Stocks
-  alias Dividendsomatic.Stocks.{CompanyProfile, StockQuote}
+  alias Dividendsomatic.Stocks.{CompanyNote, CompanyProfile, StockQuote}
 
   describe "stock quote schema" do
     test "should reject empty changeset" do
@@ -181,6 +181,106 @@ defmodule Dividendsomatic.StocksTest do
   describe "refresh_quote/1" do
     test "should return not_configured without API key" do
       assert Stocks.refresh_quote("AAPL") == {:error, :not_configured}
+    end
+  end
+
+  describe "company note schema" do
+    test "should reject empty changeset" do
+      changeset = CompanyNote.changeset(%CompanyNote{}, %{})
+      refute changeset.valid?
+      assert "can't be blank" in errors_on(changeset).isin
+    end
+
+    test "should accept valid note with only ISIN" do
+      changeset = CompanyNote.changeset(%CompanyNote{}, %{isin: "FI0009000202"})
+      assert changeset.valid?
+    end
+
+    test "should reject invalid asset_type" do
+      changeset =
+        CompanyNote.changeset(%CompanyNote{}, %{isin: "FI0009000202", asset_type: "bond"})
+
+      refute changeset.valid?
+      assert "is invalid" in errors_on(changeset).asset_type
+    end
+  end
+
+  describe "get_company_note_by_isin/1" do
+    test "should return nil when no note exists" do
+      assert is_nil(Stocks.get_company_note_by_isin("NONEXISTENT"))
+    end
+
+    test "should return note when it exists" do
+      {:ok, _} = Stocks.upsert_company_note(%{isin: "FI0009000202", symbol: "KESKOB"})
+
+      note = Stocks.get_company_note_by_isin("FI0009000202")
+      assert note.isin == "FI0009000202"
+      assert note.symbol == "KESKOB"
+    end
+  end
+
+  describe "get_or_init_company_note/2" do
+    test "should return unsaved struct when no note exists" do
+      note = Stocks.get_or_init_company_note("FI0009000202", %{symbol: "KESKOB"})
+
+      assert is_nil(note.id)
+      assert note.isin == "FI0009000202"
+      assert note.symbol == "KESKOB"
+    end
+
+    test "should return existing note when it exists" do
+      {:ok, created} = Stocks.upsert_company_note(%{isin: "FI0009000202", symbol: "KESKOB"})
+
+      note = Stocks.get_or_init_company_note("FI0009000202")
+      assert note.id == created.id
+    end
+  end
+
+  describe "upsert_company_note/1" do
+    test "should create a new note" do
+      assert {:ok, note} =
+               Stocks.upsert_company_note(%{
+                 isin: "FI0009000202",
+                 symbol: "KESKOB",
+                 thesis: "Solid Finnish retailer"
+               })
+
+      assert note.isin == "FI0009000202"
+      assert note.thesis == "Solid Finnish retailer"
+    end
+
+    test "should update existing note" do
+      {:ok, _} = Stocks.upsert_company_note(%{isin: "FI0009000202", thesis: "Original"})
+      {:ok, updated} = Stocks.upsert_company_note(%{isin: "FI0009000202", thesis: "Updated"})
+
+      assert updated.thesis == "Updated"
+      assert length(Repo.all(CompanyNote)) == 1
+    end
+
+    test "should handle watchlist toggle" do
+      {:ok, note} = Stocks.upsert_company_note(%{isin: "FI0009000202", watchlist: false})
+      refute note.watchlist
+
+      {:ok, toggled} = Stocks.upsert_company_note(%{isin: "FI0009000202", watchlist: true})
+      assert toggled.watchlist
+    end
+  end
+
+  describe "list_watchlist/0" do
+    test "should return empty list when no watchlist items" do
+      assert Stocks.list_watchlist() == []
+    end
+
+    test "should return only watchlisted notes" do
+      {:ok, _} =
+        Stocks.upsert_company_note(%{isin: "FI0009000202", symbol: "KESKOB", watchlist: true})
+
+      {:ok, _} =
+        Stocks.upsert_company_note(%{isin: "SE0000667925", symbol: "TELIA1", watchlist: false})
+
+      watchlist = Stocks.list_watchlist()
+      assert length(watchlist) == 1
+      assert hd(watchlist).symbol == "KESKOB"
     end
   end
 end

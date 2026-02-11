@@ -17,7 +17,7 @@ defmodule Dividendsomatic.Stocks do
   require Logger
 
   alias Dividendsomatic.Repo
-  alias Dividendsomatic.Stocks.{CompanyProfile, StockQuote}
+  alias Dividendsomatic.Stocks.{CompanyNote, CompanyProfile, StockQuote}
 
   @finnhub_base_url "https://finnhub.io/api/v1"
   @quote_cache_seconds 900
@@ -233,6 +233,54 @@ defmodule Dividendsomatic.Stocks do
         |> CompanyProfile.changeset(attrs)
         |> Repo.update()
     end
+  end
+
+  ## Company Notes
+
+  @doc """
+  Gets a company note by ISIN.
+  """
+  def get_company_note_by_isin(isin) when is_binary(isin) do
+    Repo.get_by(CompanyNote, isin: isin)
+  end
+
+  @doc """
+  Gets an existing company note or returns an unsaved struct with defaults.
+  """
+  def get_or_init_company_note(isin, defaults \\ %{}) do
+    case get_company_note_by_isin(isin) do
+      nil -> struct(CompanyNote, Map.merge(%{isin: isin}, defaults))
+      note -> note
+    end
+  end
+
+  @doc """
+  Creates or updates a company note by ISIN.
+  """
+  def upsert_company_note(attrs) do
+    isin = attrs[:isin] || attrs["isin"]
+
+    case get_company_note_by_isin(isin) do
+      nil ->
+        %CompanyNote{}
+        |> CompanyNote.changeset(attrs)
+        |> Repo.insert()
+
+      existing ->
+        existing
+        |> CompanyNote.changeset(attrs)
+        |> Repo.update()
+    end
+  end
+
+  @doc """
+  Lists all company notes with watchlist=true.
+  """
+  def list_watchlist do
+    CompanyNote
+    |> where([n], n.watchlist == true)
+    |> order_by([n], asc: n.symbol)
+    |> Repo.all()
   end
 
   defp get_api_key do

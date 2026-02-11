@@ -25,7 +25,6 @@ defmodule DividendsomaticWeb.StockLiveTest do
     test "should show symbol in header", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
 
-      # The symbol appears in the h1 header element
       assert html =~ "terminal-stock-symbol"
       assert html =~ "KESKOB"
     end
@@ -37,18 +36,45 @@ defmodule DividendsomaticWeb.StockLiveTest do
       assert html =~ ~s{href="/"}
     end
 
+    test "should show position summary card", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "Position"
+      assert html =~ "Shares"
+      assert html =~ "Avg Cost"
+      assert html =~ "Current Value"
+      assert html =~ "Unrealized P&amp;L"
+      assert html =~ "Weight"
+    end
+
+    test "should show data date in position card", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "Data as of 2026-01-28"
+    end
+
+    test "should show shares held count", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "1,000"
+    end
+
+    test "should show disabled investment notes section", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "Investment Notes"
+      assert html =~ "Investment Thesis"
+      assert html =~ "Coming soon"
+      refute html =~ "Save Notes"
+    end
+
     test "should show external links for HEX exchange stock", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
 
-      # Yahoo Finance with .HE suffix for HEX exchange
       assert html =~ "Yahoo Finance"
       assert html =~ "finance.yahoo.com/quote/KESKOB.HE"
-
-      # Google Finance with HEL exchange code for HEX
       assert html =~ "Google Finance"
       assert html =~ "google.com/finance/quote/KESKOB:HEL"
-
-      # Nordnet link using ISIN for HEX exchange stocks
       assert html =~ "Nordnet"
       assert html =~ "nordnet.fi/markkina/osakkeet/FI0009000202"
     end
@@ -56,7 +82,6 @@ defmodule DividendsomaticWeb.StockLiveTest do
     test "should not show SeekingAlpha link for HEX exchange stock", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
 
-      # SeekingAlpha is only shown for NYSE, NASDAQ, ARCA exchanges
       refute html =~ "SeekingAlpha"
     end
 
@@ -78,7 +103,6 @@ defmodule DividendsomaticWeb.StockLiveTest do
     test "should render page for unknown symbol without crashing", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/stocks/NONEXISTENT")
 
-      # Page should render with the symbol even if no data exists
       assert html =~ "NONEXISTENT"
     end
 
@@ -91,9 +115,73 @@ defmodule DividendsomaticWeb.StockLiveTest do
     test "should still show Yahoo Finance link for unknown symbol", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/stocks/NONEXISTENT")
 
-      # Yahoo Finance link is always generated (without exchange suffix when unknown)
       assert html =~ "Yahoo Finance"
       assert html =~ "finance.yahoo.com/quote/NONEXISTENT"
+    end
+
+    test "should not show position card for unknown symbol", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/NONEXISTENT")
+
+      refute html =~ "terminal-info-label\">Shares"
+      refute html =~ "Avg Cost"
+    end
+
+    test "should not show investment notes for unknown symbol (no ISIN)", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/NONEXISTENT")
+
+      refute html =~ "Investment Thesis"
+      refute html =~ "Coming soon"
+    end
+  end
+
+  describe "dividend display" do
+    setup %{conn: conn} do
+      {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+
+      # Dividend ex_date must be >= first holding date (2026-01-28) to show
+      {:ok, _} =
+        Portfolio.create_dividend(%{
+          symbol: "KESKOB",
+          ex_date: ~D[2026-02-05],
+          amount: Decimal.new("0.50"),
+          currency: "EUR"
+        })
+
+      %{conn: conn}
+    end
+
+    test "should show dividends received section", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "Dividends Received"
+      assert html =~ "(1)"
+      assert html =~ "Per Share"
+      assert html =~ "Income"
+    end
+
+    test "should show computed dividend income", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      # 0.50 * 1000 * 1.0 = 500.00 EUR
+      assert html =~ "500"
+      assert html =~ "Total:"
+    end
+
+    test "should filter out dividends before ownership", %{conn: conn} do
+      # Add a dividend before the holding date - should not appear
+      {:ok, _} =
+        Portfolio.create_dividend(%{
+          symbol: "KESKOB",
+          ex_date: ~D[2025-12-01],
+          amount: Decimal.new("0.30"),
+          currency: "EUR"
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      # Should still show only 1 dividend (the one from setup), not the pre-ownership one
+      assert html =~ "Dividends Received"
+      assert html =~ "(1)"
     end
   end
 end

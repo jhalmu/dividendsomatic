@@ -62,20 +62,6 @@
         <div class="terminal-chart mb-[var(--space-xs)] animate-fade-in animate-delay-3">
           <!-- Chart Header: Legend + F&G Gauge + Growth Badge -->
           <div class="terminal-chart-header">
-            <div>
-              <div class="terminal-chart-title" id="chart-title">Portfolio Performance</div>
-              <div class="terminal-chart-legend" id="chart-legend" aria-label="Chart legend">
-                <span class="terminal-legend-item">
-                  <span class="terminal-legend-line" style="background: #10b981;"></span> Value
-                </span>
-                <span class="terminal-legend-item">
-                  <span class="terminal-legend-line terminal-legend-dashed"></span> Cost Basis
-                </span>
-                <span class="terminal-legend-item">
-                  <span class="terminal-legend-bar" style="background: #f59e0b;"></span> Dividends
-                </span>
-              </div>
-            </div>
             <div class="flex items-center gap-[var(--space-sm)]">
               <%= if @growth_stats do %>
                 <div class={"terminal-growth-badge #{if Decimal.compare(@growth_stats.absolute_change, Decimal.new("0")) == :lt, do: "negative"}"}>
@@ -88,6 +74,28 @@
                   </span>
                 </div>
               <% end %>
+            </div>
+            <div>
+              <div class="terminal-chart-title" id="chart-title" style="text-align: right;">
+                Portfolio Performance
+              </div>
+              <div
+                class="terminal-chart-legend"
+                id="chart-legend"
+                aria-label="Chart legend"
+                style="justify-content: flex-end;"
+              >
+                <span class="terminal-legend-item">
+                  <span class="terminal-legend-line" style="background: #10b981;"></span> Value
+                </span>
+                <span class="terminal-legend-item">
+                  <span class="terminal-legend-line terminal-legend-dashed"></span> Cost Basis
+                </span>
+                <span class="terminal-legend-item">
+                  <span class="terminal-legend-line" style="background: #eab308;"></span>
+                  Dividends
+                </span>
+              </div>
             </div>
           </div>
           
@@ -232,14 +240,14 @@
           <%= if length(@recent_dividends) > 0 do %>
             <div class="terminal-card p-[var(--space-sm)] animate-fade-in animate-delay-4">
               <div class="terminal-section-label">Recent Dividends</div>
-              <%= for div <- @recent_dividends do %>
+              <%= for entry <- @recent_dividends do %>
                 <div class="terminal-dividend-row">
-                  <span class="terminal-dividend-symbol">{div.symbol}</span>
+                  <span class="terminal-dividend-symbol">{entry.dividend.symbol}</span>
                   <span class="terminal-dividend-date">
-                    {Calendar.strftime(div.ex_date, "%b %d")}
+                    {Calendar.strftime(entry.dividend.ex_date, "%b %d")}
                   </span>
                   <span class="terminal-dividend-amount">
-                    +{format_decimal(div.amount)} {div.currency}
+                    +{format_euro_decimal(entry.income)}
                   </span>
                 </div>
               <% end %>

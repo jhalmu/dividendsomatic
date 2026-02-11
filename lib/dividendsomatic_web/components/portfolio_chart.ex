@@ -84,7 +84,6 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
         svg_grid(mt, main_h, y_lo, y_range),
         svg_area_fill(chart_data, x_fn, y_fn, chart_bottom),
         div_overlay,
-        svg_line(chart_data, :value_float, x_fn, y_fn, "#10b981", "1.5", nil),
         svg_line(chart_data, :cost_basis_float, x_fn, y_fn, "#3b82f6", "1", "6 3"),
         svg_current_marker(chart_data, current_date, x_fn, y_fn, mt, chart_bottom),
         svg_x_labels(chart_data, x_fn, chart_bottom + 15),
@@ -129,12 +128,8 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     """
     <defs>
       <linearGradient id="val-area" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#10b981" stop-opacity="0.15"/>
-        <stop offset="100%" stop-color="#10b981" stop-opacity="0.02"/>
-      </linearGradient>
-      <linearGradient id="div-area" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.20"/>
-        <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.03"/>
+        <stop offset="0%" stop-color="#10b981" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="#10b981" stop-opacity="0.05"/>
       </linearGradient>
       #{fg_grad}
     </defs>
@@ -181,12 +176,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
 
     dash_attr = if dash, do: ~s[ stroke-dasharray="#{dash}" opacity="0.6"], else: ""
 
-    glow =
-      if dash,
-        do: "filter: drop-shadow(0 0 3px rgba(59,130,246,0.25));",
-        else: "filter: drop-shadow(0 0 5px rgba(16,185,129,0.4));"
-
-    ~s[<path d="#{d}" fill="none" stroke="#{color}" stroke-width="#{width}" stroke-linejoin="round"#{dash_attr} style="#{glow}"/>]
+    ~s[<path d="#{d}" fill="none" stroke="#{color}" stroke-width="#{width}" stroke-linejoin="round"#{dash_attr}/>]
   end
 
   defp svg_current_marker(chart_data, current_date, x_fn, y_fn, mt, bottom) do
@@ -301,26 +291,19 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     max_total = Enum.max(totals)
     bar_zone_h = main_h * 0.18
 
-    # Build area fill path from bar tops
-    area_points =
-      Enum.map(positions, fn {idx, total, _} ->
+    # Yellow line connecting dividend bar tops
+    line_points =
+      positions
+      |> Enum.with_index()
+      |> Enum.map_join(" ", fn {{idx, total, _}, i} ->
         cx = r(x_fn.(idx))
         bh = if max_total > 0, do: r(total / max_total * bar_zone_h), else: 0
         by = r(chart_bottom - bh)
-        {cx, by}
+        if i == 0, do: "M#{cx} #{by}", else: "L#{cx} #{by}"
       end)
 
-    area_path =
-      case area_points do
-        [{first_x, first_y} | rest] ->
-          moves = Enum.map_join(rest, " ", fn {x, y} -> "L#{x} #{y}" end)
-          {last_x, _} = List.last(area_points)
-
-          ~s[<path d="M#{first_x} #{chart_bottom} L#{first_x} #{first_y} #{moves} L#{last_x} #{chart_bottom} Z" fill="url(#div-area)"/>]
-
-        _ ->
-          ""
-      end
+    line =
+      ~s[<path d="#{line_points}" fill="none" stroke="#eab308" stroke-width="0.75" stroke-linejoin="round"/>]
 
     # Value labels at each point
     labels =
@@ -329,16 +312,16 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
         bh = if max_total > 0, do: r(total / max_total * bar_zone_h), else: 0
         by = r(chart_bottom - bh)
 
-        ~s[<text x="#{cx}" y="#{r(by - 4)}" fill="#f59e0b" font-size="7" text-anchor="middle" font-weight="500" opacity="0.7">€#{format_compact(total)}</text>]
+        ~s[<text x="#{cx}" y="#{r(by - 4)}" fill="#eab308" font-size="7" text-anchor="middle" font-weight="600">€#{format_compact(total)}</text>]
       end)
 
     """
-    #{area_path}
+    #{line}
     #{labels}
     """
   end
 
-  # Cumulative dividend orange line with dots and label
+  # Cumulative dividend yellow line with end label
   defp svg_cumulative_line(month_positions, x_fn, mt, main_h) do
     cumulative =
       Enum.scan(month_positions, {0, 0, ""}, fn {idx, total, month}, {_, cum, _} ->
@@ -357,51 +340,18 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
 
     cum_path = svg_cumulative_path(cumulative, x_fn, cum_y_fn)
 
-    cum_dots =
-      Enum.map_join(cumulative, "\n", fn {idx, cum, _} ->
-        cx = r(x_fn.(idx))
-        cy = r(cum_y_fn.(cum))
-
-        ~s[<circle cx="#{cx}" cy="#{cy}" r="2.5" fill="#f59e0b" stroke="#0a0e17" stroke-width="1.5"/>]
-      end)
-
     {last_idx, last_cum, _} = List.last(cumulative)
     last_x = r(x_fn.(last_idx))
     last_y = r(cum_y_fn.(last_cum))
     {label_x, anchor} = if last_x > @w - 80, do: {last_x - 8, "end"}, else: {last_x + 8, "start"}
 
     cum_label =
-      ~s[<text x="#{label_x}" y="#{r(last_y - 4)}" fill="#f59e0b" font-size="7" font-weight="600" text-anchor="#{anchor}">€#{format_compact(last_cum)} div</text>]
-
-    cum_area = svg_cumulative_area(cumulative, x_fn, cum_y_fn, cum_base + cum_zone_h)
+      ~s[<text x="#{label_x}" y="#{r(last_y - 4)}" fill="#eab308" font-size="7" font-weight="600" text-anchor="#{anchor}">€#{format_compact(last_cum)} div</text>]
 
     """
-    #{cum_area}
     #{cum_path}
-    #{cum_dots}
     #{cum_label}
     """
-  end
-
-  defp svg_cumulative_area(cumulative, _x_fn, _cum_y_fn, _baseline) when length(cumulative) <= 1,
-    do: ""
-
-  defp svg_cumulative_area(cumulative, x_fn, cum_y_fn, baseline) do
-    points =
-      Enum.map(cumulative, fn {idx, cum, _} ->
-        {r(x_fn.(idx)), r(cum_y_fn.(cum))}
-      end)
-
-    case points do
-      [{first_x, first_y} | rest] ->
-        moves = Enum.map_join(rest, " ", fn {x, y} -> "L#{x} #{y}" end)
-        {last_x, _} = List.last(points)
-
-        ~s[<path d="M#{first_x} #{baseline} L#{first_x} #{first_y} #{moves} L#{last_x} #{baseline} Z" fill="url(#div-area)" opacity="0.6"/>]
-
-      _ ->
-        ""
-    end
   end
 
   defp svg_cumulative_path(cumulative, _x_fn, _cum_y_fn) when length(cumulative) <= 1, do: ""
@@ -416,7 +366,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
         if i == 0, do: "M#{x} #{y}", else: "L#{x} #{y}"
       end)
 
-    ~s[<path d="#{d}" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round" opacity="0.8" style="filter: drop-shadow(0 0 3px rgba(245,158,11,0.3));"/>]
+    ~s[<path d="#{d}" fill="none" stroke="#eab308" stroke-width="0.5" stroke-linejoin="round"/>]
   end
 
   # --- Helpers ---

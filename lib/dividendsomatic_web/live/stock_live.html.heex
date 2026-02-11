@@ -18,26 +18,136 @@
       </.link>
     </div>
     
-<!-- Header -->
-    <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-md)] animate-fade-in">
+<!-- Price Header Card -->
+    <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in">
       <div class="flex items-center justify-between">
         <div>
           <h1 class="terminal-stock-symbol">{@symbol}</h1>
-          <%= if @company_profile do %>
+          <%= if @company_profile && @company_profile.name do %>
             <div class="terminal-stock-name">{@company_profile.name}</div>
           <% end %>
         </div>
         <%= if @quote_data do %>
           <div class="text-right">
             <div class="terminal-stat-value">{format_decimal(@quote_data.current_price)}</div>
+            <%= if @quote_data.change do %>
+              <div
+                class={"mt-[var(--space-inline)] #{if price_change_positive?(@quote_data), do: "terminal-gain", else: "terminal-loss"}"}
+                style="font-family: var(--font-mono); font-size: 0.75rem;"
+              >
+                <%= if price_change_positive?(@quote_data) do %>
+                  +
+                <% end %>
+                {format_decimal(@quote_data.change)} (<%= if price_change_positive?(@quote_data) do %>
+                  +
+                <% end %>
+                {format_decimal(@quote_data.percent_change)}%)
+              </div>
+            <% end %>
+            <%= if @quote_data.low && @quote_data.high do %>
+              <div
+                class="mt-[var(--space-inline)]"
+                style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);"
+              >
+                L {format_decimal(@quote_data.low)} — H {format_decimal(@quote_data.high)}
+              </div>
+            <% end %>
           </div>
         <% end %>
       </div>
     </div>
     
+<!-- Position Summary Card -->
+    <%= if @holding_stats do %>
+      <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-1">
+        <div class="flex items-center justify-between">
+          <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+            Position
+          </div>
+          <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-muted);">
+            Data as of {Date.to_string(@holding_stats.latest_date)}
+          </div>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)] mt-[var(--space-xs)]">
+          <div>
+            <div class="terminal-info-label">Shares</div>
+            <div class="terminal-info-value" style="font-size: 1.25rem; font-weight: 600;">
+              {format_integer(@holding_stats.quantity)}
+            </div>
+          </div>
+          <div>
+            <div class="terminal-info-label">Avg Cost</div>
+            <div class="terminal-info-value">
+              {format_decimal(@holding_stats.avg_cost)}
+              <span style="color: var(--terminal-dim); font-size: 0.625rem;">
+                {@holding_stats.currency}
+              </span>
+            </div>
+          </div>
+          <div>
+            <div class="terminal-info-label">Total Invested</div>
+            <div class="terminal-info-value">
+              {format_euro_decimal(@holding_stats.total_invested)}
+            </div>
+          </div>
+          <div>
+            <div class="terminal-info-label">Current Value</div>
+            <div class="terminal-info-value" style="font-weight: 500;">
+              {format_euro_decimal(@holding_stats.current_value)}
+            </div>
+          </div>
+          <div>
+            <div class="terminal-info-label">Unrealized P&L</div>
+            <div class={"terminal-info-value #{if pnl_positive?(@holding_stats.unrealized_pnl), do: "gain", else: "loss"}"}>
+              {format_euro_signed(@holding_stats.unrealized_pnl)}
+            </div>
+          </div>
+          <div>
+            <div class="terminal-info-label">Weight</div>
+            <div class="terminal-info-value">
+              {format_decimal(@holding_stats.percent_of_nav)}% NAV
+            </div>
+          </div>
+        </div>
+        <!-- Ownership Duration Bar -->
+        {render_ownership_bar(@holding_stats)}
+      </div>
+    <% end %>
+    
+<!-- Shares Over Time -->
+    <%= if length(@price_chart_data) > 1 do %>
+      <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-2">
+        <div class="flex items-center justify-between mb-[var(--space-xs)]">
+          <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+            Shares Over Time
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          {render_quantity_chart(@price_chart_data)}
+        </div>
+      </div>
+    <% end %>
+    
+<!-- Price Chart -->
+    <%= if length(@price_chart_data) > 1 do %>
+      <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-3">
+        <div class="flex items-center justify-between mb-[var(--space-xs)]">
+          <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+            Price History
+          </div>
+          <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);">
+            {length(@price_chart_data)} data points
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          {render_price_chart(@price_chart_data)}
+        </div>
+      </div>
+    <% end %>
+    
 <!-- Company Info -->
     <%= if @company_profile do %>
-      <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-md)] animate-fade-in animate-delay-1">
+      <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-3">
         <div class="terminal-section-label">Company Info</div>
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)] mt-[var(--space-xs)]">
           <%= if @company_profile.industry do %>
@@ -72,30 +182,117 @@
               </div>
             </div>
           <% end %>
+          <%= if @company_profile.currency do %>
+            <div>
+              <div class="terminal-info-label">Currency</div>
+              <div class="terminal-info-value">{@company_profile.currency}</div>
+            </div>
+          <% end %>
         </div>
       </div>
     <% end %>
     
-<!-- Dividend History -->
-    <%= if length(@dividends) > 0 do %>
-      <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-md)] animate-fade-in animate-delay-2">
-        <div class="terminal-section-label">Dividend History ({length(@dividends)} payments)</div>
-        <%= for div <- @dividends do %>
-          <div class="terminal-dividend-row">
-            <span class="terminal-dividend-date">
-              {Calendar.strftime(div.ex_date, "%Y-%m-%d")}
-            </span>
-            <span class="terminal-dividend-amount">
-              +{format_decimal(div.amount)} {div.currency}
-            </span>
+<!-- Dividend History (only during ownership) -->
+    <%= if length(@dividends_with_income) > 0 do %>
+      <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-4">
+        <div class="flex items-center justify-between mb-[var(--space-xs)]">
+          <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+            Dividends Received ({length(@dividends_with_income)})
           </div>
-        <% end %>
+          <div
+            class="gain"
+            style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: 500;"
+          >
+            Total: {format_euro_decimal(@total_dividend_income)}
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="terminal-table">
+            <thead>
+              <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Per Share</th>
+                <th scope="col" style="text-align: right;">Income</th>
+                <th scope="col">Currency</th>
+              </tr>
+            </thead>
+            <tbody>
+              <%= for entry <- @dividends_with_income do %>
+                <tr>
+                  <td>
+                    <span class="terminal-dividend-date">
+                      {Calendar.strftime(entry.dividend.ex_date, "%Y-%m-%d")}
+                    </span>
+                  </td>
+                  <td class="terminal-number">
+                    {format_decimal(entry.dividend.amount)}
+                  </td>
+                  <td class="terminal-number gain" style="text-align: right; font-weight: 500;">
+                    +{format_euro_decimal(entry.income)}
+                  </td>
+                  <td>
+                    <span style="color: var(--terminal-dim); font-size: 0.625rem;">
+                      {entry.dividend.currency}
+                    </span>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    <% end %>
+    
+<!-- Investment Notes (disabled) -->
+    <%= if @isin do %>
+      <div
+        class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-5"
+        style="opacity: 0.5;"
+      >
+        <div class="flex items-center justify-between mb-[var(--space-xs)]">
+          <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+            Investment Notes
+          </div>
+          <span style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">
+            Coming soon
+          </span>
+        </div>
+        <div>
+          <label
+            for="note-thesis"
+            style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;"
+          >
+            Investment Thesis
+          </label>
+          <textarea
+            id="note-thesis"
+            rows="2"
+            disabled
+            style="width: 100%; background: var(--terminal-surface); color: var(--terminal-dim); border: 1px solid var(--terminal-border); font-family: var(--font-mono); font-size: 0.75rem; padding: var(--space-xs); border-radius: 0.25rem; resize: none; cursor: not-allowed;"
+            placeholder="Why do you hold this position?"
+          ></textarea>
+        </div>
+        <div class="mt-[var(--space-xs)]">
+          <label
+            for="note-markdown"
+            style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;"
+          >
+            Notes
+          </label>
+          <textarea
+            id="note-markdown"
+            rows="3"
+            disabled
+            style="width: 100%; background: var(--terminal-surface); color: var(--terminal-dim); border: 1px solid var(--terminal-border); font-family: var(--font-mono); font-size: 0.75rem; padding: var(--space-xs); border-radius: 0.25rem; resize: none; cursor: not-allowed;"
+            placeholder="Research notes, key metrics, earnings dates..."
+          ></textarea>
+        </div>
       </div>
     <% end %>
     
 <!-- External Links -->
     <%= if length(@external_links) > 0 do %>
-      <div class="terminal-card p-[var(--space-sm)] animate-fade-in animate-delay-3">
+      <div class="terminal-card p-[var(--space-sm)] animate-fade-in animate-delay-5">
         <div class="terminal-section-label">External Links</div>
         <div class="flex flex-wrap gap-[var(--space-xs)] mt-[var(--space-xs)]">
           <%= for link <- @external_links do %>
