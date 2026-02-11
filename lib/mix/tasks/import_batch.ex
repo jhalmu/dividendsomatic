@@ -10,6 +10,8 @@ defmodule Mix.Tasks.Import.Batch do
   """
   use Mix.Task
 
+  alias Dividendsomatic.Portfolio.CsvParser
+
   @shortdoc "Batch import CSV files from directory"
   def run(args) do
     Mix.Task.run("app.start")
@@ -52,7 +54,7 @@ defmodule Mix.Tasks.Import.Batch do
   end
 
   defp import_csv_data(csv_data, filename) do
-    case extract_report_date(csv_data) do
+    case CsvParser.extract_report_date(csv_data) do
       {:ok, report_date} -> import_for_date(csv_data, report_date, filename)
       {:error, reason} -> fail(filename, reason)
     end
@@ -77,23 +79,5 @@ defmodule Mix.Tasks.Import.Batch do
   defp fail(filename, reason) do
     IO.puts("  FAIL #{filename} (#{reason})")
     :error
-  end
-
-  defp extract_report_date(csv_data) do
-    lines = String.split(csv_data, "\n", trim: true)
-
-    case Enum.drop(lines, 1) do
-      [first_data_line | _] ->
-        [date_str | _] = String.split(first_data_line, ",", parts: 2)
-        date_str = String.trim(date_str, "\"")
-
-        case Date.from_iso8601(date_str) do
-          {:ok, date} -> {:ok, date}
-          {:error, _} -> {:error, "invalid date: #{date_str}"}
-        end
-
-      [] ->
-        {:error, "no data rows"}
-    end
   end
 end

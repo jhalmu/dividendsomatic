@@ -9,6 +9,7 @@ defmodule Mix.Tasks.Import.Csv do
   import Ecto.Query
 
   alias Dividendsomatic.Portfolio
+  alias Dividendsomatic.Portfolio.CsvParser
 
   @shortdoc "Import portfolio CSV file"
   def run([file_path]) do
@@ -16,7 +17,7 @@ defmodule Mix.Tasks.Import.Csv do
 
     case File.read(file_path) do
       {:ok, csv_data} ->
-        case extract_report_date(csv_data) do
+        case CsvParser.extract_report_date(csv_data) do
           {:ok, report_date} ->
             import_csv(csv_data, report_date)
 
@@ -50,31 +51,6 @@ defmodule Mix.Tasks.Import.Csv do
 
       {:error, changeset} ->
         IO.puts("✗ Error: #{inspect(changeset.errors)}")
-    end
-  end
-
-  defp extract_report_date(csv_data) do
-    lines = String.split(csv_data, "\n", trim: true)
-
-    case Enum.drop(lines, 1) do
-      [first_data_line | _] ->
-        parse_date_from_line(first_data_line)
-
-      [] ->
-        {:error, "CSV has no data rows"}
-    end
-  end
-
-  defp parse_date_from_line(line) do
-    [date_str | _] = String.split(line, ",", parts: 2)
-    date_str = String.trim(date_str, "\"")
-
-    case Date.from_iso8601(date_str) do
-      {:ok, date} ->
-        {:ok, date}
-
-      {:error, _} ->
-        {:error, "Invalid date format: #{date_str} (expected ISO8601 like 2026-01-28)"}
     end
   end
 end

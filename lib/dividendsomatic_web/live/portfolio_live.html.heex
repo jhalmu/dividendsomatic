@@ -13,7 +13,7 @@
         <div class="terminal-stat animate-fade-in animate-delay-1">
           <div class="terminal-stat-label">Portfolio Value</div>
           <div class="terminal-stat-value">
-            €{format_integer(@total_value)}
+            {format_euro(@total_value)}
           </div>
           <%= if length(@sparkline_values) > 1 do %>
             <div class="mt-[var(--space-xs)]">
@@ -25,23 +25,20 @@
         <div class={"terminal-stat terminal-stat-accent animate-fade-in animate-delay-2 #{if !pnl_positive?(@total_pnl), do: "negative"}"}>
           <div class="terminal-stat-label">Unrealized P&L</div>
           <div class={"terminal-stat-value #{if pnl_positive?(@total_pnl), do: "gain", else: "loss"}"}>
-            <%= if pnl_positive?(@total_pnl) do %>
-              +
-            <% end %>
-            {format_decimal(@total_pnl)}
+            {format_euro_signed(@total_pnl)}
           </div>
         </div>
 
         <div class="terminal-stat animate-fade-in animate-delay-3">
           <div class="terminal-stat-label">Dividends YTD</div>
           <div class="terminal-stat-value gain">
-            €{format_decimal(@dividends_ytd)}
+            {format_euro_decimal(@dividends_ytd)}
           </div>
           <div
             class="mt-[var(--space-inline)]"
             style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);"
           >
-            Proj. €{format_decimal(@projected_dividends)}/yr
+            Proj. {format_euro_decimal(@projected_dividends)}/yr
           </div>
         </div>
 
@@ -82,9 +79,7 @@
             <div class="flex items-center gap-[var(--space-sm)]">
               <%= if @growth_stats do %>
                 <div class={"terminal-growth-badge #{if Decimal.compare(@growth_stats.absolute_change, Decimal.new("0")) == :lt, do: "negative"}"}>
-                  <%= if pnl_positive?(@growth_stats.absolute_change) do %>
-                    +
-                  <% end %>€{format_decimal(@growth_stats.absolute_change)}
+                  {format_euro_signed(@growth_stats.absolute_change)}
                   <span style="opacity: 0.6;">
                     (<%= if pnl_positive?(@growth_stats.percent_change) do %>
                       +
@@ -155,12 +150,12 @@
                 <tr>
                   <th scope="col">Symbol</th>
                   <th scope="col">Description</th>
-                  <th scope="col" class="text-right">Qty</th>
-                  <th scope="col" class="text-right">Price</th>
-                  <th scope="col" class="text-right">Value</th>
-                  <th scope="col" class="text-right">Cost</th>
-                  <th scope="col" class="text-right">P&L</th>
-                  <th scope="col" class="text-right">% NAV</th>
+                  <th scope="col">Qty</th>
+                  <th scope="col">Price</th>
+                  <th scope="col">Value</th>
+                  <th scope="col">Cost</th>
+                  <th scope="col">P&L</th>
+                  <th scope="col">% NAV</th>
                 </tr>
               </thead>
               <tbody>
@@ -178,18 +173,21 @@
                       <span class="terminal-description">{holding.description}</span>
                     </td>
                     <td class="terminal-number">
-                      {format_integer(holding.quantity)}
+                      <span style="flex-align: left;">{format_integer(holding.quantity)}</span>
                     </td>
-                    <td class="terminal-number">
+                    <td class="terminal-number" style="text-align: right;">
                       {format_decimal(holding.mark_price)}
-                      <span style="color: var(--terminal-dim); font-size: 0.625rem; margin-left: 0.25rem;">
+                      <span style="color: var(--terminal-dim); font-size: 0.625rem; position: absolute; margin-left: 0.35rem;">
                         {holding.currency_primary}
                       </span>
                     </td>
-                    <td class="terminal-number" style="font-weight: 500;">
+                    <td class="terminal-number" style="font-weight: 500;text-align: right;">
                       {format_decimal(holding.position_value)}
                     </td>
-                    <td class="terminal-number" style="color: var(--terminal-dim);">
+                    <td
+                      class="terminal-number"
+                      style="color: var(--terminal-dim);text-align: right;"
+                    >
                       {format_decimal(holding.cost_basis_money)}
                     </td>
                     <td class="terminal-number">
@@ -206,13 +204,6 @@
                     <td class="terminal-number">
                       <span style="color: var(--terminal-muted);">
                         {format_decimal(holding.percent_of_nav)}%
-                      </span>
-                      <span class="terminal-percent-bar">
-                        <span
-                          class="terminal-percent-fill"
-                          style={"width: #{min(Decimal.to_float(holding.percent_of_nav || Decimal.new("0")), 100)}%"}
-                        >
-                        </span>
                       </span>
                     </td>
                   </tr>
@@ -259,9 +250,7 @@
             <div class="terminal-card p-[var(--space-sm)] animate-fade-in animate-delay-5">
               <div class="terminal-section-label">Realized P&L (Sold)</div>
               <div class={"terminal-stat-value mt-[var(--space-xs)] #{if pnl_positive?(@realized_pnl), do: "gain", else: "loss"}"}>
-                <%= if pnl_positive?(@realized_pnl) do %>
-                  +
-                <% end %>€{format_decimal(@realized_pnl)}
+                {format_euro_signed(@realized_pnl)}
               </div>
             </div>
           <% end %>

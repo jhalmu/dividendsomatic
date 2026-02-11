@@ -133,20 +133,28 @@ lib/dividendsomatic/
     company_profile.ex          # Company profile schema
   market_sentiment.ex           # Market sentiment context
   gmail.ex                      # Gmail integration
+  data_ingestion.ex             # Generic data ingestion behaviour
+  data_ingestion/
+    csv_directory.ex            # CSV directory source adapter
+    gmail_adapter.ex            # Gmail source adapter
+    normalizer.ex               # CSV normalizer
   workers/
     gmail_import_worker.ex      # Oban worker for Gmail import
+    data_import_worker.ex       # Oban worker for generic data import
 
 lib/dividendsomatic_web/
   live/
     portfolio_live.ex           # Main LiveView
     portfolio_live.html.heex    # LiveView template
+    stock_live.ex               # Stock detail page
   components/
-    portfolio_chart.ex          # Contex chart component
+    portfolio_chart.ex          # SVG chart components
     core_components.ex          # Shared UI components
   router.ex                     # Routes
 
 lib/mix/tasks/
   import_csv.ex                 # mix import.csv task
+  import_batch.ex               # mix import.batch task
 ```
 
 ## Remember

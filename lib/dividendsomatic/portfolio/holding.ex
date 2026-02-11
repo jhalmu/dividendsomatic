@@ -33,6 +33,8 @@ defmodule Dividendsomatic.Portfolio.Holding do
     field :fx_rate_to_base, :decimal
     field :isin, :string
     field :figi, :string
+    field :holding_period_date_time, :string
+    field :identifier_key, :string
 
     timestamps()
   end
@@ -58,8 +60,16 @@ defmodule Dividendsomatic.Portfolio.Holding do
       :asset_class,
       :fx_rate_to_base,
       :isin,
-      :figi
+      :figi,
+      :holding_period_date_time,
+      :identifier_key
     ])
     |> validate_required([:portfolio_snapshot_id, :report_date, :symbol])
+    |> unique_constraint([:portfolio_snapshot_id, :isin, :report_date],
+      name: :holdings_snapshot_isin_date_index
+    )
+    |> unique_constraint([:portfolio_snapshot_id, :symbol, :report_date],
+      name: :holdings_snapshot_symbol_date_index
+    )
   end
 end

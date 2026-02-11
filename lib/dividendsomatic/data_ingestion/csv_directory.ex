@@ -15,6 +15,8 @@ defmodule Dividendsomatic.DataIngestion.CsvDirectory do
 
   @behaviour Dividendsomatic.DataIngestion
 
+  alias Dividendsomatic.Portfolio.CsvParser
+
   @default_dir "csv_data"
 
   @impl true
@@ -53,29 +55,17 @@ defmodule Dividendsomatic.DataIngestion.CsvDirectory do
     File.read(path)
   end
 
+  @doc """
+  Extracts the report date from CSV content using header-based parsing.
+
+  Delegates to `CsvParser.extract_report_date/1`.
+  """
+  defdelegate extract_report_date(csv_data), to: CsvParser
+
   defp extract_date_from_file(path) do
     case File.read(path) do
-      {:ok, csv_data} -> extract_report_date(csv_data)
+      {:ok, csv_data} -> CsvParser.extract_report_date(csv_data)
       {:error, reason} -> {:error, reason}
-    end
-  end
-
-  @doc false
-  def extract_report_date(csv_data) do
-    lines = String.split(csv_data, "\n", trim: true)
-
-    case Enum.drop(lines, 1) do
-      [first_data_line | _] ->
-        [date_str | _] = String.split(first_data_line, ",", parts: 2)
-        date_str = String.trim(date_str, "\"")
-
-        case Date.from_iso8601(date_str) do
-          {:ok, date} -> {:ok, date}
-          {:error, _} -> {:error, "invalid date: #{date_str}"}
-        end
-
-      [] ->
-        {:error, "no data rows"}
     end
   end
 end

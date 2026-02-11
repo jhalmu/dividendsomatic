@@ -43,10 +43,24 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.3.0 (Evolution Complete)
-**Status:** 6-phase evolution plan fully implemented
+**Version:** 0.5.0 (FX Conversion + Dynamic Stats + Dividend Import)
+**Status:** Phase 1 complete + partial Phase 3 (dividends) + market sentiment history
 
-**Implemented:**
+**Implemented (cumulative):**
+- FX conversion: all portfolio values converted to EUR via fx_rate_to_base
+- Dynamic growth stats (changes with snapshot navigation)
+- Dynamic market sentiment (historical F&G per snapshot date)
+- yfinance side tool: Python script fetches dividend data from Yahoo Finance
+- `mix import.yahoo dividends` imports yfinance JSON data
+- 5,498 dividend records across 60+ symbols
+- 365 days of Fear & Greed Index history stored in DB
+- Euro formatting (Finnish convention: 1 234,56 €)
+- Gmail date parsing fixed (DD/MM/YYYY, not MM/DD/YYYY)
+- Chart line widths refined
+- Header-based CSV parser (replaces brittle positional parser)
+- ISIN-based identifier strategy (not symbol/ticker)
+- Holdings deduplication with unique indexes
+- Re-import tool (`mix import.reimport`)
 - CSV import from Interactive Brokers (`mix import.csv` + `mix import.batch`)
 - Generic data ingestion pipeline (CSV directory + Gmail adapters)
 - Automated daily import via Oban cron (weekdays 12:00)
@@ -61,13 +75,64 @@ mix ecto.reset              # Drop + create + migrate
 - Dividend tracking with area fill visualization
 - Sold positions tracking
 - Stock quotes & company profiles (Finnhub API)
-- WCAG AA accessible (180 tests, 4 Playwright a11y tests)
+- WCAG AA accessible (201 tests, 4 Playwright a11y tests)
 
-**Next priorities:**
-- Production deployment (#6)
-- Multi-provider market data architecture (#22)
-- Market data research document (#21)
-- Stock detail page enhancements (#20)
+**Next priorities (from development plan):**
+- Phase 2: Company Information (ISIN-keyed company notes, real stock/ETF templates)
+- Phase 3: Dividend Calculations & Charts (enhanced schema, analytics, opaque softcolor charts)
+- Phase 4: Rule of 72 calculator
+- Phase 5A: GetLynxPortfolio automation
+- Phase 5B: Costs, Cash Flows & Short Positions
+- Phase 7: Testing & Quality (target 220+ tests, 70%+ coverage)
+- Multi-provider market data architecture (#22 - only open issue)
+- Production deployment
+- Gmail OAuth setup (env vars needed, see GMAIL_OAUTH_SETUP.md)
+- Finnhub API key setup (env vars needed)
+
+---
+
+## 2026-02-11 - CSV Pipeline Hardening (Phase 1)
+
+### Session Summary
+
+Implemented Phase 1 of the 7-phase development plan: CSV Pipeline Hardening. Replaced positional CSV parsing with header-based parsing, added ISIN-based identifier strategy, holdings deduplication, and re-import tooling. Created documentation for Gmail OAuth setup and Phoenix patterns.
+
+### Changes Made
+
+**Phase 1A - Header-Based CSV Parser:**
+- Created `lib/dividendsomatic/portfolio/csv_parser.ex`
+- Parses by column name, not position (forward-compatible with new columns)
+- Handles both Format A (17 cols, HoldingPeriodDateTime) and Format B (18 cols, Description/FifoPnlUnrealized)
+- `identifier_key` computed field: ISIN > FIGI > symbol:exchange cascade
+- Updated portfolio.ex, import_csv.ex, import_batch.ex, csv_directory.ex to use new parser
+
+**Phase 1B - Holdings Schema Enhancement:**
+- Migration: added `holding_period_date_time` and `identifier_key` fields
+- Index on `identifier_key` for lookups
+
+**Phase 1C - Holdings Deduplication:**
+- Unique index on `(portfolio_snapshot_id, isin, report_date)` where ISIN not null
+- Fallback unique index on `(portfolio_snapshot_id, symbol, report_date)` where ISIN is null
+- Unique constraints added to Holding changeset
+
+**Phase 1D - Re-import Tool:**
+- Created `mix import.reimport` task
+- Drops all snapshots+holdings, re-imports from csv_data/ with new parser
+- Successfully re-imported all 158 CSV files (3,920 holdings)
+
+**Phase 1E - Tests:**
+- 21 new CSV parser tests (both formats, edge cases, identifier_key computation)
+- Updated existing test expectations for new error messages
+
+**Phase 6 - Documentation:**
+- Created `GMAIL_OAUTH_SETUP.md` (step-by-step OAuth2 setup guide)
+- Created `docs/PHOENIX_PATTERNS.md` (extracted from deps/phoenix/usage-rules/)
+- Updated MEMO.md and CLAUDE.md
+
+### Test Results
+- 201 tests, 0 failures (5 excluded)
+- Credo --strict: 0 issues
+- All 158 CSVs re-imported successfully
 
 ---
 
@@ -126,7 +191,7 @@ Executed full 6-phase evolution plan: UI overhaul, PostgreSQL migration, generic
 #12, #13, #14, #15, #16, #17, #18, #19
 
 ### Remaining Open Issues
-#20 (Stock detail pages - implemented, can close), #21 (Market data research - documented), #22 (Multi-provider architecture - future)
+#22 (Multi-provider market data architecture - future)
 
 ---
 
@@ -349,8 +414,8 @@ mix import.csv flex.490027.PortfolioForWww.20260128.20260128.csv
 | [#17](https://github.com/jhalmu/dividendsomatic/issues/17) | PostgreSQL migration + Oban | HIGH | **Closed** |
 | [#18](https://github.com/jhalmu/dividendsomatic/issues/18) | Batch CSV re-import | HIGH | **Closed** |
 | [#19](https://github.com/jhalmu/dividendsomatic/issues/19) | Generic data ingestion pipeline | HIGH | **Closed** |
-| [#20](https://github.com/jhalmu/dividendsomatic/issues/20) | Stock detail pages | MEDIUM | Open |
-| [#21](https://github.com/jhalmu/dividendsomatic/issues/21) | Market data research document | LOW | Open |
+| [#20](https://github.com/jhalmu/dividendsomatic/issues/20) | Stock detail pages | MEDIUM | **Closed** |
+| [#21](https://github.com/jhalmu/dividendsomatic/issues/21) | Market data research document | LOW | **Closed** |
 | [#22](https://github.com/jhalmu/dividendsomatic/issues/22) | Multi-provider market data architecture | LOW | Open |
 
 ## Technical Debt

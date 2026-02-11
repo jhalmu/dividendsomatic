@@ -9,7 +9,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
   @impl true
   def mount(_params, _session, socket) do
     snapshot = Portfolio.get_latest_snapshot()
-    fear_greed = get_fear_greed_data()
+    live_fg = get_fear_greed_live()
 
     if connected?(socket) do
       Process.send_after(self(), :refresh_fear_greed, @fg_refresh_interval)
@@ -17,16 +17,24 @@ defmodule DividendsomaticWeb.PortfolioLive do
 
     socket =
       socket
+      |> assign(:live_fear_greed, live_fg)
       |> assign_snapshot(snapshot)
-      |> assign(:fear_greed, fear_greed)
 
     {:ok, socket}
   end
 
-  defp get_fear_greed_data do
+  defp get_fear_greed_live do
     case MarketSentiment.get_fear_greed_index_cached() do
       {:ok, data} -> data
       {:error, _} -> nil
+    end
+  end
+
+  defp get_fear_greed_for_snapshot(socket, snapshot) do
+    # Try historical DB data for this date
+    case MarketSentiment.get_fear_greed_for_date(snapshot.report_date) do
+      nil -> socket.assigns[:live_fear_greed]
+      data -> data
     end
   end
 
@@ -67,6 +75,26 @@ defmodule DividendsomaticWeb.PortfolioLive do
     end
   end
 
+  def handle_event("navigate", %{"direction" => "back3"}, socket) do
+    if socket.assigns.current_snapshot do
+      date = socket.assigns.current_snapshot.report_date
+      snapshot = Portfolio.get_snapshot_back(date, 3) || Portfolio.get_first_snapshot()
+      {:noreply, assign_snapshot(socket, snapshot)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("navigate", %{"direction" => "forward3"}, socket) do
+    if socket.assigns.current_snapshot do
+      date = socket.assigns.current_snapshot.report_date
+      snapshot = Portfolio.get_snapshot_forward(date, 3) || Portfolio.get_latest_snapshot()
+      {:noreply, assign_snapshot(socket, snapshot)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_event("navigate", %{"direction" => "first"}, socket) do
     first_snapshot = Portfolio.get_first_snapshot()
     {:noreply, assign_snapshot(socket, first_snapshot)}
@@ -79,9 +107,20 @@ defmodule DividendsomaticWeb.PortfolioLive do
 
   @impl true
   def handle_info(:refresh_fear_greed, socket) do
-    fear_greed = get_fear_greed_data()
+    live_fg = get_fear_greed_live()
     Process.send_after(self(), :refresh_fear_greed, @fg_refresh_interval)
-    {:noreply, assign(socket, :fear_greed, fear_greed)}
+
+    socket = assign(socket, :live_fear_greed, live_fg)
+
+    # If viewing latest snapshot, update displayed F&G too
+    socket =
+      if socket.assigns.current_snapshot && !socket.assigns.has_next do
+        assign(socket, :fear_greed, live_fg)
+      else
+        socket
+      end
+
+    {:noreply, socket}
   end
 
   # --- Function Components ---
@@ -94,41 +133,64 @@ defmodule DividendsomaticWeb.PortfolioLive do
   attr :compact, :boolean, default: false
 
   def nav_bar(assigns) do
+    btn_class = if assigns.compact, do: "terminal-nav-btn-compact", else: "terminal-nav-btn"
+    sm_class = if assigns.compact, do: "terminal-nav-btn-compact", else: "terminal-nav-btn-sm"
+    icon_size = if assigns.compact, do: "w-3 h-3", else: "w-4 h-4"
+    sm_icon = if assigns.compact, do: "w-2.5 h-2.5", else: "w-3.5 h-3.5"
+
+    assigns =
+      assigns
+      |> assign(:btn_class, btn_class)
+      |> assign(:sm_class, sm_class)
+      |> assign(:icon_size, icon_size)
+      |> assign(:sm_icon, sm_icon)
+
     ~H"""
     <nav
       class={if @compact, do: "terminal-nav-bar-compact", else: "terminal-nav-bar"}
       aria-label="Snapshot navigation"
     >
-      <%= unless @compact do %>
-        <button
-          phx-click="navigate"
-          phx-value-direction="first"
-          class="terminal-nav-btn-sm"
-          disabled={!@has_prev}
-          aria-label="First snapshot"
+      <%!-- First --%>
+      <button
+        phx-click="navigate"
+        phx-value-direction="first"
+        class={@sm_class}
+        disabled={!@has_prev}
+        aria-label="First snapshot"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="2"
+          stroke="currentColor"
+          class={@sm_icon}
+          aria-hidden="true"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke-width="2"
-            stroke="currentColor"
-            class="w-3.5 h-3.5"
-            aria-hidden="true"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5"
-            />
-          </svg>
-        </button>
-      <% end %>
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5"
+          />
+        </svg>
+      </button>
 
+      <%!-- Back 3 --%>
+      <button
+        phx-click="navigate"
+        phx-value-direction="back3"
+        class={@sm_class}
+        disabled={!@has_prev}
+        aria-label="Back 3 snapshots"
+      >
+        <span style="font-family: var(--font-mono); font-size: 0.5rem; opacity: 0.7;">-3</span>
+      </button>
+
+      <%!-- Prev --%>
       <button
         phx-click="navigate"
         phx-value-direction="prev"
-        class={if @compact, do: "terminal-nav-btn-compact", else: "terminal-nav-btn"}
+        class={@btn_class}
         disabled={!@has_prev}
         aria-label="Previous snapshot"
       >
@@ -138,32 +200,14 @@ defmodule DividendsomaticWeb.PortfolioLive do
           viewBox="0 0 24 24"
           stroke-width="2.5"
           stroke="currentColor"
-          class={if @compact, do: "w-3 h-3", else: "w-4 h-4"}
+          class={@icon_size}
           aria-hidden="true"
         >
           <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
         </svg>
       </button>
 
-      <%= if @compact do %>
-        <svg
-          class="terminal-rose-flourish"
-          width="60"
-          height="8"
-          viewBox="0 0 60 8"
-          aria-hidden="true"
-        >
-          <path
-            d="M0 4 Q15 1, 30 4 Q45 7, 60 4"
-            stroke="#ffffff"
-            stroke-width="0.4"
-            fill="none"
-            opacity="0.15"
-          />
-          <circle cx="30" cy="4" r="1" fill="#ffffff" opacity="0.12" />
-        </svg>
-      <% end %>
-
+      <%!-- Date --%>
       <div class={if @compact, do: "terminal-nav-date-compact", else: "terminal-nav-date"}>
         <div class={if @compact, do: "terminal-nav-date-main-compact", else: "terminal-nav-date-main"}>
           {Calendar.strftime(@current_snapshot.report_date, "%Y-%m-%d")}
@@ -175,29 +219,11 @@ defmodule DividendsomaticWeb.PortfolioLive do
         </div>
       </div>
 
-      <%= if @compact do %>
-        <svg
-          class="terminal-rose-flourish"
-          width="60"
-          height="8"
-          viewBox="0 0 60 8"
-          aria-hidden="true"
-        >
-          <path
-            d="M60 4 Q45 1, 30 4 Q15 7, 0 4"
-            stroke="#ffffff"
-            stroke-width="0.4"
-            fill="none"
-            opacity="0.15"
-          />
-          <circle cx="30" cy="4" r="1" fill="#ffffff" opacity="0.12" />
-        </svg>
-      <% end %>
-
+      <%!-- Next --%>
       <button
         phx-click="navigate"
         phx-value-direction="next"
-        class={if @compact, do: "terminal-nav-btn-compact", else: "terminal-nav-btn"}
+        class={@btn_class}
         disabled={!@has_next}
         aria-label="Next snapshot"
       >
@@ -207,38 +233,48 @@ defmodule DividendsomaticWeb.PortfolioLive do
           viewBox="0 0 24 24"
           stroke-width="2.5"
           stroke="currentColor"
-          class={if @compact, do: "w-3 h-3", else: "w-4 h-4"}
+          class={@icon_size}
           aria-hidden="true"
         >
           <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
         </svg>
       </button>
 
-      <%= unless @compact do %>
-        <button
-          phx-click="navigate"
-          phx-value-direction="last"
-          class="terminal-nav-btn-sm"
-          disabled={!@has_next}
-          aria-label="Latest snapshot"
+      <%!-- Forward 3 --%>
+      <button
+        phx-click="navigate"
+        phx-value-direction="forward3"
+        class={@sm_class}
+        disabled={!@has_next}
+        aria-label="Forward 3 snapshots"
+      >
+        <span style="font-family: var(--font-mono); font-size: 0.5rem; opacity: 0.7;">+3</span>
+      </button>
+
+      <%!-- Last --%>
+      <button
+        phx-click="navigate"
+        phx-value-direction="last"
+        class={@sm_class}
+        disabled={!@has_next}
+        aria-label="Latest snapshot"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="2"
+          stroke="currentColor"
+          class={@sm_icon}
+          aria-hidden="true"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke-width="2"
-            stroke="currentColor"
-            class="w-3.5 h-3.5"
-            aria-hidden="true"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M11.25 4.5l7.5 7.5-7.5 7.5m-6-15l7.5 7.5-7.5 7.5"
-            />
-          </svg>
-        </button>
-      <% end %>
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M11.25 4.5l7.5 7.5-7.5 7.5m-6-15l7.5 7.5-7.5 7.5"
+          />
+        </svg>
+      </button>
     </nav>
     """
   end
@@ -261,6 +297,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:dividend_by_month, [])
     |> assign(:sparkline_values, [])
     |> assign(:realized_pnl, Decimal.new("0"))
+    |> assign(:fear_greed, nil)
   end
 
   defp assign_snapshot(socket, snapshot) do
@@ -268,12 +305,14 @@ defmodule DividendsomaticWeb.PortfolioLive do
 
     total_value =
       Enum.reduce(holdings, Decimal.new("0"), fn h, acc ->
-        Decimal.add(acc, h.position_value || Decimal.new("0"))
+        fx = h.fx_rate_to_base || Decimal.new("1")
+        Decimal.add(acc, Decimal.mult(h.position_value || Decimal.new("0"), fx))
       end)
 
     total_pnl =
       Enum.reduce(holdings, Decimal.new("0"), fn h, acc ->
-        Decimal.add(acc, h.fifo_pnl_unrealized || Decimal.new("0"))
+        fx = h.fx_rate_to_base || Decimal.new("1")
+        Decimal.add(acc, Decimal.mult(h.fifo_pnl_unrealized || Decimal.new("0"), fx))
       end)
 
     total_snapshots = Portfolio.count_snapshots()
@@ -292,13 +331,14 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:snapshot_position, snapshot_position)
     |> assign(:total_snapshots, total_snapshots)
     |> assign(:chart_data, chart_data)
-    |> assign(:growth_stats, Portfolio.get_growth_stats())
+    |> assign(:growth_stats, Portfolio.get_growth_stats(snapshot))
     |> assign(:dividends_ytd, Portfolio.total_dividends_this_year())
     |> assign(:projected_dividends, Portfolio.projected_annual_dividends())
     |> assign(:recent_dividends, Portfolio.list_dividends_this_year() |> Enum.take(5))
     |> assign(:dividend_by_month, Portfolio.dividends_by_month())
     |> assign(:sparkline_values, sparkline_values)
     |> assign(:realized_pnl, Portfolio.total_realized_pnl())
+    |> assign(:fear_greed, get_fear_greed_for_snapshot(socket, snapshot))
   end
 
   defp format_decimal(nil), do: "0.00"
@@ -329,12 +369,67 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> add_thousands_separator()
   end
 
-  defp add_thousands_separator(str) do
+  defp format_euro(nil), do: "0 €"
+
+  defp format_euro(decimal) do
+    integer_part =
+      decimal
+      |> Decimal.round(0)
+      |> Decimal.to_integer()
+      |> Integer.to_string()
+      |> add_thousands_separator("\u00A0")
+
+    "#{integer_part} €"
+  end
+
+  defp format_euro_decimal(nil), do: "0,00 €"
+
+  defp format_euro_decimal(decimal) do
+    format_euro_number(decimal, "")
+  end
+
+  defp format_euro_signed(nil), do: "0,00 €"
+
+  defp format_euro_signed(decimal) do
+    sign =
+      cond do
+        Decimal.compare(decimal, Decimal.new("0")) == :gt -> "+"
+        Decimal.compare(decimal, Decimal.new("0")) == :lt -> "-"
+        true -> ""
+      end
+
+    format_euro_number(decimal, sign)
+  end
+
+  defp format_euro_number(decimal, sign) do
+    abs_val = Decimal.abs(Decimal.round(decimal, 2))
+
+    int_part =
+      abs_val
+      |> Decimal.round(0, :floor)
+      |> Decimal.to_integer()
+
+    frac =
+      abs_val
+      |> Decimal.sub(Decimal.new(int_part))
+      |> Decimal.mult(Decimal.new(100))
+      |> Decimal.round(0)
+      |> Decimal.to_integer()
+
+    formatted_int =
+      int_part
+      |> Integer.to_string()
+      |> add_thousands_separator("\u00A0")
+
+    "#{sign}#{formatted_int},#{String.pad_leading(Integer.to_string(frac), 2, "0")} €"
+  end
+
+  defp add_thousands_separator(str, sep \\ ",") do
     str
     |> String.reverse()
     |> String.graphemes()
     |> Enum.chunk_every(3)
-    |> Enum.join(",")
+    |> Enum.join(sep)
     |> String.reverse()
   end
 

@@ -34,7 +34,7 @@ mix dialyzer                      # Type checking
 ## Architecture
 
 ### Stack
-- Phoenix 1.8 + LiveView 1.1 + Ecto + SQLite (dev) / PostgreSQL (prod)
+- Phoenix 1.8 + LiveView 1.1 + Ecto + PostgreSQL (dev & prod via docker-compose)
 - DaisyUI 5.0 + Tailwind CSS v4 with fluid design tokens
 - NimbleCSV, Contex (charts), Oban (background jobs), Req (HTTP)
 
@@ -44,13 +44,20 @@ mix dialyzer                      # Type checking
 - **MarketSentiment** - Market sentiment data
 - **Gmail** - Auto-fetch CSV attachments from Gmail
 
+### Identifier Strategy
+
+ISIN is the primary identifier (not symbol/ticker). Symbols can be reused/changed (e.g., TELIA).
+
+Cascading lookup: `identifier_key = isin || figi || "symbol:exchange"`
+
 ### Key Modules
 
 ```
 lib/dividendsomatic/
   portfolio.ex                    # Portfolio context
   portfolio/
-    portfolio_snapshot.ex         # Daily snapshot schema
+    csv_parser.ex                 # Header-based CSV parser (Format A & B)
+    portfolio_snapshot.ex         # Daily snapshot schema (immutable history)
     holding.ex                    # Individual holding schema
     dividend.ex                   # Dividend tracking schema
     sold_position.ex              # Sold positions schema
@@ -58,6 +65,9 @@ lib/dividendsomatic/
   stocks/
     stock_quote.ex                # Stock quote schema
     company_profile.ex            # Company profile schema
+  data_ingestion/
+    csv_directory.ex              # CSV directory adapter
+    gmail_adapter.ex              # Gmail adapter
   market_sentiment.ex             # Market sentiment context
   gmail.ex                        # Gmail integration
   workers/
@@ -67,6 +77,7 @@ lib/dividendsomatic_web/
   live/
     portfolio_live.ex             # Main LiveView
     portfolio_live.html.heex      # LiveView template
+    stock_live.ex                 # Stock detail LiveView
   components/
     portfolio_chart.ex            # Contex chart component
     core_components.ex            # Shared UI components
@@ -74,6 +85,8 @@ lib/dividendsomatic_web/
 
 lib/mix/tasks/
   import_csv.ex                   # mix import.csv task
+  import_batch.ex                 # mix import.batch task
+  import_reimport.ex              # mix import.reimport (one-time re-import)
 ```
 
 ## Coding Conventions
@@ -142,3 +155,6 @@ If tests fail, stop and fix before proceeding. Never commit failing code.
 - [MEMO.md](MEMO.md) - Session notes, current status, GitHub issues, technical debt
 - [SESSION_REPORT.md](SESSION_REPORT.md) - Detailed session reports
 - [AGENTS.md](AGENTS.md) - Agent guidelines and project patterns
+- [GMAIL_OAUTH_SETUP.md](GMAIL_OAUTH_SETUP.md) - Gmail OAuth2 configuration guide
+- [docs/PHOENIX_PATTERNS.md](docs/PHOENIX_PATTERNS.md) - Phoenix/LiveView/Ecto usage rules
+- [docs/Rule72.md](docs/Rule72.md) - Rule of 72 reference

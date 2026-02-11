@@ -85,17 +85,17 @@ defmodule Dividendsomatic.Gmail do
   @doc """
   Extracts report date from email subject line.
 
-  Subject format: "Activity Flex for MM/DD/YYYY"
+  Subject format: "Activity Flex for DD/MM/YYYY"
 
   ## Examples
 
-      iex> Dividendsomatic.Gmail.extract_date_from_subject("Activity Flex for 01/28/2026")
+      iex> Dividendsomatic.Gmail.extract_date_from_subject("Activity Flex for 28/01/2026")
       ~D[2026-01-28]
   """
   def extract_date_from_subject(subject) do
-    # Match pattern: "Activity Flex for MM/DD/YYYY"
+    # Match pattern: "Activity Flex for DD/MM/YYYY"
     case Regex.run(~r/Activity Flex for (\d{2})\/(\d{2})\/(\d{4})/, subject) do
-      [_, month, day, year] ->
+      [_, day, month, year] ->
         case Date.new(
                String.to_integer(year),
                String.to_integer(month),

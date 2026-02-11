@@ -1,5 +1,8 @@
 # Dividendsomatic Evolution Plan
 
+> **Status: Phases 1-5 COMPLETE** (2026-02-10). 180 tests, 0 failures, 0 credo issues.
+> Only #22 (Multi-provider market data architecture) remains open.
+
 ## Context
 
 The app has matured from MVP to a working portfolio tracker with 125 tests, terminal-themed dark UI, custom SVG charts, and keyboard navigation. Now it needs a major evolution:
@@ -14,7 +17,7 @@ Current data flow: GetLynxPortfolio app → Mail.app → Automator → `csv_data
 
 ---
 
-## Phase 1: UI Overhaul
+## Phase 1: UI Overhaul (DONE)
 
 ### 1.1 New Template Layout
 
@@ -207,7 +210,7 @@ Changes:
 
 ---
 
-## Phase 2: PostgreSQL Migration
+## Phase 2: PostgreSQL Migration (DONE)
 
 ### 2.1 Dependencies
 
@@ -301,7 +304,7 @@ After migration: `mix ecto.reset` then batch import all 140+ CSVs from `csv_data
 
 ---
 
-## Phase 3: Generic Data Ingestion
+## Phase 3: Generic Data Ingestion (DONE)
 
 ### IMPORTANT: CSV Fields Already Vary
 
@@ -605,7 +608,7 @@ config :dividendsomatic, Oban,
 
 ---
 
-## Phase 4: Stock Detail Pages
+## Phase 4: Stock Detail Pages (DONE)
 
 ### 4.1 Route
 
@@ -653,7 +656,7 @@ Link patterns by exchange:
 
 ---
 
-## Phase 5: Market Data Research
+## Phase 5: Market Data Research (DONE)
 
 See separate file: `docs/MARKET_DATA_RESEARCH.md`
 
@@ -661,38 +664,34 @@ See separate file: `docs/MARKET_DATA_RESEARCH.md`
 
 ## GitHub Issues
 
-| # | Title | Phase | Priority |
-|---|-------|-------|----------|
-| 12 | Template restructure: move Holdings after chart, dual compact nav | 1.1, 1.3 | HIGH |
-| 13 | Brand area: tagline + decorative rose SVG line | 1.2 | MEDIUM |
-| 14 | F&G chart background band + gauge in holdings header | 1.4, 1.5 | HIGH |
-| 15 | Enhanced dividend visualization: filled area chart | 1.6 | MEDIUM |
-| 16 | Chart animations: path drawing, pulsing marker, live feel | 1.7 | MEDIUM |
-| 17 | PostgreSQL migration + docker-compose + enable Oban | 2.1-2.6 | HIGH |
-| 18 | Batch CSV re-import after PostgreSQL migration | 2.7 | HIGH |
-| 19 | Generic data ingestion module with CSV directory adapter | 3.1-3.6 | HIGH |
-| 20 | Stock detail pages with external links | 4.1-4.4 | MEDIUM |
-| 21 | Market data provider research document | 5.1 | LOW |
-| 22 | Multi-provider market data architecture (future) | 5 | LOW |
+All issues closed except #22:
+
+| # | Title | Phase | Status |
+|---|-------|-------|--------|
+| 12 | Template restructure: dual compact nav | 1.1, 1.3 | Closed |
+| 13 | Brand area: tagline + decorative rose SVG line | 1.2 | Closed |
+| 14 | F&G chart background band + gauge in holdings header | 1.4, 1.5 | Closed |
+| 15 | Enhanced dividend visualization: filled area chart | 1.6 | Closed |
+| 16 | Chart animations: path drawing, pulsing marker, live feel | 1.7 | Closed |
+| 17 | PostgreSQL migration + docker-compose + enable Oban | 2.1-2.6 | Closed |
+| 18 | Batch CSV re-import after PostgreSQL migration | 2.7 | Closed |
+| 19 | Generic data ingestion module with CSV directory adapter | 3.1-3.6 | Closed |
+| 20 | Stock detail pages with external links | 4.1-4.4 | Closed |
+| 21 | Market data provider research document | 5.1 | Closed |
+| **22** | **Multi-provider market data architecture** | **5** | **Open** |
 
 ---
 
-## Execution Order & Dependencies
+## Execution Summary
 
-```
-Phase 1 (UI) ──────────────> start immediately, no blockers
-Phase 2 (PostgreSQL) ──────> blocks Phase 3 (Oban needed)
-Phase 3 (Data Ingestion) ──> needs Phase 2 complete
-Phase 4 (Stock Pages) ─────> independent, can parallel with any
-Phase 5 (Research Doc) ────> independent, write anytime
-```
+All phases completed 2026-02-10:
+1. **Phase 1** - UI overhaul (#12-16)
+2. **Phase 2** - PostgreSQL migration (#17)
+3. **Phase 3** - Data ingestion (#18-19)
+4. **Phase 4** - Stock detail pages (#20)
+5. **Phase 5** - Market data research (#21)
 
-Decided sequence:
-1. Write docs + create GitHub issues (review before coding)
-2. **Phase 1** - UI overhaul (immediate visual payoff)
-3. **Phase 2** - PostgreSQL (infrastructure foundation)
-4. **Phase 3** - Data ingestion (automation)
-5. **Phase 4** - Stock pages (feature expansion)
+**Remaining:** #22 Multi-provider market data architecture (future work)
 
 ---
 

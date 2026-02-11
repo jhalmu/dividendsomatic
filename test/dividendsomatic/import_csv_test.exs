@@ -74,7 +74,7 @@ defmodule Mix.Tasks.Import.CsvTest do
         end)
 
       assert output =~ "Error extracting date"
-      assert output =~ "Invalid date format"
+      assert output =~ "invalid date"
     end
   end
 end

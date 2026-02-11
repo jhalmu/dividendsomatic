@@ -6,13 +6,13 @@ defmodule Dividendsomatic.GmailTest do
 
   describe "extract_date_from_subject/1" do
     test "should extract date from valid subject" do
-      assert Gmail.extract_date_from_subject("Activity Flex for 01/28/2026") == ~D[2026-01-28]
+      assert Gmail.extract_date_from_subject("Activity Flex for 28/01/2026") == ~D[2026-01-28]
     end
 
     test "should extract date with different months" do
-      assert Gmail.extract_date_from_subject("Activity Flex for 12/25/2025") == ~D[2025-12-25]
-      assert Gmail.extract_date_from_subject("Activity Flex for 06/15/2026") == ~D[2026-06-15]
-      assert Gmail.extract_date_from_subject("Activity Flex for 02/28/2026") == ~D[2026-02-28]
+      assert Gmail.extract_date_from_subject("Activity Flex for 25/12/2025") == ~D[2025-12-25]
+      assert Gmail.extract_date_from_subject("Activity Flex for 15/06/2026") == ~D[2026-06-15]
+      assert Gmail.extract_date_from_subject("Activity Flex for 28/02/2026") == ~D[2026-02-28]
     end
 
     test "should return today's date for non-matching subject" do
@@ -24,7 +24,7 @@ defmodule Dividendsomatic.GmailTest do
     end
 
     test "should return today's date for invalid date values" do
-      assert Gmail.extract_date_from_subject("Activity Flex for 13/01/2026") == Date.utc_today()
+      assert Gmail.extract_date_from_subject("Activity Flex for 32/01/2026") == Date.utc_today()
     end
 
     test "should return today's date for empty string" do
@@ -32,7 +32,7 @@ defmodule Dividendsomatic.GmailTest do
     end
 
     test "should handle subject with extra text" do
-      assert Gmail.extract_date_from_subject("Fwd: Activity Flex for 03/15/2026 - Report") ==
+      assert Gmail.extract_date_from_subject("Fwd: Activity Flex for 15/03/2026 - Report") ==
                ~D[2026-03-15]
     end
   end

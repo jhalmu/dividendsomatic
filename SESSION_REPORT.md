@@ -1,3 +1,75 @@
+# Session Report - 2026-02-11
+
+## Summary
+FX currency conversion, dynamic growth stats, dynamic market sentiment, yfinance dividend import tool, euro formatting, Gmail date fix. 218 tests, 0 failures, 0 credo issues.
+
+## FX Currency Conversion
+- Discovered 8 currencies in portfolio (EUR, USD, SEK, NOK, JPY, HKD, GBP, CAD)
+- Applied `fx_rate_to_base` conversion in portfolio_live.ex (total_value, total_pnl)
+- Applied in portfolio.ex (chart data, growth stats, calculate_total_value)
+- Created `to_base_currency/2` helper in portfolio context
+- Historical FX rates preserved per-holding per-snapshot (time machine accuracy)
+
+## Dynamic Growth Stats
+- `get_growth_stats/1` now accepts optional snapshot parameter
+- Badge shows change from first snapshot to currently viewed snapshot (not always latest)
+- Navigating between snapshots updates the growth badge dynamically
+
+## Dynamic Market Sentiment
+- Created `fear_greed_history` table and `FearGreedRecord` schema
+- `fetch_and_store_history/1` fetches N days from Alternative.me API
+- `get_fear_greed_for_date/1` with 3-day fallback for nearest date
+- LiveView F&G gauge updates per snapshot date during navigation
+- Stored 365 days of historical F&G data
+
+## yfinance Dividend Import
+- Created `tools/yfinance_fetch.py` Python side tool
+- Exchange suffix mapping: HEX→.HE, TSEJ→.T, OSE→.OL, SBF→.PA, IBIS→.DE, SEHK→.HK
+- SYMBOL_OVERRIDES for special cases (Finnish short codes, Oslo "o" suffix, HK zero-padding, Toronto .UN REITs)
+- Created `lib/mix/tasks/import_yahoo.ex` for importing JSON output
+- Imported 5,498 dividend records across 60+ symbols
+
+## Euro Formatting
+- Finnish convention: 1 234,56 € (non-breaking space separator, comma decimal)
+- `format_euro_decimal/1`, `format_euro_signed/1`, `format_euro_number/2` helpers
+- Applied throughout portfolio_live template
+
+## Bug Fixes
+- Gmail date parsing: DD/MM/YYYY (European) instead of MM/DD/YYYY (American)
+- Chart line widths refined: value 2.5→1.5, cost basis 1.5→1
+
+## Testing (218 tests, 0 failures)
+- `fear_greed_record_test.exs` - schema validation, range, uniqueness
+- `market_sentiment_history_test.exs` - date lookup, fallback, colors
+- `portfolio_fx_test.exs` - FX conversion in charts, dynamic growth stats
+- `import_yahoo_test.exs` - JSON import, duplicate handling
+- Credo --strict: 0 issues
+
+## Files Created
+- `lib/dividendsomatic/market_sentiment/fear_greed_record.ex`
+- `priv/repo/migrations/20260211164500_create_fear_greed_history.exs`
+- `lib/mix/tasks/import_yahoo.ex`
+- `tools/yfinance_fetch.py`
+- `tools/requirements.txt`
+- `test/dividendsomatic/market_sentiment/fear_greed_record_test.exs`
+- `test/dividendsomatic/market_sentiment_history_test.exs`
+- `test/dividendsomatic/portfolio_fx_test.exs`
+- `test/dividendsomatic/import_yahoo_test.exs`
+
+## Files Modified
+- `lib/dividendsomatic_web/live/portfolio_live.ex` - Euro helpers, FX conversion, dynamic F&G
+- `lib/dividendsomatic/portfolio.ex` - FX conversion, dynamic growth stats, to_base_currency
+- `lib/dividendsomatic/market_sentiment.ex` - Historical F&G storage and lookup
+- `lib/dividendsomatic_web/components/portfolio_chart.ex` - Thinner line widths
+- `lib/dividendsomatic/gmail.ex` - DD/MM/YYYY date fix
+- `test/dividendsomatic/gmail_test.exs` - Updated date format assertions
+- `MEMO.md` - Session notes updated
+
+## Remaining Open Issues
+- #22 Multi-provider market data architecture (future)
+
+---
+
 # Session Report - 2026-02-10
 
 ## Summary
@@ -83,6 +155,4 @@ Full 6-phase evolution plan executed: UI overhaul with terminal theme, PostgreSQ
 #12, #13, #14, #15, #16, #17, #18, #19
 
 ## Remaining Open Issues
-- #20 Stock detail pages (implemented)
-- #21 Market data research document (written)
 - #22 Multi-provider market data architecture (future)
