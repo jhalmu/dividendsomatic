@@ -23,9 +23,12 @@ defmodule DividendsomaticWeb.StockLive do
     dividends_with_income = compute_dividends_with_income(owned_dividends, holdings)
     total_dividend_income = sum_dividend_income(dividends_with_income)
 
-    # Dividend analytics
+    # Dividend analytics uses ALL dividends (not ownership-filtered)
+    # so TTM, yield, frequency reflect the stock's actual dividend pattern
+    all_dividends_with_income = compute_dividends_with_income(all_dividends, holdings)
+
     dividend_analytics =
-      compute_dividend_analytics(dividends_with_income, quote_data, holding_stats)
+      compute_dividend_analytics(all_dividends_with_income, quote_data, holding_stats)
 
     # Dividend payback progress
     payback_data =
