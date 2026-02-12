@@ -1,0 +1,122 @@
+defmodule DividendsomaticWeb.DataGapsLiveTest do
+  use DividendsomaticWeb.ConnCase, async: true
+
+  import Phoenix.LiveViewTest
+
+  alias Dividendsomatic.Portfolio.{BrokerTransaction, Holding, PortfolioSnapshot}
+
+  describe "Data Gaps page" do
+    test "should render the page with broker coverage", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/data/gaps")
+
+      assert html =~ "Data Coverage"
+      assert html =~ "Broker Timeline"
+      assert html =~ "Per-Stock Coverage"
+    end
+
+    test "should show toggle filter button", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/data/gaps")
+      assert html =~ "Current holdings only"
+    end
+
+    test "should toggle filter", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/data/gaps")
+
+      html = view |> element("button", "Current holdings only") |> render_click()
+      assert html =~ "Show all stocks"
+    end
+
+    test "should show broker coverage when data exists", %{conn: conn} do
+      # Insert a Nordnet transaction
+      %BrokerTransaction{}
+      |> BrokerTransaction.changeset(%{
+        broker: "nordnet",
+        transaction_type: "buy",
+        raw_type: "OSTO",
+        external_id: "test_1",
+        trade_date: ~D[2017-03-06],
+        isin: "FI0009000202",
+        security_name: "KESKO"
+      })
+      |> Dividendsomatic.Repo.insert!()
+
+      # Insert an IBKR snapshot with holding
+      {:ok, snapshot} =
+        %PortfolioSnapshot{}
+        |> PortfolioSnapshot.changeset(%{report_date: ~D[2026-01-28]})
+        |> Dividendsomatic.Repo.insert()
+
+      %Holding{}
+      |> Holding.changeset(%{
+        portfolio_snapshot_id: snapshot.id,
+        report_date: ~D[2026-01-28],
+        symbol: "KESKOB",
+        currency_primary: "EUR",
+        quantity: Decimal.new("100"),
+        mark_price: Decimal.new("21"),
+        position_value: Decimal.new("2100"),
+        cost_basis_price: Decimal.new("18"),
+        cost_basis_money: Decimal.new("1800"),
+        open_price: Decimal.new("18"),
+        percent_of_nav: Decimal.new("10"),
+        fx_rate_to_base: Decimal.new("1"),
+        isin: "FI0009000202",
+        listing_exchange: "HEX",
+        asset_class: "STK"
+      })
+      |> Dividendsomatic.Repo.insert!()
+
+      {:ok, _view, html} = live(conn, ~p"/data/gaps")
+
+      assert html =~ "Nordnet"
+      assert html =~ "IBKR"
+      assert html =~ "FI0009000202"
+    end
+
+    test "should show stock gap for stock with broken coverage", %{conn: conn} do
+      # Nordnet transaction (old)
+      %BrokerTransaction{}
+      |> BrokerTransaction.changeset(%{
+        broker: "nordnet",
+        transaction_type: "buy",
+        raw_type: "OSTO",
+        external_id: "gap_test_1",
+        trade_date: ~D[2017-03-06],
+        isin: "FI_GAP_TEST",
+        security_name: "GapStock"
+      })
+      |> Dividendsomatic.Repo.insert!()
+
+      # IBKR snapshot (recent)
+      {:ok, snapshot} =
+        %PortfolioSnapshot{}
+        |> PortfolioSnapshot.changeset(%{report_date: ~D[2026-01-28]})
+        |> Dividendsomatic.Repo.insert()
+
+      %Holding{}
+      |> Holding.changeset(%{
+        portfolio_snapshot_id: snapshot.id,
+        report_date: ~D[2026-01-28],
+        symbol: "GAP",
+        currency_primary: "EUR",
+        quantity: Decimal.new("50"),
+        mark_price: Decimal.new("10"),
+        position_value: Decimal.new("500"),
+        cost_basis_price: Decimal.new("8"),
+        cost_basis_money: Decimal.new("400"),
+        open_price: Decimal.new("8"),
+        percent_of_nav: Decimal.new("5"),
+        fx_rate_to_base: Decimal.new("1"),
+        isin: "FI_GAP_TEST",
+        listing_exchange: "HEX",
+        asset_class: "STK"
+      })
+      |> Dividendsomatic.Repo.insert!()
+
+      {:ok, _view, html} = live(conn, ~p"/data/gaps")
+
+      assert html =~ "GapStock" || html =~ "GAP"
+      assert html =~ "FI_GAP_TEST"
+    end
+  end
+end

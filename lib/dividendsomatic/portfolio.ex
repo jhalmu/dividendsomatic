@@ -6,7 +6,16 @@ defmodule Dividendsomatic.Portfolio do
   import Ecto.Query
   require Logger
 
-  alias Dividendsomatic.Portfolio.{CsvParser, Dividend, Holding, PortfolioSnapshot, SoldPosition}
+  alias Dividendsomatic.Portfolio.{
+    BrokerTransaction,
+    Cost,
+    CsvParser,
+    Dividend,
+    Holding,
+    PortfolioSnapshot,
+    SoldPosition
+  }
+
   alias Dividendsomatic.Repo
 
   ## Portfolio Snapshots
@@ -690,5 +699,280 @@ defmodule Dividendsomatic.Portfolio do
       hypothetical_value: what_if_value(current_prices),
       opportunity_cost: what_if_opportunity_cost(current_prices)
     }
+  end
+
+  ## Broker Transactions
+
+  @doc """
+  Creates a broker transaction.
+  """
+  def create_broker_transaction(attrs) do
+    %BrokerTransaction{}
+    |> BrokerTransaction.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Upserts a broker transaction (idempotent by broker + external_id).
+  """
+  def upsert_broker_transaction(attrs) do
+    %BrokerTransaction{}
+    |> BrokerTransaction.changeset(attrs)
+    |> Repo.insert(on_conflict: :nothing, conflict_target: [:broker, :external_id])
+  end
+
+  @doc """
+  Lists broker transactions with optional filters.
+  """
+  def list_broker_transactions(opts \\ []) do
+    query = BrokerTransaction |> order_by([t], desc: t.trade_date)
+
+    query =
+      case Keyword.get(opts, :broker) do
+        nil -> query
+        broker -> where(query, [t], t.broker == ^broker)
+      end
+
+    query =
+      case Keyword.get(opts, :type) do
+        nil -> query
+        type -> where(query, [t], t.transaction_type == ^type)
+      end
+
+    query =
+      case Keyword.get(opts, :isin) do
+        nil -> query
+        isin -> where(query, [t], t.isin == ^isin)
+      end
+
+    Repo.all(query)
+  end
+
+  ## Costs
+
+  @doc """
+  Creates a cost record.
+  """
+  def create_cost(attrs) do
+    %Cost{}
+    |> Cost.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Lists all costs.
+  """
+  def list_costs do
+    Cost
+    |> order_by([c], desc: c.date)
+    |> Repo.all()
+  end
+
+  @doc """
+  Lists costs by type.
+  """
+  def list_costs_by_type(cost_type) do
+    Cost
+    |> where([c], c.cost_type == ^cost_type)
+    |> order_by([c], desc: c.date)
+    |> Repo.all()
+  end
+
+  @doc """
+  Lists costs by symbol.
+  """
+  def list_costs_by_symbol(symbol) do
+    Cost
+    |> where([c], c.symbol == ^symbol)
+    |> order_by([c], desc: c.date)
+    |> Repo.all()
+  end
+
+  @doc """
+  Returns total costs grouped by type.
+  """
+  def total_costs_by_type do
+    Cost
+    |> group_by([c], c.cost_type)
+    |> select([c], {c.cost_type, sum(c.amount)})
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  @doc """
+  Returns a cost summary with totals.
+  """
+  def costs_summary do
+    by_type = total_costs_by_type()
+
+    total =
+      by_type
+      |> Map.values()
+      |> Enum.reduce(Decimal.new("0"), &Decimal.add/2)
+
+    %{by_type: by_type, total: total, count: Repo.aggregate(Cost, :count)}
+  end
+
+  ## Data Gaps Analysis
+
+  @doc """
+  Returns broker coverage data for gap analysis.
+  """
+  def broker_coverage do
+    nordnet_range =
+      BrokerTransaction
+      |> where([t], t.broker == "nordnet")
+      |> select([t], %{min_date: min(t.trade_date), max_date: max(t.trade_date), count: count()})
+      |> Repo.one()
+
+    ibkr_range =
+      PortfolioSnapshot
+      |> select([s], %{
+        min_date: min(s.report_date),
+        max_date: max(s.report_date),
+        count: count()
+      })
+      |> Repo.one()
+
+    %{nordnet: nordnet_range, ibkr: ibkr_range}
+  end
+
+  @doc """
+  Returns per-stock gap analysis.
+  Shows first/last dates per broker, and gap periods.
+  """
+  def stock_gaps(opts \\ []) do
+    current_only = Keyword.get(opts, :current_only, false)
+
+    nordnet_stocks = fetch_nordnet_stock_ranges()
+    ibkr_stocks = fetch_ibkr_stock_ranges()
+    current_isins = if current_only, do: current_holding_isins(), else: nil
+
+    gaps = merge_stock_gaps(nordnet_stocks, ibkr_stocks)
+
+    if current_isins do
+      Enum.filter(gaps, fn g -> MapSet.member?(current_isins, g.isin) end)
+    else
+      gaps
+    end
+  end
+
+  defp fetch_nordnet_stock_ranges do
+    BrokerTransaction
+    |> where([t], t.broker == "nordnet" and not is_nil(t.isin))
+    |> group_by([t], [t.isin, t.security_name])
+    |> select([t], %{
+      isin: t.isin,
+      name: t.security_name,
+      first_date: min(t.trade_date),
+      last_date: max(t.trade_date),
+      broker: "nordnet"
+    })
+    |> Repo.all()
+  end
+
+  defp fetch_ibkr_stock_ranges do
+    Holding
+    |> where([h], not is_nil(h.isin))
+    |> group_by([h], [h.isin, h.symbol])
+    |> select([h], %{
+      isin: h.isin,
+      name: h.symbol,
+      first_date: min(h.report_date),
+      last_date: max(h.report_date),
+      broker: "ibkr"
+    })
+    |> Repo.all()
+  end
+
+  defp current_holding_isins do
+    case get_latest_snapshot() do
+      nil ->
+        MapSet.new()
+
+      snapshot ->
+        snapshot.holdings
+        |> Enum.map(& &1.isin)
+        |> Enum.reject(&is_nil/1)
+        |> MapSet.new()
+    end
+  end
+
+  defp merge_stock_gaps(nordnet_stocks, ibkr_stocks) do
+    all_isins =
+      (Enum.map(nordnet_stocks, & &1.isin) ++ Enum.map(ibkr_stocks, & &1.isin))
+      |> Enum.uniq()
+
+    nordnet_map = Map.new(nordnet_stocks, &{&1.isin, &1})
+    ibkr_map = Map.new(ibkr_stocks, &{&1.isin, &1})
+
+    all_isins
+    |> Enum.map(fn isin ->
+      nordnet = Map.get(nordnet_map, isin)
+      ibkr = Map.get(ibkr_map, isin)
+      name = (ibkr && ibkr.name) || (nordnet && nordnet.name) || "Unknown"
+      gap_days = compute_gap_days(nordnet, ibkr)
+
+      %{
+        isin: isin,
+        name: name,
+        nordnet: nordnet,
+        ibkr: ibkr,
+        gap_days: gap_days,
+        has_gap: gap_days > 0,
+        brokers: brokers_list(nordnet, ibkr)
+      }
+    end)
+    |> Enum.sort_by(& &1.name)
+  end
+
+  defp compute_gap_days(nil, _ibkr), do: 0
+  defp compute_gap_days(_nordnet, nil), do: 0
+
+  defp compute_gap_days(nordnet, ibkr) do
+    # Gap = time between Nordnet last date and IBKR first date
+    gap = Date.diff(ibkr.first_date, nordnet.last_date)
+    max(gap, 0)
+  end
+
+  defp brokers_list(nordnet, ibkr) do
+    []
+    |> then(fn l -> if nordnet, do: ["nordnet" | l], else: l end)
+    |> then(fn l -> if ibkr, do: ["ibkr" | l], else: l end)
+  end
+
+  @doc """
+  Returns dividend coverage gaps for stocks.
+  """
+  def dividend_gaps do
+    dividends =
+      Dividend
+      |> order_by([d], asc: d.ex_date)
+      |> Repo.all()
+
+    dividends
+    |> Enum.group_by(fn d -> d.isin || d.symbol end)
+    |> Enum.map(fn {key, divs} ->
+      sorted = Enum.sort_by(divs, & &1.ex_date, Date)
+
+      gaps =
+        sorted
+        |> Enum.chunk_every(2, 1, :discard)
+        |> Enum.filter(fn [a, b] -> Date.diff(b.ex_date, a.ex_date) > 400 end)
+        |> Enum.map(fn [a, b] ->
+          %{from: a.ex_date, to: b.ex_date, days: Date.diff(b.ex_date, a.ex_date)}
+        end)
+
+      %{
+        key: key,
+        symbol: hd(sorted).symbol,
+        first_dividend: hd(sorted).ex_date,
+        last_dividend: List.last(sorted).ex_date,
+        count: length(sorted),
+        gaps: gaps
+      }
+    end)
+    |> Enum.filter(fn d -> d.gaps != [] end)
+    |> Enum.sort_by(& &1.symbol)
   end
 end

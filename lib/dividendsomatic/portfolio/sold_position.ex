@@ -22,12 +22,14 @@ defmodule Dividendsomatic.Portfolio.SoldPosition do
     field :currency, :string, default: "EUR"
     field :realized_pnl, :decimal
     field :notes, :string
+    field :isin, :string
+    field :source, :string
 
     timestamps()
   end
 
   @required_fields [:symbol, :quantity, :purchase_price, :purchase_date, :sale_price, :sale_date]
-  @optional_fields [:description, :currency, :realized_pnl, :notes]
+  @optional_fields [:description, :currency, :realized_pnl, :notes, :isin, :source]
 
   @doc false
   def changeset(sold_position, attrs) do

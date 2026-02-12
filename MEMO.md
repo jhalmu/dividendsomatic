@@ -43,10 +43,13 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.9.0 (Finnhub Financial Metrics + Sector Badges)
-**Status:** Phase 1-4 + 5B complete + financial metrics + market sentiment history
+**Version:** 0.10.0 (Nordnet CSV Import + Costs System + Data Gaps)
+**Status:** Phase 1-4 + 5B complete + Nordnet import + financial metrics + market sentiment history
 
 **Implemented (cumulative):**
+- **Nordnet CSV Import** - Full Nordnet CSV pipeline (NordnetCsvParser, BrokerTransaction, processors for dividends/sold positions/costs, `mix import.nordnet` task)
+- **Costs System** - Commission, withholding tax, loan interest tracking from broker transactions
+- **Data Gaps Page** - Broker coverage timeline, per-stock gap analysis, dividend coverage gaps
 - **Phase 5B: Costs, Cash Flows & Short Positions** - Enhanced cost basis, cost basis chart line, FX exposure, realized P&L table, cash flow summary, short position support
 - **Phase 2: Company Notes** - Editable investment thesis & notes per stock (ISIN-keyed)
 - **Phase 3: Dividend Analytics** - Yield, yield-on-cost, YoY growth, frequency detection, dividend chart
@@ -84,7 +87,7 @@ mix ecto.reset              # Drop + create + migrate
 - **Sector/industry badges** on stock detail pages (WCAG AA compliant)
 - Rule of 72 calculator (interactive rate input, doubling milestones, exact vs approximation)
 - Dividend income fix (lookback snapshot for pre-year holdings)
-- WCAG AA accessible (286 tests, 13 Playwright a11y/E2E tests)
+- WCAG AA accessible (348 tests, 13 Playwright a11y/E2E tests)
 
 **Next priorities (from development plan):**
 - ~~Phase 4: Rule of 72 calculator~~ ✅
@@ -95,6 +98,29 @@ mix ecto.reset              # Drop + create + migrate
 - Production deployment
 - Gmail OAuth setup (env vars needed, see GMAIL_OAUTH_SETUP.md)
 - Finnhub API key setup (env vars needed)
+
+---
+
+## 2026-02-12 - Nordnet CSV Import, Costs System & Data Gaps Page
+
+### Session Summary
+
+Full Nordnet CSV import pipeline with transaction parsing, broker_transactions table, derived dividends/sold positions/costs via processors, `mix import.nordnet` task, and Data Gaps analysis page. 62 new tests (348 total), 0 failures, Credo clean.
+
+### Features
+1. **NordnetCsvParser** - Tab-separated CSV parser for Nordnet transaction exports (Finnish column names, comma decimals)
+2. **BrokerTransaction schema** - Unified broker transaction storage with upsert (idempotent by broker+external_id)
+3. **DividendProcessor** - Derives dividend records from OSINKO transactions, cross-broker dedup by ISIN+date
+4. **SoldPositionProcessor** - Derives sold positions from MYYNTI transactions, back-calculates purchase price from P&L
+5. **CostProcessor** - Extracts commissions, withholding taxes, loan interest as cost records
+6. **mix import.nordnet** - Mix task for importing Nordnet CSV files (single file or directory)
+7. **Data Gaps Page** (/data/gaps) - Broker coverage timeline, per-stock gap analysis, dividend coverage gaps, current-holdings filter
+8. **ISIN fields** - Added isin column to dividends and sold_positions for cross-broker deduplication
+
+### Test Results
+- 348 tests, 0 failures (17 excluded)
+- 62 new tests across 8 test files
+- Credo --strict: 0 issues
 
 ---
 
@@ -591,6 +617,6 @@ mix import.csv flex.490027.PortfolioForWww.20260128.20260128.csv
 - [ ] Gmail integration needs OAuth env vars (`GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`)
 - [ ] Finnhub integration needs API key (`FINNHUB_API_KEY`)
 - [ ] No production deployment (Fly.io or similar)
-- [x] Test coverage: 286 tests + 9 Playwright E2E, 0 credo issues
+- [x] Test coverage: 348 tests + 9 Playwright E2E, 0 credo issues
 
 ---

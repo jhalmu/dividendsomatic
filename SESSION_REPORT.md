@@ -1,3 +1,98 @@
+# Session Report - 2026-02-12 (evening)
+
+## Summary
+Nordnet CSV Import pipeline, Costs System, Data Gaps Page. 6 phases implemented with 62 new tests (348 total, 0 failures, 0 credo issues).
+
+## Features Implemented
+
+**Feature 1: Nordnet CSV Parser**
+- Created `NordnetCsvParser` for tab-separated Nordnet transaction exports
+- Handles Finnish column names (Tapahtumatyyppi, Arvopaperi, ISIN, etc.)
+- Comma decimal parsing (e.g., "10,50" -> Decimal)
+- Maps Nordnet transaction types (OSTO->buy, MYYNTI->sell, OSINKO->dividend, etc.)
+- Generates deterministic external_id for idempotent upsert
+
+**Feature 2: Broker Transaction Schema**
+- Created `broker_transactions` table with migration
+- Fields: broker, external_id, transaction_type, raw_type, trade_date, settlement_date, isin, security_name, quantity, price, amount, result, currency, confirmation_number, commission
+- Unique index on (broker, external_id) for idempotent imports
+
+**Feature 3: Derived Data Processors**
+- `DividendProcessor` - Creates dividend records from OSINKO transactions, cross-broker dedup by ISIN+date
+- `SoldPositionProcessor` - Creates sold positions from MYYNTI transactions, back-calculates purchase price from P&L, FIFO purchase date
+- `CostProcessor` - Extracts commissions, withholding taxes, loan interest as cost records
+
+**Feature 4: Costs Schema & Context**
+- Created `costs` table with migration (date, amount, currency, cost_type, symbol, isin, broker, description)
+- Context functions: create_cost, list_costs, list_costs_by_type, list_costs_by_symbol, total_costs_by_type, costs_summary
+
+**Feature 5: mix import.nordnet Task**
+- Single file or directory import (default: csv_data/nordnet/)
+- Parses CSV -> upserts transactions -> runs all processors
+- Prints summary with counts
+
+**Feature 6: Data Gaps Page (/data/gaps)**
+- Broker coverage timeline (Nordnet vs IBKR date ranges)
+- Per-stock gap analysis (merged by ISIN, gap days calculated)
+- Dividend coverage gaps (>400 day intervals between payments)
+- Toggle filter for current holdings only
+- ISIN fields added to dividends and sold_positions tables
+
+## Key Fixes (Credo)
+- `sold_position_processor.ex` - Extracted `do_insert_sold_position/1`, `build_and_insert_sold_position/3`, `zero?/1`
+- `dividend_processor.ex` - Replaced nested if with cond, extracted `do_insert_dividend/2`
+- `portfolio.ex` - Extracted `fetch_nordnet_stock_ranges/0`, `fetch_ibkr_stock_ranges/0`, `current_holding_isins/0`, `merge_stock_gaps/2`
+- `import_nordnet.ex` - Extracted `import_files/1`
+- `import_nordnet_test.exs` - Aliased `Mix.Tasks.Import.Nordnet` as `ImportNordnet`
+- `data_gaps_live_test.exs` - Prefixed unused `view` with `_`
+
+## Tests (286 -> 348)
+- 14 NordnetCsvParser tests (parsing, field mapping, edge cases)
+- 6 BrokerTransaction schema tests
+- 10 processor tests (DividendProcessor, SoldPositionProcessor, CostProcessor)
+- 6 Cost schema tests
+- 2 full import pipeline tests (end-to-end, idempotency)
+- 5 Data Gaps LiveView tests
+- 10 portfolio context tests (stock_gaps, broker_coverage, dividend_gaps)
+- 9 other supporting tests
+
+## Files Created
+- `lib/dividendsomatic/portfolio/nordnet_csv_parser.ex`
+- `lib/dividendsomatic/portfolio/broker_transaction.ex`
+- `lib/dividendsomatic/portfolio/cost.ex`
+- `lib/dividendsomatic/portfolio/processors/dividend_processor.ex`
+- `lib/dividendsomatic/portfolio/processors/sold_position_processor.ex`
+- `lib/dividendsomatic/portfolio/processors/cost_processor.ex`
+- `lib/dividendsomatic_web/live/data_gaps_live.ex`
+- `lib/dividendsomatic_web/live/data_gaps_live.html.heex`
+- `lib/mix/tasks/import_nordnet.ex`
+- `priv/repo/migrations/20260212160000_create_broker_transactions.exs`
+- `priv/repo/migrations/20260212160001_create_costs.exs`
+- `priv/repo/migrations/20260212160002_add_isin_to_dividends_and_sold_positions.exs`
+- `test/dividendsomatic/portfolio/nordnet_csv_parser_test.exs`
+- `test/dividendsomatic/portfolio/broker_transaction_test.exs`
+- `test/dividendsomatic/portfolio/cost_test.exs`
+- `test/dividendsomatic/portfolio/processors/dividend_processor_test.exs`
+- `test/dividendsomatic/portfolio/processors/sold_position_processor_test.exs`
+- `test/dividendsomatic/portfolio/processors/cost_processor_test.exs`
+- `test/dividendsomatic/import_nordnet_test.exs`
+- `test/dividendsomatic/portfolio_nordnet_test.exs`
+- `test/dividendsomatic_web/live/data_gaps_live_test.exs`
+
+## Files Modified
+- `lib/dividendsomatic/portfolio.ex` - Broker transaction, cost, and data gaps context functions
+- `lib/dividendsomatic/portfolio/dividend.ex` - Added isin field
+- `lib/dividendsomatic/portfolio/sold_position.ex` - Added isin field
+- `lib/dividendsomatic_web/live/portfolio_live.ex` - Data gaps nav link
+- `lib/dividendsomatic_web/live/portfolio_live.html.heex` - Data gaps nav link
+- `lib/dividendsomatic_web/live/stock_live.html.heex` - Minor updates
+- `lib/dividendsomatic_web/router.ex` - /data/gaps route
+
+## Remaining Open Issues
+- #22 Multi-provider market data architecture (future)
+
+---
+
 # Session Report - 2026-02-12 (afternoon)
 
 ## Summary

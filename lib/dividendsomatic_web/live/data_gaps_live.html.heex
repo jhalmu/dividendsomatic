@@ -1,0 +1,304 @@
+<main class="terminal-theme terminal-grid" role="main">
+  <div class="max-w-[var(--content-max-width)] mx-auto px-[var(--space-sm)] sm:px-[var(--space-md)] lg:px-[var(--space-lg)] py-[var(--space-md)]">
+    <!-- Back Navigation -->
+    <div class="mb-[var(--space-md)]">
+      <.link navigate={~p"/"} class="terminal-back-link" aria-label="Back to portfolio">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="2"
+          stroke="currentColor"
+          class="w-3.5 h-3.5"
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+        </svg>
+        Portfolio
+      </.link>
+    </div>
+
+    <h1 class="terminal-stock-symbol mb-[var(--space-sm)]">Data Coverage</h1>
+    
+<!-- Broker Coverage Timeline -->
+    <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in">
+      <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+        Broker Timeline
+      </div>
+      <div class="mt-[var(--space-xs)]">
+        <%= if @coverage.nordnet && @coverage.nordnet.min_date do %>
+          <div
+            class="flex items-center gap-[var(--space-xs)] mb-[var(--space-xs)]"
+            style="font-family: var(--font-mono); font-size: 0.625rem;"
+          >
+            <span style="min-width: 60px; color: #10b981; font-weight: 600; text-transform: uppercase;">
+              Nordnet
+            </span>
+            <span style="color: var(--terminal-muted);">
+              {Date.to_string(@coverage.nordnet.min_date)} — {Date.to_string(
+                @coverage.nordnet.max_date
+              )}
+            </span>
+            <span style="color: var(--terminal-dim);">
+              ({@coverage.nordnet.count} transactions)
+            </span>
+          </div>
+        <% end %>
+        <%= if @coverage.ibkr && @coverage.ibkr.min_date do %>
+          <div
+            class="flex items-center gap-[var(--space-xs)] mb-[var(--space-xs)]"
+            style="font-family: var(--font-mono); font-size: 0.625rem;"
+          >
+            <span style="min-width: 60px; color: #60a5fa; font-weight: 600; text-transform: uppercase;">
+              IBKR
+            </span>
+            <span style="color: var(--terminal-muted);">
+              {Date.to_string(@coverage.ibkr.min_date)} — {Date.to_string(@coverage.ibkr.max_date)}
+            </span>
+            <span style="color: var(--terminal-dim);">
+              ({@coverage.ibkr.count} snapshots)
+            </span>
+          </div>
+        <% end %>
+        <!-- SVG Timeline Bar -->
+        <%= if @coverage.nordnet && @coverage.ibkr && @coverage.nordnet.min_date && @coverage.ibkr.max_date do %>
+          <div class="mt-[var(--space-xs)]">
+            <% timeline_start = @coverage.nordnet.min_date || @coverage.ibkr.min_date %>
+            <% timeline_end = @coverage.ibkr.max_date || @coverage.nordnet.max_date %>
+            <% total_days = max(Date.diff(timeline_end, timeline_start), 1) %>
+            <svg
+              width="100%"
+              height="48"
+              viewBox="0 0 800 48"
+              preserveAspectRatio="xMidYMid meet"
+              xmlns="http://www.w3.org/2000/svg"
+              style="font-family: 'JetBrains Mono', monospace;"
+            >
+              <!-- Background -->
+              <rect x="60" y="8" width="720" height="32" fill="#0f172a" rx="4" />
+              <!-- Nordnet bar -->
+              <% n_start =
+                Date.diff(@coverage.nordnet.min_date, timeline_start) / total_days * 720 %>
+              <% n_width =
+                Date.diff(@coverage.nordnet.max_date, @coverage.nordnet.min_date) / total_days *
+                  720 %>
+              <rect
+                x={60 + n_start}
+                y="10"
+                width={max(n_width, 2)}
+                height="12"
+                fill="#10b981"
+                rx="2"
+              />
+              <!-- IBKR bar -->
+              <% i_start = Date.diff(@coverage.ibkr.min_date, timeline_start) / total_days * 720 %>
+              <% i_width =
+                Date.diff(@coverage.ibkr.max_date, @coverage.ibkr.min_date) / total_days * 720 %>
+              <rect
+                x={60 + i_start}
+                y="26"
+                width={max(i_width, 2)}
+                height="12"
+                fill="#60a5fa"
+                rx="2"
+              />
+              <!-- Gap indicator -->
+              <%= if @coverage.nordnet.max_date && @coverage.ibkr.min_date do %>
+                <% gap_start =
+                  Date.diff(@coverage.nordnet.max_date, timeline_start) / total_days * 720 %>
+                <% gap_width =
+                  Date.diff(@coverage.ibkr.min_date, @coverage.nordnet.max_date) / total_days *
+                    720 %>
+                <%= if gap_width > 0 do %>
+                  <rect
+                    x={60 + gap_start}
+                    y="8"
+                    width={gap_width}
+                    height="32"
+                    fill="#ef4444"
+                    fill-opacity="0.15"
+                    rx="2"
+                  />
+                <% end %>
+              <% end %>
+              <!-- Labels -->
+              <text x="60" y="6" fill="#475569" font-size="7">
+                {Date.to_string(timeline_start)}
+              </text>
+              <text x="780" y="6" fill="#475569" font-size="7" text-anchor="end">
+                {Date.to_string(timeline_end)}
+              </text>
+            </svg>
+          </div>
+        <% end %>
+      </div>
+    </div>
+    
+<!-- Summary Stats -->
+    <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-1">
+      <div class="flex items-center justify-between">
+        <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+          Summary
+        </div>
+        <button
+          phx-click="toggle_filter"
+          class="btn btn-xs btn-outline"
+          style="font-family: var(--font-mono); font-size: 0.625rem;"
+        >
+          <%= if @current_only do %>
+            Show all stocks
+          <% else %>
+            Current holdings only
+          <% end %>
+        </button>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-[var(--space-xs)] mt-[var(--space-xs)]">
+        <div>
+          <div class="terminal-info-label">Total ISINs</div>
+          <div class="terminal-info-value" style="font-size: 1.25rem; font-weight: 600;">
+            {@summary.total_isins}
+          </div>
+        </div>
+        <div>
+          <div class="terminal-info-label">Both Brokers</div>
+          <div class="terminal-info-value gain">{@summary.both_brokers}</div>
+        </div>
+        <div>
+          <div class="terminal-info-label">With Gaps</div>
+          <div class={"terminal-info-value #{if @summary.with_gap > 0, do: "loss", else: "gain"}"}>
+            {@summary.with_gap}
+          </div>
+        </div>
+        <div>
+          <div class="terminal-info-label">Total Gap Days</div>
+          <div class={"terminal-info-value #{if @summary.total_gap_days > 0, do: "loss", else: ""}"}>
+            {@summary.total_gap_days}
+          </div>
+        </div>
+      </div>
+    </div>
+    
+<!-- Costs Summary -->
+    <%= if @costs_summary.count > 0 do %>
+      <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-2">
+        <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+          Cost Coverage
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)] mt-[var(--space-xs)]">
+          <%= for {type, total} <- @costs_summary.by_type do %>
+            <div>
+              <div class="terminal-info-label">{format_cost_type(type)}</div>
+              <div class="terminal-info-value loss">{format_euro_decimal(total)}</div>
+            </div>
+          <% end %>
+          <div>
+            <div class="terminal-info-label">Total Costs</div>
+            <div class="terminal-info-value loss" style="font-weight: 600;">
+              {format_euro_decimal(@costs_summary.total)}
+            </div>
+          </div>
+        </div>
+      </div>
+    <% end %>
+    
+<!-- Per-Stock Table -->
+    <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-2">
+      <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+        Per-Stock Coverage ({length(@stock_gaps)})
+      </div>
+      <div class="overflow-x-auto mt-[var(--space-xs)]">
+        <table class="terminal-table">
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">ISIN</th>
+              <th scope="col">Nordnet</th>
+              <th scope="col">IBKR</th>
+              <th scope="col" style="text-align: right;">Gap</th>
+            </tr>
+          </thead>
+          <tbody>
+            <%= for gap <- @stock_gaps do %>
+              <tr>
+                <td>
+                  <span style="font-weight: 500;">{gap.name}</span>
+                </td>
+                <td style="color: var(--terminal-dim); font-size: 0.625rem;">
+                  {gap.isin}
+                </td>
+                <td>
+                  <%= if gap.nordnet do %>
+                    <span style="color: #10b981; font-size: 0.625rem;">
+                      {Date.to_string(gap.nordnet.first_date)} — {Date.to_string(
+                        gap.nordnet.last_date
+                      )}
+                    </span>
+                  <% else %>
+                    <span style="color: var(--terminal-dim); font-size: 0.625rem;">—</span>
+                  <% end %>
+                </td>
+                <td>
+                  <%= if gap.ibkr do %>
+                    <span style="color: #60a5fa; font-size: 0.625rem;">
+                      {Date.to_string(gap.ibkr.first_date)} — {Date.to_string(gap.ibkr.last_date)}
+                    </span>
+                  <% else %>
+                    <span style="color: var(--terminal-dim); font-size: 0.625rem;">—</span>
+                  <% end %>
+                </td>
+                <td style="text-align: right;">
+                  <%= if gap.has_gap do %>
+                    <span class="loss" style="font-size: 0.625rem; font-weight: 500;">
+                      {gap.gap_days}d
+                    </span>
+                  <% else %>
+                    <span style="color: var(--terminal-dim); font-size: 0.625rem;">—</span>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    
+<!-- Dividend Gaps -->
+    <%= if length(@dividend_gaps) > 0 do %>
+      <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-3">
+        <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+          Dividend Gaps ({length(@dividend_gaps)} stocks)
+        </div>
+        <div class="overflow-x-auto mt-[var(--space-xs)]">
+          <table class="terminal-table">
+            <thead>
+              <tr>
+                <th scope="col">Stock</th>
+                <th scope="col">Dividends</th>
+                <th scope="col">Range</th>
+                <th scope="col">Missing Periods</th>
+              </tr>
+            </thead>
+            <tbody>
+              <%= for dg <- @dividend_gaps do %>
+                <tr>
+                  <td style="font-weight: 500;">{dg.symbol}</td>
+                  <td class="terminal-number">{dg.count}</td>
+                  <td style="color: var(--terminal-dim); font-size: 0.625rem;">
+                    {Date.to_string(dg.first_dividend)} — {Date.to_string(dg.last_dividend)}
+                  </td>
+                  <td>
+                    <%= for g <- dg.gaps do %>
+                      <span class="loss" style="font-size: 0.625rem;">
+                        {Date.to_string(g.from)} → {Date.to_string(g.to)} ({g.days}d)
+                      </span>
+                    <% end %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</main>

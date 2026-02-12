@@ -457,7 +457,10 @@
           <span class="ml-1.5">navigate</span>
         </div>
         <span class="sr-only">Use left and right arrow keys to navigate between snapshots</span>
-        <div>dividends-o-matic</div>
+        <div class="flex items-center gap-[var(--space-sm)]">
+          <.link navigate={~p"/data/gaps"} class="hover:underline">data coverage</.link>
+          <span>dividends-o-matic</span>
+        </div>
       </div>
     <% else %>
       <!-- Empty State -->

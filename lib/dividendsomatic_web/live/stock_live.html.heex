@@ -75,6 +75,18 @@
       </div>
     </div>
     
+<!-- Data Date -->
+    <div
+      class="text-center mb-[var(--space-xs)]"
+      style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-muted);"
+    >
+      <%= if @holding_stats do %>
+        Data as of {Date.to_string(@holding_stats.latest_date)}
+      <% else %>
+        <span style="visibility: hidden;">Data as of 0000-00-00</span>
+      <% end %>
+    </div>
+    
 <!-- Position Summary Card -->
     <%= if @holding_stats do %>
       <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-1">
@@ -89,9 +101,6 @@
                 SHORT
               </span>
             <% end %>
-          </div>
-          <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-muted);">
-            Data as of {Date.to_string(@holding_stats.latest_date)}
           </div>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)] mt-[var(--space-xs)]">

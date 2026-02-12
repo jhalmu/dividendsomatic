@@ -44,8 +44,14 @@ defmodule DividendsomaticWeb.PortfolioLive do
   def handle_params(%{"date" => date_string}, _uri, socket) do
     case Date.from_iso8601(date_string) do
       {:ok, date} ->
-        snapshot = Portfolio.get_snapshot_by_date(date)
-        {:noreply, assign_snapshot(socket, snapshot)}
+        # Skip reload if already on this date (from push_patch after navigate event)
+        if socket.assigns.current_snapshot &&
+             socket.assigns.current_snapshot.report_date == date do
+          {:noreply, socket}
+        else
+          snapshot = Portfolio.get_snapshot_by_date(date)
+          {:noreply, assign_snapshot(socket, snapshot)}
+        end
 
       _ ->
         {:noreply, socket}
@@ -61,7 +67,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     if socket.assigns.current_snapshot do
       date = socket.assigns.current_snapshot.report_date
       prev_snapshot = Portfolio.get_previous_snapshot(date)
-      {:noreply, assign_snapshot(socket, prev_snapshot)}
+      {:noreply, navigate_to_snapshot(socket, prev_snapshot)}
     else
       {:noreply, socket}
     end
@@ -71,7 +77,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     if socket.assigns.current_snapshot do
       date = socket.assigns.current_snapshot.report_date
       next_snapshot = Portfolio.get_next_snapshot(date)
-      {:noreply, assign_snapshot(socket, next_snapshot)}
+      {:noreply, navigate_to_snapshot(socket, next_snapshot)}
     else
       {:noreply, socket}
     end
@@ -81,7 +87,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     if socket.assigns.current_snapshot do
       date = socket.assigns.current_snapshot.report_date
       snapshot = Portfolio.get_snapshot_back(date, 3) || Portfolio.get_first_snapshot()
-      {:noreply, assign_snapshot(socket, snapshot)}
+      {:noreply, navigate_to_snapshot(socket, snapshot)}
     else
       {:noreply, socket}
     end
@@ -91,7 +97,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     if socket.assigns.current_snapshot do
       date = socket.assigns.current_snapshot.report_date
       snapshot = Portfolio.get_snapshot_forward(date, 3) || Portfolio.get_latest_snapshot()
-      {:noreply, assign_snapshot(socket, snapshot)}
+      {:noreply, navigate_to_snapshot(socket, snapshot)}
     else
       {:noreply, socket}
     end
@@ -99,12 +105,12 @@ defmodule DividendsomaticWeb.PortfolioLive do
 
   def handle_event("navigate", %{"direction" => "first"}, socket) do
     first_snapshot = Portfolio.get_first_snapshot()
-    {:noreply, assign_snapshot(socket, first_snapshot)}
+    {:noreply, navigate_to_snapshot(socket, first_snapshot)}
   end
 
   def handle_event("navigate", %{"direction" => "last"}, socket) do
     latest_snapshot = Portfolio.get_latest_snapshot()
-    {:noreply, assign_snapshot(socket, latest_snapshot)}
+    {:noreply, navigate_to_snapshot(socket, latest_snapshot)}
   end
 
   @impl true
@@ -279,6 +285,16 @@ defmodule DividendsomaticWeb.PortfolioLive do
       </button>
     </nav>
     """
+  end
+
+  defp navigate_to_snapshot(socket, nil), do: socket
+
+  defp navigate_to_snapshot(socket, snapshot) do
+    date = Date.to_string(snapshot.report_date)
+
+    socket
+    |> assign_snapshot(snapshot)
+    |> push_patch(to: "/portfolio/#{date}", replace: true)
   end
 
   defp assign_snapshot(socket, nil) do
