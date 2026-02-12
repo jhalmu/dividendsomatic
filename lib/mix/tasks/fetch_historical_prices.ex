@@ -1,0 +1,198 @@
+defmodule Mix.Tasks.Fetch.HistoricalPrices do
+  @moduledoc """
+  Fetch historical prices from Finnhub for portfolio reconstruction.
+
+  Usage:
+    mix fetch.historical_prices              # Full pipeline
+    mix fetch.historical_prices --resolve    # Only resolve ISIN→symbol mappings
+    mix fetch.historical_prices --dry-run    # Preview what would be fetched
+  """
+  use Mix.Task
+
+  import Ecto.Query
+
+  alias Dividendsomatic.Portfolio.BrokerTransaction
+  alias Dividendsomatic.Repo
+  alias Dividendsomatic.Stocks
+  alias Dividendsomatic.Stocks.SymbolMapper
+
+  @shortdoc "Fetch historical prices from Finnhub"
+
+  # Finnhub free tier: 60 calls/minute
+  @rate_limit_ms 1100
+
+  # Forex pairs needed for EUR conversion
+  @forex_pairs [
+    {"OANDA:EUR_USD", "USD"},
+    {"OANDA:EUR_SEK", "SEK"},
+    {"OANDA:EUR_NOK", "NOK"},
+    {"OANDA:EUR_GBP", "GBP"},
+    {"OANDA:EUR_JPY", "JPY"},
+    {"OANDA:EUR_HKD", "HKD"},
+    {"OANDA:EUR_CAD", "CAD"}
+  ]
+
+  def run(args) do
+    Mix.Task.run("app.start")
+
+    cond do
+      "--resolve" in args -> resolve_only()
+      "--dry-run" in args -> dry_run()
+      true -> full_pipeline()
+    end
+  end
+
+  defp resolve_only do
+    IO.puts("--- Resolving ISIN → Finnhub symbol mappings ---\n")
+    {resolved, unmappable, pending} = SymbolMapper.resolve_all()
+
+    IO.puts("  Resolved: #{resolved}")
+    IO.puts("  Unmappable: #{unmappable}")
+    IO.puts("  Pending: #{pending}")
+  end
+
+  defp dry_run do
+    IO.puts("--- Dry Run: Historical Price Fetch Plan ---\n")
+
+    {resolved, unmappable, pending} = SymbolMapper.resolve_all()
+
+    IO.puts(
+      "Symbol resolution: #{resolved} resolved, #{unmappable} unmappable, #{pending} pending\n"
+    )
+
+    mappings = SymbolMapper.list_resolved()
+    date_ranges = build_date_ranges()
+
+    IO.puts("Stocks to fetch (#{length(mappings)}):")
+
+    Enum.each(mappings, fn mapping ->
+      range = Map.get(date_ranges, mapping.isin)
+
+      if range do
+        existing = Stocks.count_historical_prices(mapping.finnhub_symbol)
+
+        IO.puts(
+          "  #{mapping.finnhub_symbol} (#{mapping.isin}) #{range.first_date}..#{range.last_date} [#{existing} existing]"
+        )
+      end
+    end)
+
+    currencies = currencies_in_use()
+    needed_fx = Enum.filter(@forex_pairs, fn {_pair, currency} -> currency in currencies end)
+
+    IO.puts("\nForex pairs to fetch (#{length(needed_fx)}):")
+    Enum.each(needed_fx, fn {pair, currency} -> IO.puts("  #{pair} (#{currency})") end)
+
+    total_calls = length(mappings) + length(needed_fx)
+
+    IO.puts(
+      "\nEstimated API calls: #{total_calls} (~#{div(total_calls * @rate_limit_ms, 60_000) + 1} min)"
+    )
+  end
+
+  defp full_pipeline do
+    IO.puts("--- Historical Price Fetch Pipeline ---\n")
+
+    # Step 1: Resolve symbols
+    IO.puts("Step 1: Resolving ISIN → Finnhub symbols...")
+    {resolved, unmappable, pending} = SymbolMapper.resolve_all()
+    IO.puts("  #{resolved} resolved, #{unmappable} unmappable, #{pending} pending\n")
+
+    # Step 2: Fetch stock candles
+    mappings = SymbolMapper.list_resolved()
+    date_ranges = build_date_ranges()
+
+    IO.puts("Step 2: Fetching stock candles (#{length(mappings)} symbols)...")
+
+    stock_results =
+      Enum.reduce(mappings, {0, 0}, fn mapping, acc ->
+        fetch_stock_candle(mapping, date_ranges, acc)
+      end)
+
+    IO.puts(
+      "  Stock candles: #{elem(stock_results, 0)} succeeded, #{elem(stock_results, 1)} failed\n"
+    )
+
+    # Step 3: Fetch forex rates
+    currencies = currencies_in_use()
+    needed_fx = Enum.filter(@forex_pairs, fn {_pair, currency} -> currency in currencies end)
+    {global_from, global_to} = global_date_range()
+
+    IO.puts("Step 3: Fetching forex rates (#{length(needed_fx)} pairs)...")
+
+    if global_from do
+      Enum.each(needed_fx, &fetch_forex_pair(&1, global_from, global_to))
+    else
+      IO.puts("  No date range found, skipping forex")
+    end
+
+    IO.puts("\n--- Done ---")
+  end
+
+  defp fetch_forex_pair({pair, currency}, global_from, global_to) do
+    IO.write("  #{pair} (#{currency})...")
+    Process.sleep(@rate_limit_ms)
+
+    case Stocks.fetch_forex_candles(pair, global_from, global_to) do
+      {:ok, count} -> IO.puts(" #{count} records")
+      {:error, reason} -> IO.puts(" ERROR: #{inspect(reason)}")
+    end
+  end
+
+  defp fetch_stock_candle(mapping, date_ranges, {success, fail}) do
+    case Map.get(date_ranges, mapping.isin) do
+      nil ->
+        {success, fail}
+
+      range ->
+        IO.write("  #{mapping.finnhub_symbol}...")
+        Process.sleep(@rate_limit_ms)
+
+        case Stocks.fetch_historical_candles(
+               mapping.finnhub_symbol,
+               range.first_date,
+               range.last_date,
+               isin: mapping.isin
+             ) do
+          {:ok, count} ->
+            IO.puts(" #{count} records")
+            {success + 1, fail}
+
+          {:error, reason} ->
+            IO.puts(" ERROR: #{inspect(reason)}")
+            {success, fail + 1}
+        end
+    end
+  end
+
+  # Build a map of ISIN → %{first_date, last_date} from broker_transactions
+  defp build_date_ranges do
+    BrokerTransaction
+    |> where([t], not is_nil(t.isin) and t.transaction_type in ["buy", "sell"])
+    |> group_by([t], t.isin)
+    |> select([t], {t.isin, %{first_date: min(t.trade_date), last_date: max(t.trade_date)}})
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  # Get the global date range across all transactions
+  defp global_date_range do
+    result =
+      BrokerTransaction
+      |> where([t], t.transaction_type in ["buy", "sell"])
+      |> select([t], %{min_date: min(t.trade_date), max_date: max(t.trade_date)})
+      |> Repo.one()
+
+    {result.min_date, result.max_date}
+  end
+
+  # Get distinct currencies used in broker transactions
+  defp currencies_in_use do
+    BrokerTransaction
+    |> where([t], not is_nil(t.currency))
+    |> distinct(true)
+    |> select([t], t.currency)
+    |> Repo.all()
+    |> Enum.reject(&(&1 == "EUR"))
+  end
+end

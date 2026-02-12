@@ -1,9 +1,9 @@
 defmodule Dividendsomatic.Portfolio.Processors.SoldPositionProcessor do
   @moduledoc """
-  Derives sold position records from Nordnet MYYNTI (sell) transactions.
+  Derives sold position records from broker sell transactions.
 
-  Back-calculates purchase price from Nordnet's P&L data.
-  Finds earliest matching buy (OSTO) by ISIN for purchase date (FIFO).
+  Nordnet: back-calculates purchase price from P&L data, finds earliest buy by ISIN.
+  IBKR: finds earliest buy by security name (matching company name), uses buy price.
   """
 
   import Ecto.Query
@@ -13,13 +13,13 @@ defmodule Dividendsomatic.Portfolio.Processors.SoldPositionProcessor do
   alias Dividendsomatic.Repo
 
   @doc """
-  Processes all Nordnet sell transactions and inserts into sold_positions table.
+  Processes all sell transactions and inserts into sold_positions table.
   Returns `{:ok, count}` with the number of new sold positions created.
   """
   def process do
     sell_txns =
       BrokerTransaction
-      |> where([t], t.transaction_type == "sell" and t.broker == "nordnet")
+      |> where([t], t.transaction_type == "sell")
       |> order_by([t], asc: t.trade_date)
       |> Repo.all()
 
@@ -42,16 +42,35 @@ defmodule Dividendsomatic.Portfolio.Processors.SoldPositionProcessor do
     if zero?(quantity) || zero?(sale_price) do
       :skipped
     else
-      build_and_insert_sold_position(txn, quantity, sale_price)
+      build_and_insert(txn, quantity, sale_price)
     end
   end
 
-  defp build_and_insert_sold_position(txn, quantity, sale_price) do
+  # Nordnet: has P&L (result) and ISIN on sell transactions
+  defp build_and_insert(%{broker: "nordnet"} = txn, quantity, sale_price) do
     purchase_price = back_calculate_purchase_price(sale_price, txn.result, quantity)
-    purchase_date = find_purchase_date(txn.isin)
+    purchase_date = find_nordnet_purchase_date(txn.isin)
+
+    insert_position(txn, quantity, sale_price, purchase_price, purchase_date)
+  end
+
+  # IBKR: no P&L, no ISIN on sells — find earliest buy by company name
+  defp build_and_insert(%{broker: "ibkr"} = txn, quantity, sale_price) do
+    {purchase_date, purchase_price} = find_ibkr_purchase(txn.security_name)
+    purchase_price = purchase_price || sale_price
+
+    insert_position(txn, quantity, sale_price, purchase_price, purchase_date)
+  end
+
+  defp build_and_insert(txn, quantity, sale_price) do
+    insert_position(txn, quantity, sale_price, sale_price, nil)
+  end
+
+  defp insert_position(txn, quantity, sale_price, purchase_price, purchase_date) do
+    symbol = ibkr_symbol(txn) || txn.security_name
 
     attrs = %{
-      symbol: txn.security_name,
+      symbol: symbol,
       quantity: quantity,
       purchase_price: purchase_price,
       purchase_date: purchase_date || txn.trade_date,
@@ -60,8 +79,8 @@ defmodule Dividendsomatic.Portfolio.Processors.SoldPositionProcessor do
       currency: txn.currency || "EUR",
       realized_pnl: txn.result,
       isin: txn.isin,
-      source: "nordnet",
-      notes: "Imported from Nordnet"
+      source: txn.broker,
+      notes: "Imported from #{txn.broker}"
     }
 
     case %SoldPosition{} |> SoldPosition.changeset(attrs) |> Repo.insert() do
@@ -72,24 +91,23 @@ defmodule Dividendsomatic.Portfolio.Processors.SoldPositionProcessor do
 
   defp zero?(decimal), do: Decimal.compare(decimal, Decimal.new("0")) == :eq
 
-  # purchase_price = sale_price - (result / quantity)
+  # Nordnet: purchase_price = sale_price - (result / quantity)
   defp back_calculate_purchase_price(sale_price, nil, _quantity), do: sale_price
 
   defp back_calculate_purchase_price(sale_price, result, quantity) do
     if Decimal.compare(quantity, Decimal.new("0")) != :eq do
       per_share_pnl = Decimal.div(result, quantity)
       price = Decimal.sub(sale_price, per_share_pnl)
-      # Ensure positive purchase price
       if Decimal.compare(price, Decimal.new("0")) == :gt, do: price, else: sale_price
     else
       sale_price
     end
   end
 
-  # Find earliest buy transaction for this ISIN (FIFO)
-  defp find_purchase_date(nil), do: nil
+  # Find earliest Nordnet buy by ISIN (FIFO)
+  defp find_nordnet_purchase_date(nil), do: nil
 
-  defp find_purchase_date(isin) do
+  defp find_nordnet_purchase_date(isin) do
     BrokerTransaction
     |> where([t], t.transaction_type == "buy" and t.isin == ^isin and t.broker == "nordnet")
     |> order_by([t], asc: t.trade_date)
@@ -98,11 +116,57 @@ defmodule Dividendsomatic.Portfolio.Processors.SoldPositionProcessor do
     |> Repo.one()
   end
 
-  defp sold_position_exists?(txn) do
-    # Check by ISIN + sale_date + quantity
-    if txn.isin do
-      quantity = Decimal.abs(txn.quantity || Decimal.new("0"))
+  # Find earliest IBKR buy by company name, falling back to ticker symbol.
+  # CSV-parsed buys have company names as security_name; PDF-parsed buys have tickers.
+  # Tries company name first, then ticker from raw_data["symbol"].
+  defp find_ibkr_purchase(nil), do: {nil, nil}
 
+  defp find_ibkr_purchase(security_name) do
+    # Try matching by security_name (company name for CSV, ticker for PDF)
+    result = find_ibkr_buy_by_field(:security_name, security_name)
+
+    # Fallback: try matching by ticker stored in raw_data->symbol
+    result = result || find_ibkr_buy_by_symbol(security_name)
+
+    result || {nil, nil}
+  end
+
+  defp find_ibkr_buy_by_field(field, value) do
+    BrokerTransaction
+    |> where(
+      [t],
+      t.broker == "ibkr" and t.transaction_type == "buy" and field(t, ^field) == ^value
+    )
+    |> order_by([t], asc: t.trade_date)
+    |> limit(1)
+    |> select([t], {t.trade_date, t.price})
+    |> Repo.one()
+  end
+
+  defp find_ibkr_buy_by_symbol(security_name) do
+    BrokerTransaction
+    |> where(
+      [t],
+      t.broker == "ibkr" and t.transaction_type == "buy" and
+        fragment("?->>'symbol' = ?", t.raw_data, ^security_name)
+    )
+    |> order_by([t], asc: t.trade_date)
+    |> limit(1)
+    |> select([t], {t.trade_date, t.price})
+    |> Repo.one()
+  end
+
+  # For IBKR, prefer ticker symbol from raw_data over full company name
+  defp ibkr_symbol(%{broker: "ibkr", raw_data: %{"symbol" => symbol}}) when is_binary(symbol),
+    do: symbol
+
+  defp ibkr_symbol(_), do: nil
+
+  defp sold_position_exists?(txn) do
+    symbol = ibkr_symbol(txn) || txn.security_name
+    quantity = Decimal.abs(txn.quantity || Decimal.new("0"))
+
+    if txn.isin do
       SoldPosition
       |> where(
         [s],
@@ -111,7 +175,10 @@ defmodule Dividendsomatic.Portfolio.Processors.SoldPositionProcessor do
       |> Repo.exists?()
     else
       SoldPosition
-      |> where([s], s.symbol == ^txn.security_name and s.sale_date == ^txn.trade_date)
+      |> where(
+        [s],
+        s.symbol == ^symbol and s.sale_date == ^txn.trade_date and s.quantity == ^quantity
+      )
       |> Repo.exists?()
     end
   end

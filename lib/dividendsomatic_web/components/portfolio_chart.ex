@@ -82,6 +82,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
       [
         svg_defs(false),
         svg_grid(mt, main_h, y_lo, y_range),
+        svg_era_gap_indicator(chart_data, x_fn, mt, main_h),
         svg_area_fill(chart_data, x_fn, y_fn, chart_bottom),
         div_overlay,
         svg_line(chart_data, :cost_basis_float, x_fn, y_fn, "#3b82f6", "1", "6 3"),
@@ -148,33 +149,66 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
   end
 
   defp svg_area_fill(chart_data, x_fn, y_fn, bottom_y) do
-    n = length(chart_data)
+    chart_data
+    |> split_at_gaps()
+    |> Enum.map_join("\n", &svg_area_segment(&1, x_fn, y_fn, bottom_y))
+  end
+
+  defp svg_area_segment(segment, x_fn, y_fn, bottom_y) do
+    indexed = Enum.map(segment, fn {point, idx} -> {idx, point} end)
 
     points =
-      chart_data
-      |> Enum.with_index()
-      |> Enum.map(fn {p, i} ->
+      Enum.map(indexed, fn {i, p} ->
         "#{r(x_fn.(i))},#{r(y_fn.(p.value_float))}"
       end)
 
-    first_x = r(x_fn.(0))
-    last_x = r(x_fn.(n - 1))
+    {first_idx, _} = hd(indexed)
+    {last_idx, _} = List.last(indexed)
+    first_x = r(x_fn.(first_idx))
+    last_x = r(x_fn.(last_idx))
 
     d = "M#{first_x},#{bottom_y} L#{Enum.join(points, " L")} L#{last_x},#{bottom_y} Z"
     ~s[<path d="#{d}" fill="url(#val-area)"/>]
   end
 
-  defp svg_line(chart_data, field, x_fn, y_fn, color, width, dash) do
-    d =
-      chart_data
-      |> Enum.with_index()
-      |> Enum.map_join(" ", fn {p, i} ->
-        x = r(x_fn.(i))
-        y = r(y_fn.(Map.get(p, field)))
-        if i == 0, do: "M#{x} #{y}", else: "L#{x} #{y}"
-      end)
+  # Split chart data into segments, breaking at gaps > 180 days
+  defp split_at_gaps(chart_data) do
+    chart_data
+    |> Enum.with_index()
+    |> Enum.chunk_while([], &chunk_by_gap/2, &flush_chunk/1)
+    |> Enum.reject(&(&1 == []))
+  end
 
+  defp chunk_by_gap(item, []), do: {:cont, [item]}
+
+  defp chunk_by_gap({point, _idx} = item, [{prev_point, _} | _] = acc) do
+    if Date.diff(point.date, prev_point.date) > 180 do
+      {:cont, Enum.reverse(acc), [item]}
+    else
+      {:cont, [item | acc]}
+    end
+  end
+
+  defp flush_chunk([]), do: {:cont, []}
+  defp flush_chunk(acc), do: {:cont, Enum.reverse(acc), []}
+
+  defp svg_line(chart_data, field, x_fn, y_fn, color, width, dash) do
     dash_attr = if dash, do: ~s[ stroke-dasharray="#{dash}" opacity="0.6"], else: ""
+
+    chart_data
+    |> split_at_gaps()
+    |> Enum.map_join("\n", &svg_line_segment(&1, field, x_fn, y_fn, color, width, dash_attr))
+  end
+
+  defp svg_line_segment(segment, field, x_fn, y_fn, color, width, dash_attr) do
+    d =
+      segment
+      |> Enum.with_index()
+      |> Enum.map_join(" ", fn {{p, orig_idx}, seg_idx} ->
+        x = r(x_fn.(orig_idx))
+        y = r(y_fn.(Map.get(p, field)))
+        if seg_idx == 0, do: "M#{x} #{y}", else: "L#{x} #{y}"
+      end)
 
     ~s[<path d="#{d}" fill="none" stroke="#{color}" stroke-width="#{width}" stroke-linejoin="round"#{dash_attr}/>]
   end
@@ -201,11 +235,20 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     count = min(6, n)
     step = max(div(n - 1, count), 1)
 
+    # Use year-month format for wide ranges (>365 days), day format for narrow
+    first_date = hd(chart_data).date
+    last_date = List.last(chart_data).date
+    wide_range = Date.diff(last_date, first_date) > 365
+
     for i <- 0..count, idx = min(i * step, n - 1), reduce: [] do
       acc ->
         point = Enum.at(chart_data, idx)
         lx = r(x_fn.(idx))
-        date_str = Calendar.strftime(point.date, "%b %d")
+
+        date_str =
+          if wide_range,
+            do: Calendar.strftime(point.date, "%b %Y"),
+            else: Calendar.strftime(point.date, "%b %d")
 
         [
           ~s[<text x="#{lx}" y="#{r(label_y)}" fill="#475569" font-size="8" text-anchor="middle">#{date_str}</text>]
@@ -367,6 +410,32 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
       end)
 
     ~s[<path d="#{d}" fill="none" stroke="#eab308" stroke-width="0.5" stroke-linejoin="round"/>]
+  end
+
+  # Era gap indicator: shows "NO DATA" label in gaps between data segments
+  defp svg_era_gap_indicator(chart_data, x_fn, mt, main_h) do
+    segments = split_at_gaps(chart_data)
+
+    if length(segments) > 1 do
+      segments
+      |> Enum.chunk_every(2, 1, :discard)
+      |> Enum.map_join("\n", fn [seg_a, seg_b] ->
+        {_, last_idx} = List.last(seg_a)
+        {_, first_idx} = hd(seg_b)
+        mid_x = r((x_fn.(last_idx) + x_fn.(first_idx)) / 2)
+        mid_y = r(mt + main_h / 2)
+        left_x = r(x_fn.(last_idx))
+        right_x = r(x_fn.(first_idx))
+
+        """
+        <line x1="#{left_x}" y1="#{mt}" x2="#{left_x}" y2="#{r(mt + main_h)}" stroke="#334155" stroke-width="1" stroke-dasharray="4 4" opacity="0.4"/>
+        <line x1="#{right_x}" y1="#{mt}" x2="#{right_x}" y2="#{r(mt + main_h)}" stroke="#334155" stroke-width="1" stroke-dasharray="4 4" opacity="0.4"/>
+        <text x="#{mid_x}" y="#{mid_y}" fill="#475569" font-size="8" text-anchor="middle" opacity="0.6">NO DATA</text>
+        """
+      end)
+    else
+      ""
+    end
   end
 
   # --- Helpers ---

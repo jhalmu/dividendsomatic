@@ -1,9 +1,10 @@
 defmodule Dividendsomatic.Portfolio.Processors.CostProcessor do
   @moduledoc """
-  Extracts cost records from Nordnet broker transactions.
+  Extracts cost records from broker transactions.
 
   Handles commissions (from buy/sell), withholding tax, foreign tax,
   loan interest, and capital interest. All amounts stored as positive.
+  Supports both Nordnet and IBKR brokers.
   """
 
   import Ecto.Query
@@ -21,7 +22,7 @@ defmodule Dividendsomatic.Portfolio.Processors.CostProcessor do
   }
 
   @doc """
-  Processes all Nordnet transactions and extracts costs.
+  Processes all broker transactions and extracts costs.
   Returns `{:ok, count}` with the number of new costs created.
   """
   def process do
@@ -38,8 +39,7 @@ defmodule Dividendsomatic.Portfolio.Processors.CostProcessor do
     BrokerTransaction
     |> where(
       [t],
-      t.broker == "nordnet" and t.transaction_type in ["buy", "sell"] and
-        not is_nil(t.commission)
+      t.transaction_type in ["buy", "sell"] and not is_nil(t.commission)
     )
     |> Repo.all()
     |> Enum.map(fn txn ->
@@ -58,7 +58,7 @@ defmodule Dividendsomatic.Portfolio.Processors.CostProcessor do
     types = Map.keys(@cost_type_map)
 
     BrokerTransaction
-    |> where([t], t.broker == "nordnet" and t.transaction_type in ^types)
+    |> where([t], t.transaction_type in ^types)
     |> Repo.all()
     |> Enum.map(fn txn ->
       cost_type = Map.get(@cost_type_map, txn.transaction_type)
@@ -76,15 +76,18 @@ defmodule Dividendsomatic.Portfolio.Processors.CostProcessor do
     if cost_exists?(txn) do
       :skipped
     else
+      # IBKR amounts are already in EUR (base currency) regardless of Price Currency
+      currency = if txn.broker == "ibkr", do: "EUR", else: txn.currency || "EUR"
+
       attrs = %{
         cost_type: cost_type,
         date: txn.trade_date || txn.entry_date,
         amount: amount,
-        currency: txn.currency || "EUR",
+        currency: currency,
         symbol: txn.security_name,
         isin: txn.isin,
         description: txn.description || txn.raw_type,
-        broker: "nordnet",
+        broker: txn.broker,
         broker_transaction_id: txn.id
       }
 

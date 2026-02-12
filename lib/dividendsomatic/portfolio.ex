@@ -13,10 +13,12 @@ defmodule Dividendsomatic.Portfolio do
     Dividend,
     Holding,
     PortfolioSnapshot,
+    PositionReconstructor,
     SoldPosition
   }
 
   alias Dividendsomatic.Repo
+  alias Dividendsomatic.Stocks
 
   ## Portfolio Snapshots
 
@@ -132,14 +134,118 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   @doc """
-  Returns ALL snapshot data for charting (no limit).
+  Returns ALL chart data: reconstructed Nordnet data + IBKR snapshot data.
+
+  Merges two data sources:
+  - Nordnet era (2017-2022): Reconstructed from broker_transactions + historical prices
+  - IBKR era (2025+): Direct from portfolio_snapshots
+
+  Gap between eras is preserved as-is (honest representation).
   """
   def get_all_chart_data do
+    reconstructed = get_reconstructed_chart_data()
+    ibkr = get_ibkr_chart_data()
+    reconstructed ++ ibkr
+  end
+
+  @doc """
+  Returns IBKR snapshot data for charting (original behavior).
+  """
+  def get_ibkr_chart_data do
     PortfolioSnapshot
     |> order_by([s], asc: s.report_date)
     |> preload(:holdings)
     |> Repo.all()
     |> Enum.map(&snapshot_to_chart_point/1)
+  end
+
+  @doc """
+  Returns reconstructed chart data from Nordnet broker transactions.
+
+  Uses PositionReconstructor to rebuild positions, then prices them
+  using historical price data and FX rates.
+  """
+  def get_reconstructed_chart_data do
+    positions_over_time = PositionReconstructor.reconstruct()
+
+    positions_over_time
+    |> Enum.map(&price_reconstructed_point/1)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp price_reconstructed_point(%{date: date, positions: positions}) do
+    {total_value, total_cost_basis} =
+      Enum.reduce(positions, {Decimal.new("0"), Decimal.new("0")}, fn pos, {val_acc, cost_acc} ->
+        case get_position_value(pos, date) do
+          {:ok, value} ->
+            {Decimal.add(val_acc, value), Decimal.add(cost_acc, pos.cost_basis)}
+
+          :skip ->
+            {val_acc, Decimal.add(cost_acc, pos.cost_basis)}
+        end
+      end)
+
+    # Only include points where we have at least some price data
+    if Decimal.compare(total_value, Decimal.new("0")) == :gt do
+      %{
+        date: date,
+        date_string: Date.to_string(date),
+        value: total_value,
+        value_float: Decimal.to_float(total_value),
+        cost_basis_float: Decimal.to_float(total_cost_basis),
+        source: :nordnet
+      }
+    else
+      nil
+    end
+  end
+
+  defp get_position_value(position, date) do
+    # Resolve ISIN to Finnhub symbol
+    mapping = Stocks.get_symbol_mapping(position.isin)
+
+    symbol =
+      case mapping do
+        %{status: "resolved", finnhub_symbol: s} -> s
+        _ -> nil
+      end
+
+    if symbol do
+      case Stocks.get_close_price(symbol, date) do
+        {:ok, close_price} ->
+          value = Decimal.mult(position.quantity, close_price)
+
+          # Apply FX conversion if non-EUR
+          eur_value = apply_fx_conversion(value, position.currency, date)
+          {:ok, eur_value}
+
+        {:error, _} ->
+          :skip
+      end
+    else
+      :skip
+    end
+  end
+
+  defp apply_fx_conversion(value, "EUR", _date), do: value
+
+  defp apply_fx_conversion(value, currency, date) do
+    pair = "OANDA:EUR_#{currency}"
+
+    case Stocks.get_fx_rate(pair, date) do
+      {:ok, rate} ->
+        # EUR/XXX rate means 1 EUR = X units of currency
+        # To convert from currency to EUR: value / rate
+        if Decimal.compare(rate, Decimal.new("0")) == :gt do
+          Decimal.div(value, rate)
+        else
+          value
+        end
+
+      {:error, _} ->
+        # No FX data, return unconverted (approximate)
+        value
+    end
   end
 
   defp snapshot_to_chart_point(snapshot) do

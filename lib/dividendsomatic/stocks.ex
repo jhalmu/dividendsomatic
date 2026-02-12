@@ -17,7 +17,15 @@ defmodule Dividendsomatic.Stocks do
   require Logger
 
   alias Dividendsomatic.Repo
-  alias Dividendsomatic.Stocks.{CompanyNote, CompanyProfile, StockMetric, StockQuote}
+
+  alias Dividendsomatic.Stocks.{
+    CompanyNote,
+    CompanyProfile,
+    HistoricalPrice,
+    StockMetric,
+    StockQuote,
+    SymbolMapping
+  }
 
   @finnhub_base_url "https://finnhub.io/api/v1"
   @quote_cache_seconds 900
@@ -328,6 +336,241 @@ defmodule Dividendsomatic.Stocks do
   defp parse_decimal(nil), do: nil
   defp parse_decimal(value) when is_number(value), do: Decimal.new("#{value}")
   defp parse_decimal(_), do: nil
+
+  ## Historical Prices
+
+  @doc """
+  Fetches daily candle data from Finnhub for a stock symbol.
+
+  Returns `{:ok, count}` with number of records inserted, or `{:error, reason}`.
+  """
+  def fetch_historical_candles(symbol, from_date, to_date, opts \\ []) do
+    isin = Keyword.get(opts, :isin)
+
+    case get_api_key() do
+      {:ok, api_key} ->
+        from_ts = date_to_unix(from_date)
+        to_ts = date_to_unix(to_date)
+        url = "#{@finnhub_base_url}/stock/candle"
+
+        case Req.get(url,
+               params: [symbol: symbol, resolution: "D", from: from_ts, to: to_ts, token: api_key]
+             ) do
+          {:ok, %{status: 200, body: %{"s" => "ok"} = body}} ->
+            insert_candle_data(symbol, isin, body)
+
+          {:ok, %{status: 200, body: %{"s" => "no_data"}}} ->
+            Logger.warning("No candle data for #{symbol} (#{from_date}..#{to_date})")
+            {:ok, 0}
+
+          {:ok, %{status: 429}} ->
+            {:error, :rate_limited}
+
+          {:ok, %{status: 403, body: _}} ->
+            Logger.warning("Finnhub candle access denied for #{symbol} — paid plan required")
+            {:error, :access_denied}
+
+          {:ok, %{status: status, body: body}} ->
+            Logger.error("Finnhub candle failed for #{symbol}: #{status} - #{inspect(body)}")
+            {:error, :api_error}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+
+      {:error, :not_configured} ->
+        {:error, :not_configured}
+    end
+  end
+
+  @doc """
+  Fetches daily forex candle data from Finnhub.
+
+  Pair format: "OANDA:EUR_USD". Returns `{:ok, count}`.
+  """
+  def fetch_forex_candles(pair, from_date, to_date) do
+    case get_api_key() do
+      {:ok, api_key} ->
+        from_ts = date_to_unix(from_date)
+        to_ts = date_to_unix(to_date)
+        url = "#{@finnhub_base_url}/forex/candle"
+
+        case Req.get(url,
+               params: [symbol: pair, resolution: "D", from: from_ts, to: to_ts, token: api_key]
+             ) do
+          {:ok, %{status: 200, body: %{"s" => "ok"} = body}} ->
+            insert_candle_data(pair, nil, body)
+
+          {:ok, %{status: 200, body: %{"s" => "no_data"}}} ->
+            Logger.warning("No forex data for #{pair} (#{from_date}..#{to_date})")
+            {:ok, 0}
+
+          {:ok, %{status: 429}} ->
+            {:error, :rate_limited}
+
+          {:ok, %{status: 403, body: _}} ->
+            Logger.warning("Finnhub forex access denied for #{pair} — paid plan required")
+            {:error, :access_denied}
+
+          {:ok, %{status: status, body: body}} ->
+            Logger.error("Finnhub forex failed for #{pair}: #{status} - #{inspect(body)}")
+            {:error, :api_error}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+
+      {:error, :not_configured} ->
+        {:error, :not_configured}
+    end
+  end
+
+  defp insert_candle_data(symbol, isin, body) do
+    timestamps = body["t"] || []
+    opens = body["o"] || []
+    highs = body["h"] || []
+    lows = body["l"] || []
+    closes = body["c"] || []
+    volumes = body["v"] || []
+
+    records =
+      timestamps
+      |> Enum.with_index()
+      |> Enum.map(fn {ts, i} ->
+        %{
+          symbol: symbol,
+          isin: isin,
+          date: unix_to_date(ts),
+          open: parse_decimal(Enum.at(opens, i)),
+          high: parse_decimal(Enum.at(highs, i)),
+          low: parse_decimal(Enum.at(lows, i)),
+          close: parse_decimal(Enum.at(closes, i)),
+          volume: Enum.at(volumes, i),
+          source: "finnhub"
+        }
+      end)
+
+    count =
+      Enum.reduce(records, 0, fn attrs, acc ->
+        changeset = HistoricalPrice.changeset(%HistoricalPrice{}, attrs)
+
+        case Repo.insert(changeset, on_conflict: :nothing, conflict_target: [:symbol, :date]) do
+          {:ok, _} -> acc + 1
+          {:error, _} -> acc
+        end
+      end)
+
+    {:ok, count}
+  end
+
+  @doc """
+  Gets the close price for a symbol on a given date.
+
+  Falls back to the nearest prior trading day within 5 days.
+  """
+  def get_close_price(symbol, date) do
+    lookback = Date.add(date, -5)
+
+    HistoricalPrice
+    |> where([p], p.symbol == ^symbol and p.date >= ^lookback and p.date <= ^date)
+    |> order_by([p], desc: p.date)
+    |> limit(1)
+    |> Repo.one()
+    |> case do
+      %HistoricalPrice{close: close} when not is_nil(close) -> {:ok, close}
+      _ -> {:error, :no_price}
+    end
+  end
+
+  @doc """
+  Gets the FX rate (close price) for a forex pair on a given date.
+
+  Falls back to the nearest prior trading day within 5 days.
+  """
+  def get_fx_rate(pair, date) do
+    get_close_price(pair, date)
+  end
+
+  @doc """
+  Lists historical prices for a symbol within a date range.
+  """
+  def list_historical_prices(symbol, from_date, to_date) do
+    HistoricalPrice
+    |> where([p], p.symbol == ^symbol and p.date >= ^from_date and p.date <= ^to_date)
+    |> order_by([p], asc: p.date)
+    |> Repo.all()
+  end
+
+  @doc """
+  Returns count of historical price records for a symbol.
+  """
+  def count_historical_prices(symbol) do
+    HistoricalPrice
+    |> where([p], p.symbol == ^symbol)
+    |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  Returns the date range of historical prices for a symbol.
+  """
+  def historical_price_range(symbol) do
+    HistoricalPrice
+    |> where([p], p.symbol == ^symbol)
+    |> select([p], %{min_date: min(p.date), max_date: max(p.date), count: count()})
+    |> Repo.one()
+  end
+
+  ## Symbol Mappings (CRUD)
+
+  @doc """
+  Gets a symbol mapping by ISIN.
+  """
+  def get_symbol_mapping(isin) do
+    Repo.get_by(SymbolMapping, isin: isin)
+  end
+
+  @doc """
+  Creates or updates a symbol mapping.
+  """
+  def upsert_symbol_mapping(attrs) do
+    isin = attrs[:isin] || attrs["isin"]
+
+    case get_symbol_mapping(isin) do
+      nil ->
+        %SymbolMapping{}
+        |> SymbolMapping.changeset(attrs)
+        |> Repo.insert()
+
+      existing ->
+        existing
+        |> SymbolMapping.changeset(attrs)
+        |> Repo.update()
+    end
+  end
+
+  @doc """
+  Lists all symbol mappings.
+  """
+  def list_symbol_mappings do
+    SymbolMapping
+    |> order_by([m], asc: m.isin)
+    |> Repo.all()
+  end
+
+  defp date_to_unix(date) do
+    date
+    |> Date.to_iso8601()
+    |> then(&(&1 <> "T00:00:00Z"))
+    |> DateTime.from_iso8601()
+    |> elem(1)
+    |> DateTime.to_unix()
+  end
+
+  defp unix_to_date(timestamp) do
+    timestamp
+    |> DateTime.from_unix!()
+    |> DateTime.to_date()
+  end
 
   ## Company Notes
 
