@@ -43,6 +43,11 @@ dividendsomatic-*.tar
 # Ignore digested assets cache.
 /priv/static/cache_manifest.json
 
+# Environment variables (secrets)
+.env
+.env.*
+!.env.example
+
 # In case you use Node.js/npm, you want to ignore these.
 npm-debug.log
 /assets/node_modules/

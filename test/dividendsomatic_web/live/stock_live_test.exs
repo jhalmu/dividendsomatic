@@ -515,6 +515,76 @@ defmodule DividendsomaticWeb.StockLiveTest do
     end
   end
 
+  describe "financial metrics card" do
+    setup %{conn: conn} do
+      {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+      %{conn: conn}
+    end
+
+    test "should not show metrics card when no metrics data", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      refute html =~ "financial-metrics"
+      refute html =~ "Key Metrics"
+    end
+
+    test "should show metrics card when data exists", %{conn: conn} do
+      now = DateTime.truncate(DateTime.utc_now(), :second)
+
+      Dividendsomatic.Repo.insert!(%Dividendsomatic.Stocks.StockMetric{
+        symbol: "KESKOB",
+        pe_ratio: Decimal.new("15.20"),
+        roe: Decimal.new("22.50"),
+        net_margin: Decimal.new("8.30"),
+        beta: Decimal.new("0.85"),
+        fetched_at: now
+      })
+
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "financial-metrics"
+      assert html =~ "Key Metrics"
+      assert html =~ "P/E"
+      assert html =~ "15.20"
+      assert html =~ "ROE"
+      assert html =~ "22.50"
+      assert html =~ "Net Margin"
+      assert html =~ "8.30"
+      assert html =~ "Beta"
+      assert html =~ "0.85"
+    end
+
+    test "should skip nil fields in rendering", %{conn: conn} do
+      now = DateTime.truncate(DateTime.utc_now(), :second)
+
+      Dividendsomatic.Repo.insert!(%Dividendsomatic.Stocks.StockMetric{
+        symbol: "KESKOB",
+        pe_ratio: Decimal.new("15.20"),
+        fetched_at: now
+      })
+
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "P/E"
+      refute html =~ "terminal-info-label\">ROE"
+      refute html =~ "terminal-info-label\">Net Margin"
+    end
+
+    test "should show updated date from fetched_at", %{conn: conn} do
+      fetched = ~U[2026-02-10 14:30:00Z]
+
+      Dividendsomatic.Repo.insert!(%Dividendsomatic.Stocks.StockMetric{
+        symbol: "KESKOB",
+        pe_ratio: Decimal.new("15.20"),
+        fetched_at: fetched
+      })
+
+      {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
+
+      assert html =~ "Updated 2026-02-10"
+    end
+  end
+
   describe "short position support (Feature 6)" do
     @short_csv """
     "ReportDate","CurrencyPrimary","Symbol","Description","SubCategory","Quantity","MarkPrice","PositionValue","CostBasisPrice","CostBasisMoney","OpenPrice","PercentOfNAV","FifoPnlUnrealized","ListingExchange","AssetClass","FXRateToBase","ISIN","FIGI"

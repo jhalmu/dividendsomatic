@@ -158,3 +158,4 @@ If tests fail, stop and fix before proceeding. Never commit failing code.
 - [GMAIL_OAUTH_SETUP.md](GMAIL_OAUTH_SETUP.md) - Gmail OAuth2 configuration guide
 - [docs/PHOENIX_PATTERNS.md](docs/PHOENIX_PATTERNS.md) - Phoenix/LiveView/Ecto usage rules
 - [docs/Rule72.md](docs/Rule72.md) - Rule of 72 reference
+- [docs/BROKER_INTEGRATION.md](docs/BROKER_INTEGRATION.md) - IBKR/Nordnet API analysis & verdict

@@ -290,96 +290,90 @@
       <% end %>
       
 <!-- Recent Dividends + Realized P&L side by side -->
-      <%= if length(@recent_dividends) > 0 or Decimal.compare(@realized_pnl, Decimal.new("0")) != :eq do %>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-[var(--space-xs)] mb-[var(--space-xs)]">
-          <%= if length(@recent_dividends) > 0 do %>
-            <div class="terminal-card p-[var(--space-sm)] animate-fade-in animate-delay-4">
-              <div class="terminal-section-label">Recent Dividends</div>
-              <%= for entry <- @recent_dividends do %>
-                <div class="terminal-dividend-row">
-                  <span class="terminal-dividend-symbol">{entry.dividend.symbol}</span>
-                  <span class="terminal-dividend-date">
-                    {Calendar.strftime(entry.dividend.ex_date, "%b %d")}
-                  </span>
-                  <span class="terminal-dividend-amount">
-                    +{format_euro_decimal(entry.income)}
-                  </span>
-                </div>
-              <% end %>
-            </div>
-          <% end %>
-
-          <%= if Decimal.compare(@realized_pnl, Decimal.new("0")) != :eq do %>
-            <div
-              class="terminal-card p-[var(--space-sm)] animate-fade-in animate-delay-5"
-              data-testid="realized-pnl-card"
-            >
-              <div class="flex items-center justify-between">
-                <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
-                  Realized P&L ({length(@sold_positions)} sold)
-                </div>
-                <div
-                  class={"terminal-stat-value #{if pnl_positive?(@realized_pnl), do: "gain", else: "loss"}"}
-                  style="font-size: 0.875rem;"
-                >
-                  {format_euro_signed(@realized_pnl)}
-                </div>
-              </div>
-              <%= if length(@sold_positions) > 0 do %>
-                <div class="overflow-x-auto mt-[var(--space-xs)]">
-                  <table class="terminal-table">
-                    <thead>
-                      <tr>
-                        <th scope="col">Symbol</th>
-                        <th scope="col">Qty</th>
-                        <th scope="col" style="text-align: right;">Buy</th>
-                        <th scope="col" style="text-align: right;">Sell</th>
-                        <th scope="col" style="text-align: right;">P&L</th>
-                        <th scope="col">Held</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <%= for sp <- @sold_positions do %>
-                        <tr>
-                          <td>
-                            <.link
-                              navigate={~p"/stocks/#{sp.symbol}"}
-                              class="terminal-symbol hover:underline"
-                            >
-                              {sp.symbol}
-                            </.link>
-                          </td>
-                          <td class="terminal-number">{format_integer(sp.quantity)}</td>
-                          <td
-                            class="terminal-number"
-                            style="text-align: right; color: var(--terminal-dim);"
-                          >
-                            {format_decimal(sp.purchase_price)}
-                          </td>
-                          <td class="terminal-number" style="text-align: right;">
-                            {format_decimal(sp.sale_price)}
-                          </td>
-                          <td class="terminal-number" style="text-align: right;">
-                            <span class={pnl_badge_class(sp.realized_pnl)}>
-                              <%= if pnl_positive?(sp.realized_pnl) do %>
-                                +
-                              <% end %>
-                              {format_euro_decimal(sp.realized_pnl)}
-                            </span>
-                          </td>
-                          <td class="terminal-number" style="color: var(--terminal-dim);">
-                            {Date.diff(sp.sale_date, sp.purchase_date)}d
-                          </td>
-                        </tr>
-                      <% end %>
-                    </tbody>
-                  </table>
-                </div>
-              <% end %>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-[var(--space-xs)] mb-[var(--space-xs)]">
+        <div class="terminal-card p-[var(--space-sm)] animate-fade-in animate-delay-4">
+          <div class="terminal-section-label">Recent Dividends</div>
+          <%= for entry <- @recent_dividends do %>
+            <div class="terminal-dividend-row">
+              <span class="terminal-dividend-symbol">{entry.dividend.symbol}</span>
+              <span class="terminal-dividend-date">
+                {Calendar.strftime(entry.dividend.ex_date, "%b %d")}
+              </span>
+              <span class="terminal-dividend-amount">
+                +{format_euro_decimal(entry.income)}
+              </span>
             </div>
           <% end %>
         </div>
-      <% end %>
+
+        <div
+          class="terminal-card p-[var(--space-sm)] animate-fade-in animate-delay-5"
+          data-testid="realized-pnl-card"
+        >
+          <div class="flex items-center justify-between">
+            <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+              Realized P&L ({length(@sold_positions)} sold)
+            </div>
+            <div
+              class={"terminal-stat-value #{if pnl_positive?(@realized_pnl), do: "gain", else: "loss"}"}
+              style="font-size: 0.875rem;"
+            >
+              {format_euro_signed(@realized_pnl)}
+            </div>
+          </div>
+          <%= if length(@sold_positions) > 0 do %>
+            <div class="overflow-x-auto mt-[var(--space-xs)]">
+              <table class="terminal-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Symbol</th>
+                    <th scope="col">Qty</th>
+                    <th scope="col" style="text-align: right;">Buy</th>
+                    <th scope="col" style="text-align: right;">Sell</th>
+                    <th scope="col" style="text-align: right;">P&L</th>
+                    <th scope="col">Held</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <%= for sp <- @sold_positions do %>
+                    <tr>
+                      <td>
+                        <.link
+                          navigate={~p"/stocks/#{sp.symbol}"}
+                          class="terminal-symbol hover:underline"
+                        >
+                          {sp.symbol}
+                        </.link>
+                      </td>
+                      <td class="terminal-number">{format_integer(sp.quantity)}</td>
+                      <td
+                        class="terminal-number"
+                        style="text-align: right; color: var(--terminal-dim);"
+                      >
+                        {format_decimal(sp.purchase_price)}
+                      </td>
+                      <td class="terminal-number" style="text-align: right;">
+                        {format_decimal(sp.sale_price)}
+                      </td>
+                      <td class="terminal-number" style="text-align: right;">
+                        <span class={pnl_badge_class(sp.realized_pnl)}>
+                          <%= if pnl_positive?(sp.realized_pnl) do %>
+                            +
+                          <% end %>
+                          {format_euro_decimal(sp.realized_pnl)}
+                        </span>
+                      </td>
+                      <td class="terminal-number" style="color: var(--terminal-dim);">
+                        {Date.diff(sp.sale_date, sp.purchase_date)}d
+                      </td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          <% end %>
+        </div>
+      </div>
       
 <!-- Dividend Cash Flow -->
       <%= if length(@cash_flow) > 0 do %>

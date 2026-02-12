@@ -11,6 +11,7 @@ defmodule DividendsomaticWeb.StockLive do
     all_dividends = Portfolio.list_dividends_by_symbol(symbol)
     company_profile = get_company_profile(symbol)
     quote_data = get_stock_quote(symbol)
+    financial_metrics = get_financial_metrics(symbol)
     isin = get_isin(holdings)
 
     company_note =
@@ -48,6 +49,7 @@ defmodule DividendsomaticWeb.StockLive do
       |> assign(:dividend_analytics, dividend_analytics)
       |> assign(:company_profile, company_profile)
       |> assign(:quote_data, quote_data)
+      |> assign(:financial_metrics, financial_metrics)
       |> assign(:isin, isin)
       |> assign(:company_note, company_note)
       |> assign(:note_saved, false)
@@ -1049,6 +1051,54 @@ defmodule DividendsomaticWeb.StockLive do
     end
   rescue
     _ -> nil
+  end
+
+  defp get_financial_metrics(symbol) do
+    case Stocks.get_financial_metrics(symbol) do
+      {:ok, metrics} -> metrics
+      _ -> nil
+    end
+  rescue
+    _ -> nil
+  end
+
+  # {green_threshold, red_threshold, :higher_is_better | :lower_is_better}
+  @metric_thresholds %{
+    pe_ratio: {20, 30, :lower_is_better},
+    roe: {15, 8, :higher_is_better},
+    roa: {10, 5, :higher_is_better},
+    net_margin: {20, 5, :higher_is_better},
+    operating_margin: {15, 10, :higher_is_better},
+    debt_to_equity: {0.5, 1.5, :lower_is_better},
+    current_ratio: {1.5, 1.0, :higher_is_better},
+    payout_ratio: {60, 80, :lower_is_better},
+    fcf_margin: {15, 5, :higher_is_better}
+  }
+
+  defp metric_color_class(nil, _metric), do: ""
+
+  defp metric_color_class(value, metric) do
+    case Map.get(@metric_thresholds, metric) do
+      nil -> ""
+      thresholds -> apply_thresholds(Decimal.to_float(value), thresholds)
+    end
+  end
+
+  defp apply_thresholds(val, {green, red, :higher_is_better}) do
+    cond do
+      val >= green -> "gain"
+      val < red -> "loss"
+      true -> ""
+    end
+  end
+
+  defp apply_thresholds(val, {green, red, :lower_is_better}) do
+    cond do
+      val < 0 -> "loss"
+      val <= green -> "gain"
+      val > red -> "loss"
+      true -> ""
+    end
   end
 
   defp build_external_links(symbol, holdings, company_profile) do

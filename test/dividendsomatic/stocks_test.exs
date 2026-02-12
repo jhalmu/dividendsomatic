@@ -3,7 +3,7 @@ defmodule Dividendsomatic.StocksTest do
 
   alias Dividendsomatic.Repo
   alias Dividendsomatic.Stocks
-  alias Dividendsomatic.Stocks.{CompanyNote, CompanyProfile, StockQuote}
+  alias Dividendsomatic.Stocks.{CompanyNote, CompanyProfile, StockMetric, StockQuote}
 
   describe "stock quote schema" do
     test "should reject empty changeset" do
@@ -88,6 +88,91 @@ defmodule Dividendsomatic.StocksTest do
 
       assert profile.symbol == "GOOGL"
       assert profile.name == "Alphabet Inc."
+    end
+  end
+
+  describe "stock metric schema" do
+    test "should reject empty changeset" do
+      changeset = StockMetric.changeset(%StockMetric{}, %{})
+
+      refute changeset.valid?
+      assert "can't be blank" in errors_on(changeset).symbol
+      assert "can't be blank" in errors_on(changeset).fetched_at
+    end
+
+    test "should accept valid metric data" do
+      attrs = %{
+        symbol: "AAPL",
+        pe_ratio: Decimal.new("28.50"),
+        pb_ratio: Decimal.new("45.20"),
+        eps: Decimal.new("6.42"),
+        roe: Decimal.new("147.25"),
+        roa: Decimal.new("28.30"),
+        net_margin: Decimal.new("25.31"),
+        operating_margin: Decimal.new("30.74"),
+        debt_to_equity: Decimal.new("1.87"),
+        current_ratio: Decimal.new("0.99"),
+        fcf_margin: Decimal.new("26.15"),
+        beta: Decimal.new("1.24"),
+        payout_ratio: Decimal.new("15.47"),
+        fetched_at: DateTime.truncate(DateTime.utc_now(), :second)
+      }
+
+      changeset = StockMetric.changeset(%StockMetric{}, attrs)
+      assert changeset.valid?
+    end
+
+    test "should persist and retrieve metric" do
+      attrs = %{
+        symbol: "MSFT",
+        pe_ratio: Decimal.new("35.00"),
+        roe: Decimal.new("40.50"),
+        fetched_at: DateTime.truncate(DateTime.utc_now(), :second)
+      }
+
+      {:ok, metric} =
+        %StockMetric{}
+        |> StockMetric.changeset(attrs)
+        |> Repo.insert()
+
+      assert metric.symbol == "MSFT"
+      assert Decimal.equal?(metric.pe_ratio, Decimal.new("35.00"))
+      assert Decimal.equal?(metric.roe, Decimal.new("40.50"))
+    end
+  end
+
+  describe "get_financial_metrics/1" do
+    test "should return not_configured when API key is missing" do
+      assert Stocks.get_financial_metrics("AAPL") == {:error, :not_configured}
+    end
+
+    test "should return cached metrics when fresh" do
+      now = DateTime.truncate(DateTime.utc_now(), :second)
+
+      Repo.insert!(%StockMetric{
+        symbol: "AAPL",
+        pe_ratio: Decimal.new("28.50"),
+        roe: Decimal.new("147.25"),
+        fetched_at: now
+      })
+
+      assert {:ok, metric} = Stocks.get_financial_metrics("AAPL")
+      assert metric.symbol == "AAPL"
+      assert Decimal.equal?(metric.pe_ratio, Decimal.new("28.50"))
+    end
+
+    test "should try to refresh stale cached metrics" do
+      stale_time =
+        DateTime.add(DateTime.truncate(DateTime.utc_now(), :second), -700_000, :second)
+
+      Repo.insert!(%StockMetric{
+        symbol: "AAPL",
+        pe_ratio: Decimal.new("28.50"),
+        fetched_at: stale_time
+      })
+
+      # Without API key, refresh will fail with :not_configured
+      assert Stocks.get_financial_metrics("AAPL") == {:error, :not_configured}
     end
   end
 

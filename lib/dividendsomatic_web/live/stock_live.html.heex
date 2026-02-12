@@ -26,6 +26,24 @@
           <%= if @company_profile && @company_profile.name do %>
             <div class="terminal-stock-name">{@company_profile.name}</div>
           <% end %>
+          <%= if @company_profile && (@company_profile.industry || @company_profile.country) do %>
+            <div
+              class="flex flex-wrap items-center gap-[var(--space-xs)] mt-[var(--space-inline)]"
+              style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-muted);"
+            >
+              <%= if @company_profile.industry do %>
+                <span data-testid="sector-badge">{@company_profile.industry}</span>
+              <% end %>
+              <%= if @company_profile.country do %>
+                <span>&middot;</span>
+                <span>{@company_profile.country}</span>
+              <% end %>
+              <%= if @company_profile.exchange do %>
+                <span>&middot;</span>
+                <span>{@company_profile.exchange}</span>
+              <% end %>
+            </div>
+          <% end %>
         </div>
         <%= if @quote_data do %>
           <div class="text-right">
@@ -396,6 +414,121 @@
             <div>
               <div class="terminal-info-label">Currency</div>
               <div class="terminal-info-value">{@company_profile.currency}</div>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+    
+<!-- Key Financial Metrics -->
+    <%= if @financial_metrics do %>
+      <div
+        class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-3"
+        data-testid="financial-metrics"
+      >
+        <div class="flex items-center justify-between">
+          <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+            Key Metrics
+          </div>
+          <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);">
+            Updated {Date.to_string(DateTime.to_date(@financial_metrics.fetched_at))}
+          </div>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[var(--space-xs)] mt-[var(--space-xs)]">
+          <%= if @financial_metrics.pe_ratio do %>
+            <div>
+              <div class="terminal-info-label">P/E</div>
+              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.pe_ratio, :pe_ratio)}"}>
+                {format_decimal(@financial_metrics.pe_ratio)}
+              </div>
+            </div>
+          <% end %>
+          <%= if @financial_metrics.pb_ratio do %>
+            <div>
+              <div class="terminal-info-label">P/B</div>
+              <div class="terminal-info-value">
+                {format_decimal(@financial_metrics.pb_ratio)}
+              </div>
+            </div>
+          <% end %>
+          <%= if @financial_metrics.eps do %>
+            <div>
+              <div class="terminal-info-label">EPS</div>
+              <div class="terminal-info-value">
+                {format_decimal(@financial_metrics.eps)}
+              </div>
+            </div>
+          <% end %>
+          <%= if @financial_metrics.roe do %>
+            <div>
+              <div class="terminal-info-label">ROE</div>
+              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.roe, :roe)}"}>
+                {format_decimal(@financial_metrics.roe)}%
+              </div>
+            </div>
+          <% end %>
+          <%= if @financial_metrics.roa do %>
+            <div>
+              <div class="terminal-info-label">ROA</div>
+              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.roa, :roa)}"}>
+                {format_decimal(@financial_metrics.roa)}%
+              </div>
+            </div>
+          <% end %>
+          <%= if @financial_metrics.net_margin do %>
+            <div>
+              <div class="terminal-info-label">Net Margin</div>
+              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.net_margin, :net_margin)}"}>
+                {format_decimal(@financial_metrics.net_margin)}%
+              </div>
+            </div>
+          <% end %>
+          <%= if @financial_metrics.operating_margin do %>
+            <div>
+              <div class="terminal-info-label">Op. Margin</div>
+              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.operating_margin, :operating_margin)}"}>
+                {format_decimal(@financial_metrics.operating_margin)}%
+              </div>
+            </div>
+          <% end %>
+          <%= if @financial_metrics.debt_to_equity do %>
+            <div>
+              <div class="terminal-info-label">D/E</div>
+              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.debt_to_equity, :debt_to_equity)}"}>
+                {format_decimal(@financial_metrics.debt_to_equity)}
+              </div>
+            </div>
+          <% end %>
+          <%= if @financial_metrics.current_ratio do %>
+            <div>
+              <div class="terminal-info-label">Current Ratio</div>
+              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.current_ratio, :current_ratio)}"}>
+                {format_decimal(@financial_metrics.current_ratio)}
+              </div>
+            </div>
+          <% end %>
+          <%= if @financial_metrics.fcf_margin do %>
+            <div>
+              <div class="terminal-info-label">FCF Margin</div>
+              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.fcf_margin, :fcf_margin)}"}>
+                {format_decimal(@financial_metrics.fcf_margin)}%
+              </div>
+            </div>
+          <% end %>
+          <%= if @financial_metrics.beta do %>
+            <div>
+              <div class="terminal-info-label">Beta</div>
+              <div class="terminal-info-value">
+                {format_decimal(@financial_metrics.beta)}
+              </div>
+            </div>
+          <% end %>
+          <%= if @financial_metrics.payout_ratio do %>
+            <div>
+              <div class="terminal-info-label">Payout Ratio</div>
+              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.payout_ratio, :payout_ratio)}"}>
+                {format_decimal(@financial_metrics.payout_ratio)}%
+              </div>
             </div>
           <% end %>
         </div>

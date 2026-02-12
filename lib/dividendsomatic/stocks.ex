@@ -17,7 +17,7 @@ defmodule Dividendsomatic.Stocks do
   require Logger
 
   alias Dividendsomatic.Repo
-  alias Dividendsomatic.Stocks.{CompanyNote, CompanyProfile, StockQuote}
+  alias Dividendsomatic.Stocks.{CompanyNote, CompanyProfile, StockMetric, StockQuote}
 
   @finnhub_base_url "https://finnhub.io/api/v1"
   @quote_cache_seconds 900
@@ -62,6 +62,25 @@ defmodule Dividendsomatic.Stocks do
   end
 
   @doc """
+  Gets financial metrics, using cache if fresh enough.
+
+  Returns cached data if less than 7 days old, otherwise fetches fresh data.
+  """
+  def get_financial_metrics(symbol) do
+    case get_cached_metrics(symbol) do
+      %StockMetric{} = metric ->
+        if stale?(metric.fetched_at, @profile_cache_seconds) do
+          fetch_and_cache_metrics(symbol)
+        else
+          {:ok, metric}
+        end
+
+      nil ->
+        fetch_and_cache_metrics(symbol)
+    end
+  end
+
+  @doc """
   Gets quotes for multiple symbols.
 
   Returns a map of symbol => quote data.
@@ -101,6 +120,10 @@ defmodule Dividendsomatic.Stocks do
     Repo.get_by(CompanyProfile, symbol: symbol)
   end
 
+  defp get_cached_metrics(symbol) do
+    Repo.get_by(StockMetric, symbol: symbol)
+  end
+
   defp stale?(fetched_at, max_age_seconds) do
     now = DateTime.utc_now()
     diff = DateTime.diff(now, fetched_at, :second)
@@ -122,6 +145,17 @@ defmodule Dividendsomatic.Stocks do
     case get_api_key() do
       {:ok, api_key} ->
         fetch_profile_from_api(symbol, api_key)
+
+      {:error, :not_configured} ->
+        Logger.warning("Finnhub API key not configured")
+        {:error, :not_configured}
+    end
+  end
+
+  defp fetch_and_cache_metrics(symbol) do
+    case get_api_key() do
+      {:ok, api_key} ->
+        fetch_metrics_from_api(symbol, api_key)
 
       {:error, :not_configured} ->
         Logger.warning("Finnhub API key not configured")
@@ -234,6 +268,66 @@ defmodule Dividendsomatic.Stocks do
         |> Repo.update()
     end
   end
+
+  defp fetch_metrics_from_api(symbol, api_key) do
+    url = "#{@finnhub_base_url}/stock/metric"
+
+    case Req.get(url, params: [symbol: symbol, metric: "all", token: api_key]) do
+      {:ok, %{status: 200, body: %{"metric" => metric}}} when is_map(metric) ->
+        upsert_metrics(symbol, metric)
+
+      {:ok, %{status: 200, body: _}} ->
+        Logger.warning("No metrics data for symbol: #{symbol}")
+        {:error, :no_data}
+
+      {:ok, %{status: 429}} ->
+        Logger.warning("Finnhub rate limit exceeded")
+        {:error, :rate_limited}
+
+      {:ok, %{status: status, body: body}} ->
+        Logger.error("Finnhub metrics failed: #{status} - #{inspect(body)}")
+        {:error, :api_error}
+
+      {:error, reason} ->
+        Logger.error("Finnhub request failed: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  defp upsert_metrics(symbol, api_data) do
+    attrs = %{
+      symbol: symbol,
+      pe_ratio: parse_decimal(api_data["peBasicExclExtraTTM"]),
+      pb_ratio: parse_decimal(api_data["pbQuarterly"]),
+      eps: parse_decimal(api_data["epsBasicExclExtraItemsTTM"]),
+      roe: parse_decimal(api_data["roeRfy"]),
+      roa: parse_decimal(api_data["roaRfy"]),
+      net_margin: parse_decimal(api_data["netProfitMarginTTM"]),
+      operating_margin: parse_decimal(api_data["operatingMarginTTM"]),
+      debt_to_equity: parse_decimal(api_data["totalDebt/totalEquityQuarterly"]),
+      current_ratio: parse_decimal(api_data["currentRatioQuarterly"]),
+      fcf_margin: parse_decimal(api_data["fcfMarginTTM"]),
+      beta: parse_decimal(api_data["beta"]),
+      payout_ratio: parse_decimal(api_data["payoutRatioTTM"]),
+      fetched_at: DateTime.utc_now()
+    }
+
+    case get_cached_metrics(symbol) do
+      nil ->
+        %StockMetric{}
+        |> StockMetric.changeset(attrs)
+        |> Repo.insert()
+
+      existing ->
+        existing
+        |> StockMetric.changeset(attrs)
+        |> Repo.update()
+    end
+  end
+
+  defp parse_decimal(nil), do: nil
+  defp parse_decimal(value) when is_number(value), do: Decimal.new("#{value}")
+  defp parse_decimal(_), do: nil
 
   ## Company Notes
 

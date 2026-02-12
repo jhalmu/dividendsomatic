@@ -30,6 +30,6 @@ defmodule Dividendsomatic.Portfolio.Dividend do
     |> cast(attrs, @required_fields ++ @optional_fields)
     |> validate_required(@required_fields)
     |> validate_number(:amount, greater_than: 0)
-    |> unique_constraint([:symbol, :ex_date, :amount], name: :dividends_unique)
+    |> unique_constraint([:symbol, :ex_date], name: :dividends_unique)
   end
 end

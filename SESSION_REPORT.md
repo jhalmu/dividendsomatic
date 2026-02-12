@@ -1,4 +1,56 @@
-# Session Report - 2026-02-12
+# Session Report - 2026-02-12 (afternoon)
+
+## Summary
+Finnhub Financial Metrics integration, sector badges on stock pages, Playwright E2E tests. 286 tests (0 failures), 9 Playwright E2E tests, Credo clean.
+
+## Features Implemented
+
+**Feature 1: Financial Metrics from Finnhub API**
+- Created `stock_metrics` table (migration) with 12 Decimal columns
+- Created `StockMetric` schema mirroring `StockQuote` pattern
+- Added `get_financial_metrics/1` with 7-day cache in Stocks context
+- Fetches `/stock/metric?metric=all` from Finnhub API
+- Maps 12 API fields (peBasicExclExtraTTM → pe_ratio, roeRfy → roe, etc.)
+- Data-driven `@metric_thresholds` for conditional color coding (green/red)
+- "Key Financial Metrics" card on stock detail page with grid layout
+
+**Feature 2: Sector/Industry Badges**
+- Added sector, country, exchange info under company name in Price Header
+- Plain text with middot separators (WCAG AA compliant)
+- Conditional rendering when company profile exists
+
+**Feature 3: Playwright E2E Tests for Stock Pages**
+- 9 tests: page structure, position summary, sector badge (shown/hidden), metrics card (shown/hidden/nil fields/updated date), accessibility
+- Uses axe-core accessibility auditing
+
+## Key Fixes
+- Credo cyclomatic complexity (39 → data-driven `@metric_thresholds` map)
+- WCAG color contrast on sector badge (removed background, plain text)
+- Pre-fetched 39 company profiles for portfolio symbols via Finnhub API
+
+## Tests (276 → 286 + 9 Playwright)
+- 4 StockMetric schema/cache tests
+- 4 financial metrics card LiveView tests
+- 9 Playwright E2E stock page tests (including a11y audit)
+
+## Files Created
+- `priv/repo/migrations/20260212134738_create_stock_metrics.exs`
+- `lib/dividendsomatic/stocks/stock_metric.ex`
+- `test/dividendsomatic_web/e2e/stock_page_test.exs`
+
+## Files Modified
+- `lib/dividendsomatic/stocks.ex` — StockMetric alias, get/fetch/upsert metrics, parse_decimal
+- `lib/dividendsomatic_web/live/stock_live.ex` — mount metrics, get_financial_metrics helper, @metric_thresholds, metric_color_class
+- `lib/dividendsomatic_web/live/stock_live.html.heex` — sector badges, Key Financial Metrics card
+- `test/dividendsomatic/stocks_test.exs` — StockMetric schema + cache tests
+- `test/dividendsomatic_web/live/stock_live_test.exs` — financial metrics card tests
+
+## Remaining Open Issues
+- #22 Multi-provider market data architecture (future)
+
+---
+
+# Session Report - 2026-02-12 (morning)
 
 ## Summary
 Phase 5B: Costs, Cash Flows & Short Positions. 6 features implemented with 17 new tests (276 total, 0 failures, 0 credo issues). Code reviewed and all issues resolved.

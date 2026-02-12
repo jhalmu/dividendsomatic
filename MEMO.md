@@ -43,8 +43,8 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.8.0 (Phase 5B: Costs, Cash Flows & Short Positions)
-**Status:** Phase 1-4 + 5B complete + market sentiment history
+**Version:** 0.9.0 (Finnhub Financial Metrics + Sector Badges)
+**Status:** Phase 1-4 + 5B complete + financial metrics + market sentiment history
 
 **Implemented (cumulative):**
 - **Phase 5B: Costs, Cash Flows & Short Positions** - Enhanced cost basis, cost basis chart line, FX exposure, realized P&L table, cash flow summary, short position support
@@ -80,9 +80,11 @@ mix ecto.reset              # Drop + create + migrate
 - Dividend tracking with area fill visualization
 - Sold positions tracking
 - Stock quotes & company profiles (Finnhub API)
+- **Finnhub Financial Metrics** (P/E, ROE, ROA, margins, debt/equity, payout ratio, beta) with 7-day cache
+- **Sector/industry badges** on stock detail pages (WCAG AA compliant)
 - Rule of 72 calculator (interactive rate input, doubling milestones, exact vs approximation)
 - Dividend income fix (lookback snapshot for pre-year holdings)
-- WCAG AA accessible (257 tests, 4 Playwright a11y tests)
+- WCAG AA accessible (286 tests, 13 Playwright a11y/E2E tests)
 
 **Next priorities (from development plan):**
 - ~~Phase 4: Rule of 72 calculator~~ ✅
@@ -93,6 +95,55 @@ mix ecto.reset              # Drop + create + migrate
 - Production deployment
 - Gmail OAuth setup (env vars needed, see GMAIL_OAUTH_SETUP.md)
 - Finnhub API key setup (env vars needed)
+
+---
+
+## 2026-02-12 - Finnhub Financial Metrics & Sector Badges
+
+### Session Summary
+
+Added Finnhub financial metrics (P/E, ROE, ROA, margins, debt/equity, payout ratio, beta) to stock detail pages with 7-day caching. Added sector/industry/country badges under company name. Created 9 Playwright E2E tests for stock pages. 286 tests + 9 Playwright, 0 failures, Credo clean.
+
+### Features
+1. Financial Metrics card with conditional color coding (data-driven thresholds)
+2. Sector/industry/country/exchange badges in stock header
+3. Playwright E2E test suite for stock pages (structure, badges, metrics, a11y)
+
+### Key Decisions
+- Data-driven `@metric_thresholds` map to avoid Credo complexity
+- Plain text badges (no background) for WCAG AA contrast compliance
+- Pre-fetched 39 company profiles for portfolio symbols
+
+### Test Results
+- 286 tests, 0 failures (8 excluded)
+- 9 Playwright E2E tests passing
+- Credo --strict: 0 issues
+
+---
+
+## 2026-02-12 - IBKR API & Nordnet API Research
+
+### Session Summary
+
+Comprehensive research on IBKR API integration options (Client Portal API, TWS API, Web API), the Elixir `ibkr_api` hex package, user's existing Python implementations, and Nordnet API. Concluded that IBKR Client Portal API is not suitable for headless production deployment.
+
+### Key Decision
+
+**CSV import remains the primary data source.** The IBKR Client Portal API requires manual browser login and a Java gateway on the same machine - incompatible with headless Hetzner VPS deployment. 12 security/architecture red flags identified.
+
+### Research Documented
+
+- Three IBKR API variants compared (TWS, Client Portal, Web API)
+- Elixir `ibkr_api` package evaluated (v1.0.3, 8 stars, single maintainer - too immature)
+- User's Python repos reviewed (`jhalmu/backend`, `jhalmu/interactive-brokers-web-api`)
+- Nordnet nExt API evaluated (CSV export recommended over API integration)
+- Multi-broker adapter architecture designed (builds on existing `DataIngestion` behaviour)
+
+### Action Items
+
+- Monitor IBKR OAuth 2.0 availability for individual accounts (currently commercial only)
+- Consider adding `NordnetCsvParser` when Nordnet CSV data available
+- See [docs/BROKER_INTEGRATION.md](docs/BROKER_INTEGRATION.md) for full analysis
 
 ---
 
@@ -540,6 +591,6 @@ mix import.csv flex.490027.PortfolioForWww.20260128.20260128.csv
 - [ ] Gmail integration needs OAuth env vars (`GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`)
 - [ ] Finnhub integration needs API key (`FINNHUB_API_KEY`)
 - [ ] No production deployment (Fly.io or similar)
-- [x] Test coverage: 276 tests, 0 credo issues
+- [x] Test coverage: 286 tests + 9 Playwright E2E, 0 credo issues
 
 ---
