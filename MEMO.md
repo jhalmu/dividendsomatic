@@ -54,7 +54,28 @@ mix ecto.reset              # Drop + create + migrate
 **Version:** 0.15.0 (Multi-Provider Market Data Architecture)
 **Status:** Multi-provider architecture operational, EODHD ready
 
-**Latest session (2026-02-13, EVE):**
+**Latest session (2026-02-13, NIGHT):**
+- **CSV processing & archive** — imported all CSV data, verified DB completeness, archived files
+  - IBKR: 7,699 transactions (all previously imported)
+  - Flex: 159 portfolio snapshots (all previously imported)
+  - Nordnet: 2,074 parsed, 104 new transactions
+  - Nordnet 9A: 605 trades (all previously imported)
+  - Archived all CSVs to `csv_data/archive/{ibkr,nordnet,flex,dividends}/`
+- **Data gaps page fix & usability**
+  - Deleted 104 bad Nordnet transactions (9A report parsed as regular CSV)
+  - Fixed Nordnet importer to skip `9a-report*` files
+  - Added ISIN validation filter (length >= 12) — 174 clean stocks, 0 garbage
+  - Added IBKR transaction date range to broker coverage timeline (3 bars: Nordnet, IBKR Txns, IBKR Flex)
+  - Show actual stock descriptions instead of ticker numbers
+  - Search/filter for per-stock table (name, ISIN, symbol)
+  - Sortable columns (name, gap days, brokers) with direction toggle
+  - Nordnet-only / IBKR-only counts in summary (6 stats instead of 4)
+  - Collapsible dividend gaps section
+  - Broker badges + gap row highlighting
+- DB totals: 159 snapshots, 3,930 holdings, 7,404 broker txns, 6,148 dividends, 1,625 sold positions, 4,598 costs
+- 409 tests, 0 failures, 0 credo issues
+
+**Previous session (2026-02-13, EVE):**
 - **Multi-provider market data architecture (#22)**
   - `MarketData.Provider` behaviour with 6 callbacks (3 required, 3 optional)
   - `MarketData.Dispatcher` with configurable fallback chains per data type
@@ -92,7 +113,7 @@ mix ecto.reset              # Drop + create + migrate
 - Historical price reconstruction (Yahoo Finance, 2017-2026 continuous chart)
 - Batch-loaded chart pricing (3 queries instead of 3,700+, cached in persistent_term)
 - Symbol resolution: ISIN → Finnhub/Yahoo via cascading lookup
-- Dividend tracking (5,498 records across 60+ symbols)
+- Dividend tracking (6,148 records across 60+ symbols)
 - Finnhub financial metrics, company profiles, stock quotes
 - Fear & Greed Index (365 days history)
 - Costs system, FX exposure, sold positions (grouped), data gaps analysis
