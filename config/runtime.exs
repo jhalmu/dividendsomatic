@@ -35,6 +35,12 @@ if finnhub_api_key = System.get_env("FINNHUB_API_KEY") do
   config :dividendsomatic, finnhub_api_key: finnhub_api_key
 end
 
+# EODHD API configuration for historical data and fundamentals
+# All World Extended plan: $20/month
+if eodhd_api_key = System.get_env("EODHD_API_KEY") do
+  config :dividendsomatic, eodhd_api_key: eodhd_api_key
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

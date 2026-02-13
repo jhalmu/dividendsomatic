@@ -74,6 +74,34 @@ config :dividendsomatic, Oban,
   ],
   queues: [default: 10, gmail_import: 1, data_import: 1]
 
+# Multi-provider market data configuration
+config :dividendsomatic, :market_data,
+  providers: %{
+    quote: [
+      Dividendsomatic.MarketData.Providers.Finnhub,
+      Dividendsomatic.MarketData.Providers.Eodhd
+    ],
+    candles: [
+      Dividendsomatic.MarketData.Providers.YahooFinance,
+      Dividendsomatic.MarketData.Providers.Eodhd,
+      Dividendsomatic.MarketData.Providers.Finnhub
+    ],
+    forex: [
+      Dividendsomatic.MarketData.Providers.YahooFinance,
+      Dividendsomatic.MarketData.Providers.Eodhd
+    ],
+    profile: [
+      Dividendsomatic.MarketData.Providers.Finnhub,
+      Dividendsomatic.MarketData.Providers.Eodhd
+    ],
+    metrics: [
+      Dividendsomatic.MarketData.Providers.Finnhub
+    ],
+    isin_lookup: [
+      Dividendsomatic.MarketData.Providers.Finnhub
+    ]
+  }
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

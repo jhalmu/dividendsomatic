@@ -16,6 +16,9 @@ config :dividendsomatic, Dividendsomatic.Repo,
 # Oban testing mode - jobs run inline in tests
 config :dividendsomatic, Oban, testing: :inline
 
+# Disable market data providers in test — tests use Req.Test stubs directly
+config :dividendsomatic, :market_data, providers: %{}
+
 # Enable server for Playwright E2E tests
 config :dividendsomatic, DividendsomaticWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
