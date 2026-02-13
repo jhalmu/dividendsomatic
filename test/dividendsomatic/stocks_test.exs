@@ -150,8 +150,8 @@ defmodule Dividendsomatic.StocksTest do
   end
 
   describe "get_financial_metrics/1" do
-    test "should return not_configured when API key is missing" do
-      assert Stocks.get_financial_metrics("AAPL") == {:error, :not_configured}
+    test "should return error when no providers configured" do
+      assert Stocks.get_financial_metrics("AAPL") == {:error, :all_providers_failed}
     end
 
     test "should return cached metrics when fresh" do
@@ -179,8 +179,8 @@ defmodule Dividendsomatic.StocksTest do
         fetched_at: stale_time
       })
 
-      # Without API key, refresh will fail with :not_configured
-      assert Stocks.get_financial_metrics("AAPL") == {:error, :not_configured}
+      # No providers configured in test — dispatcher returns :all_providers_failed
+      assert Stocks.get_financial_metrics("AAPL") == {:error, :all_providers_failed}
     end
   end
 
@@ -203,8 +203,8 @@ defmodule Dividendsomatic.StocksTest do
   end
 
   describe "get_quote/1" do
-    test "should return not_configured when API key is missing" do
-      assert Stocks.get_quote("AAPL") == {:error, :not_configured}
+    test "should return error when no providers configured" do
+      assert Stocks.get_quote("AAPL") == {:error, :all_providers_failed}
     end
 
     test "should return cached quote when fresh" do
@@ -230,14 +230,14 @@ defmodule Dividendsomatic.StocksTest do
         fetched_at: stale_time
       })
 
-      # Without API key, refresh will fail with :not_configured
-      assert Stocks.get_quote("AAPL") == {:error, :not_configured}
+      # No providers configured in test — dispatcher returns :all_providers_failed
+      assert Stocks.get_quote("AAPL") == {:error, :all_providers_failed}
     end
   end
 
   describe "get_company_profile/1" do
-    test "should return not_configured when API key is missing" do
-      assert Stocks.get_company_profile("AAPL") == {:error, :not_configured}
+    test "should return error when no providers configured" do
+      assert Stocks.get_company_profile("AAPL") == {:error, :all_providers_failed}
     end
 
     test "should return cached profile when fresh" do
@@ -272,8 +272,8 @@ defmodule Dividendsomatic.StocksTest do
   end
 
   describe "refresh_quote/1" do
-    test "should return not_configured without API key" do
-      assert Stocks.refresh_quote("AAPL") == {:error, :not_configured}
+    test "should return error when no providers configured" do
+      assert Stocks.refresh_quote("AAPL") == {:error, :all_providers_failed}
     end
   end
 

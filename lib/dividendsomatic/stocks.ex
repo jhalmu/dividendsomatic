@@ -1,16 +1,14 @@
 defmodule Dividendsomatic.Stocks do
   @moduledoc """
-  Stock data integration using Finnhub API.
+  Stock data context — public facade for quotes, profiles, metrics, and prices.
 
-  Provides real-time quotes and company profiles with caching.
+  All external market data flows through the MarketData Dispatcher, which
+  selects providers based on configuration. This context handles caching
+  (DB read/write) and Decimal conversion.
 
   ## Configuration
 
-  Set `FINNHUB_API_KEY` environment variable.
-
-  ## Rate Limits
-
-  Free tier: 60 calls/minute
+  Provider chains are configured in `config :dividendsomatic, :market_data`.
   """
 
   import Ecto.Query
@@ -18,17 +16,17 @@ defmodule Dividendsomatic.Stocks do
 
   alias Dividendsomatic.Repo
 
+  alias Dividendsomatic.MarketData.Dispatcher
+
   alias Dividendsomatic.Stocks.{
     CompanyNote,
     CompanyProfile,
     HistoricalPrice,
     StockMetric,
     StockQuote,
-    SymbolMapping,
-    YahooFinance
+    SymbolMapping
   }
 
-  @finnhub_base_url "https://finnhub.io/api/v1"
   @quote_cache_seconds 900
   @profile_cache_seconds 604_800
 
@@ -140,99 +138,36 @@ defmodule Dividendsomatic.Stocks do
   end
 
   defp fetch_and_cache_quote(symbol) do
-    case get_api_key() do
-      {:ok, api_key} ->
-        fetch_quote_from_api(symbol, api_key)
-
-      {:error, :not_configured} ->
-        Logger.warning("Finnhub API key not configured")
-        {:error, :not_configured}
+    case Dispatcher.dispatch_for(:get_quote, [symbol], :quote) do
+      {:ok, data} -> upsert_quote(symbol, data)
+      {:error, _} = error -> error
     end
   end
 
   defp fetch_and_cache_profile(symbol) do
-    case get_api_key() do
-      {:ok, api_key} ->
-        fetch_profile_from_api(symbol, api_key)
-
-      {:error, :not_configured} ->
-        Logger.warning("Finnhub API key not configured")
-        {:error, :not_configured}
+    case Dispatcher.dispatch_for(:get_company_profile, [symbol], :profile) do
+      {:ok, data} -> upsert_profile(symbol, data)
+      {:error, _} = error -> error
     end
   end
 
   defp fetch_and_cache_metrics(symbol) do
-    case get_api_key() do
-      {:ok, api_key} ->
-        fetch_metrics_from_api(symbol, api_key)
-
-      {:error, :not_configured} ->
-        Logger.warning("Finnhub API key not configured")
-        {:error, :not_configured}
+    case Dispatcher.dispatch_for(:get_financial_metrics, [symbol], :metrics) do
+      {:ok, data} -> upsert_metrics(symbol, data)
+      {:error, _} = error -> error
     end
   end
 
-  defp fetch_quote_from_api(symbol, api_key) do
-    url = "#{@finnhub_base_url}/quote"
-
-    case Req.get(url, params: [symbol: symbol, token: api_key]) do
-      {:ok, %{status: 200, body: body}} when is_map(body) ->
-        if body["c"] && body["c"] != 0 do
-          upsert_quote(symbol, body)
-        else
-          Logger.warning("No quote data for symbol: #{symbol}")
-          {:error, :no_data}
-        end
-
-      {:ok, %{status: 429}} ->
-        Logger.warning("Finnhub rate limit exceeded")
-        {:error, :rate_limited}
-
-      {:ok, %{status: status, body: body}} ->
-        Logger.error("Finnhub quote failed: #{status} - #{inspect(body)}")
-        {:error, :api_error}
-
-      {:error, reason} ->
-        Logger.error("Finnhub request failed: #{inspect(reason)}")
-        {:error, reason}
-    end
-  end
-
-  defp fetch_profile_from_api(symbol, api_key) do
-    url = "#{@finnhub_base_url}/stock/profile2"
-
-    case Req.get(url, params: [symbol: symbol, token: api_key]) do
-      {:ok, %{status: 200, body: body}} when is_map(body) and map_size(body) > 0 ->
-        upsert_profile(symbol, body)
-
-      {:ok, %{status: 200, body: _}} ->
-        Logger.warning("No profile data for symbol: #{symbol}")
-        {:error, :no_data}
-
-      {:ok, %{status: 429}} ->
-        Logger.warning("Finnhub rate limit exceeded")
-        {:error, :rate_limited}
-
-      {:ok, %{status: status, body: body}} ->
-        Logger.error("Finnhub profile failed: #{status} - #{inspect(body)}")
-        {:error, :api_error}
-
-      {:error, reason} ->
-        Logger.error("Finnhub request failed: #{inspect(reason)}")
-        {:error, reason}
-    end
-  end
-
-  defp upsert_quote(symbol, api_data) do
+  defp upsert_quote(symbol, data) do
     attrs = %{
       symbol: symbol,
-      current_price: Decimal.new("#{api_data["c"]}"),
-      change: Decimal.new("#{api_data["d"]}"),
-      percent_change: Decimal.new("#{api_data["dp"]}"),
-      high: Decimal.new("#{api_data["h"]}"),
-      low: Decimal.new("#{api_data["l"]}"),
-      open: Decimal.new("#{api_data["o"]}"),
-      previous_close: Decimal.new("#{api_data["pc"]}"),
+      current_price: to_decimal(data[:current_price]),
+      change: to_decimal(data[:change]),
+      percent_change: to_decimal(data[:percent_change]),
+      high: to_decimal(data[:high]),
+      low: to_decimal(data[:low]),
+      open: to_decimal(data[:open]),
+      previous_close: to_decimal(data[:previous_close]),
       fetched_at: DateTime.utc_now()
     }
 
@@ -249,19 +184,19 @@ defmodule Dividendsomatic.Stocks do
     end
   end
 
-  defp upsert_profile(symbol, api_data) do
+  defp upsert_profile(symbol, data) do
     attrs = %{
       symbol: symbol,
-      name: api_data["name"],
-      country: api_data["country"],
-      currency: api_data["currency"],
-      exchange: api_data["exchange"],
-      ipo_date: parse_date(api_data["ipo"]),
-      market_cap: parse_market_cap(api_data["marketCapitalization"]),
-      sector: api_data["finnhubIndustry"],
-      industry: api_data["finnhubIndustry"],
-      logo_url: api_data["logo"],
-      web_url: api_data["weburl"],
+      name: data[:name],
+      country: data[:country],
+      currency: data[:currency],
+      exchange: data[:exchange],
+      ipo_date: parse_date(data[:ipo_date]),
+      market_cap: to_decimal(data[:market_cap]),
+      sector: data[:sector],
+      industry: data[:industry],
+      logo_url: data[:logo_url],
+      web_url: data[:web_url],
       fetched_at: DateTime.utc_now()
     }
 
@@ -278,46 +213,21 @@ defmodule Dividendsomatic.Stocks do
     end
   end
 
-  defp fetch_metrics_from_api(symbol, api_key) do
-    url = "#{@finnhub_base_url}/stock/metric"
-
-    case Req.get(url, params: [symbol: symbol, metric: "all", token: api_key]) do
-      {:ok, %{status: 200, body: %{"metric" => metric}}} when is_map(metric) ->
-        upsert_metrics(symbol, metric)
-
-      {:ok, %{status: 200, body: _}} ->
-        Logger.warning("No metrics data for symbol: #{symbol}")
-        {:error, :no_data}
-
-      {:ok, %{status: 429}} ->
-        Logger.warning("Finnhub rate limit exceeded")
-        {:error, :rate_limited}
-
-      {:ok, %{status: status, body: body}} ->
-        Logger.error("Finnhub metrics failed: #{status} - #{inspect(body)}")
-        {:error, :api_error}
-
-      {:error, reason} ->
-        Logger.error("Finnhub request failed: #{inspect(reason)}")
-        {:error, reason}
-    end
-  end
-
-  defp upsert_metrics(symbol, api_data) do
+  defp upsert_metrics(symbol, data) do
     attrs = %{
       symbol: symbol,
-      pe_ratio: parse_decimal(api_data["peBasicExclExtraTTM"]),
-      pb_ratio: parse_decimal(api_data["pbQuarterly"]),
-      eps: parse_decimal(api_data["epsBasicExclExtraItemsTTM"]),
-      roe: parse_decimal(api_data["roeRfy"]),
-      roa: parse_decimal(api_data["roaRfy"]),
-      net_margin: parse_decimal(api_data["netProfitMarginTTM"]),
-      operating_margin: parse_decimal(api_data["operatingMarginTTM"]),
-      debt_to_equity: parse_decimal(api_data["totalDebt/totalEquityQuarterly"]),
-      current_ratio: parse_decimal(api_data["currentRatioQuarterly"]),
-      fcf_margin: parse_decimal(api_data["fcfMarginTTM"]),
-      beta: parse_decimal(api_data["beta"]),
-      payout_ratio: parse_decimal(api_data["payoutRatioTTM"]),
+      pe_ratio: to_decimal(data[:pe_ratio]),
+      pb_ratio: to_decimal(data[:pb_ratio]),
+      eps: to_decimal(data[:eps]),
+      roe: to_decimal(data[:roe]),
+      roa: to_decimal(data[:roa]),
+      net_margin: to_decimal(data[:net_margin]),
+      operating_margin: to_decimal(data[:operating_margin]),
+      debt_to_equity: to_decimal(data[:debt_to_equity]),
+      current_ratio: to_decimal(data[:current_ratio]),
+      fcf_margin: to_decimal(data[:fcf_margin]),
+      beta: to_decimal(data[:beta]),
+      payout_ratio: to_decimal(data[:payout_ratio]),
       fetched_at: DateTime.utc_now()
     }
 
@@ -334,137 +244,35 @@ defmodule Dividendsomatic.Stocks do
     end
   end
 
-  defp parse_decimal(nil), do: nil
-  defp parse_decimal(value) when is_number(value), do: Decimal.new("#{value}")
-  defp parse_decimal(_), do: nil
-
   ## Historical Prices
 
   @doc """
-  Fetches daily candle data from Finnhub for a stock symbol.
+  Fetches daily candle data for a stock symbol via the provider chain.
 
   Returns `{:ok, count}` with number of records inserted, or `{:error, reason}`.
   """
   def fetch_historical_candles(symbol, from_date, to_date, opts \\ []) do
     isin = Keyword.get(opts, :isin)
 
-    case get_api_key() do
-      {:ok, api_key} ->
-        from_ts = date_to_unix(from_date)
-        to_ts = date_to_unix(to_date)
-        url = "#{@finnhub_base_url}/stock/candle"
-
-        case Req.get(url,
-               params: [symbol: symbol, resolution: "D", from: from_ts, to: to_ts, token: api_key]
-             ) do
-          {:ok, %{status: 200, body: %{"s" => "ok"} = body}} ->
-            insert_candle_data(symbol, isin, body)
-
-          {:ok, %{status: 200, body: %{"s" => "no_data"}}} ->
-            Logger.warning("No candle data for #{symbol} (#{from_date}..#{to_date})")
-            {:ok, 0}
-
-          {:ok, %{status: 429}} ->
-            {:error, :rate_limited}
-
-          {:ok, %{status: 403, body: _}} ->
-            Logger.warning("Finnhub candle access denied for #{symbol} — paid plan required")
-            {:error, :access_denied}
-
-          {:ok, %{status: status, body: body}} ->
-            Logger.error("Finnhub candle failed for #{symbol}: #{status} - #{inspect(body)}")
-            {:error, :api_error}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-
-      {:error, :not_configured} ->
-        {:error, :not_configured}
+    case Dispatcher.dispatch_for(:get_candles, [symbol, from_date, to_date, []], :candles) do
+      {:ok, records} -> insert_provider_records(symbol, isin, records)
+      {:error, _} = error -> error
     end
   end
 
   @doc """
-  Fetches daily forex candle data from Finnhub.
+  Fetches daily forex candle data via the provider chain.
 
   Pair format: "OANDA:EUR_USD". Returns `{:ok, count}`.
   """
   def fetch_forex_candles(pair, from_date, to_date) do
-    case get_api_key() do
-      {:ok, api_key} ->
-        from_ts = date_to_unix(from_date)
-        to_ts = date_to_unix(to_date)
-        url = "#{@finnhub_base_url}/forex/candle"
-
-        case Req.get(url,
-               params: [symbol: pair, resolution: "D", from: from_ts, to: to_ts, token: api_key]
-             ) do
-          {:ok, %{status: 200, body: %{"s" => "ok"} = body}} ->
-            insert_candle_data(pair, nil, body)
-
-          {:ok, %{status: 200, body: %{"s" => "no_data"}}} ->
-            Logger.warning("No forex data for #{pair} (#{from_date}..#{to_date})")
-            {:ok, 0}
-
-          {:ok, %{status: 429}} ->
-            {:error, :rate_limited}
-
-          {:ok, %{status: 403, body: _}} ->
-            Logger.warning("Finnhub forex access denied for #{pair} — paid plan required")
-            {:error, :access_denied}
-
-          {:ok, %{status: status, body: body}} ->
-            Logger.error("Finnhub forex failed for #{pair}: #{status} - #{inspect(body)}")
-            {:error, :api_error}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-
-      {:error, :not_configured} ->
-        {:error, :not_configured}
+    case Dispatcher.dispatch_for(:get_forex_candles, [pair, from_date, to_date], :forex) do
+      {:ok, records} -> insert_provider_records(pair, nil, records)
+      {:error, _} = error -> error
     end
   end
 
-  defp insert_candle_data(symbol, isin, body) do
-    timestamps = body["t"] || []
-    opens = body["o"] || []
-    highs = body["h"] || []
-    lows = body["l"] || []
-    closes = body["c"] || []
-    volumes = body["v"] || []
-
-    records =
-      timestamps
-      |> Enum.with_index()
-      |> Enum.map(fn {ts, i} ->
-        %{
-          symbol: symbol,
-          isin: isin,
-          date: unix_to_date(ts),
-          open: parse_decimal(Enum.at(opens, i)),
-          high: parse_decimal(Enum.at(highs, i)),
-          low: parse_decimal(Enum.at(lows, i)),
-          close: parse_decimal(Enum.at(closes, i)),
-          volume: Enum.at(volumes, i),
-          source: "finnhub"
-        }
-      end)
-
-    count =
-      Enum.reduce(records, 0, fn attrs, acc ->
-        changeset = HistoricalPrice.changeset(%HistoricalPrice{}, attrs)
-
-        case Repo.insert(changeset, on_conflict: :nothing, conflict_target: [:symbol, :date]) do
-          {:ok, _} -> acc + 1
-          {:error, _} -> acc
-        end
-      end)
-
-    {:ok, count}
-  end
-
-  ## Yahoo Finance Historical Data
+  ## Yahoo Finance Historical Data (direct provider calls for mix tasks)
 
   @doc """
   Fetches daily candle data from Yahoo Finance for a stock symbol.
@@ -473,48 +281,48 @@ defmodule Dividendsomatic.Stocks do
   """
   def fetch_yahoo_candles(symbol, from_date, to_date, opts \\ []) do
     isin = Keyword.get(opts, :isin)
-    yahoo_symbol = YahooFinance.to_yahoo_symbol(symbol)
 
-    case YahooFinance.fetch_candles(yahoo_symbol, from_date, to_date) do
-      {:ok, records} ->
-        insert_yahoo_records(symbol, isin, records)
-
-      {:error, reason} ->
-        {:error, reason}
+    case Dividendsomatic.MarketData.Providers.YahooFinance.get_candles(
+           symbol,
+           from_date,
+           to_date,
+           []
+         ) do
+      {:ok, records} -> insert_provider_records(symbol, isin, records)
+      {:error, _} = error -> error
     end
   end
 
   @doc """
   Fetches daily forex candle data from Yahoo Finance.
 
-  Pair format: "OANDA:EUR_USD" (converted to "EURUSD=X" internally).
+  Pair format: "OANDA:EUR_USD" (converted internally).
   Returns `{:ok, count}`.
   """
   def fetch_yahoo_forex(oanda_pair, from_date, to_date) do
-    yahoo_pair = YahooFinance.forex_to_yahoo(oanda_pair)
-
-    case YahooFinance.fetch_forex(yahoo_pair, from_date, to_date) do
-      {:ok, records} ->
-        insert_yahoo_records(oanda_pair, nil, records)
-
-      {:error, reason} ->
-        {:error, reason}
+    case Dividendsomatic.MarketData.Providers.YahooFinance.get_forex_candles(
+           oanda_pair,
+           from_date,
+           to_date
+         ) do
+      {:ok, records} -> insert_provider_records(oanda_pair, nil, records)
+      {:error, _} = error -> error
     end
   end
 
-  defp insert_yahoo_records(symbol, isin, records) do
+  defp insert_provider_records(symbol, isin, records) do
     count =
       Enum.reduce(records, 0, fn record, acc ->
         attrs = %{
           symbol: symbol,
           isin: isin,
           date: record.date,
-          open: parse_decimal(record.open),
-          high: parse_decimal(record.high),
-          low: parse_decimal(record.low),
-          close: parse_decimal(record.close),
+          open: to_decimal(record.open),
+          high: to_decimal(record.high),
+          low: to_decimal(record.low),
+          close: to_decimal(record.close),
           volume: record.volume,
-          source: "yahoo"
+          source: "provider"
         }
 
         changeset = HistoricalPrice.changeset(%HistoricalPrice{}, attrs)
@@ -585,45 +393,15 @@ defmodule Dividendsomatic.Stocks do
     |> Repo.one()
   end
 
-  ## Finnhub ISIN Lookup
+  ## ISIN Lookup
 
   @doc """
-  Looks up a stock's Finnhub symbol by ISIN using the /stock/profile2 endpoint.
+  Looks up a stock's symbol by ISIN via the provider chain.
 
   Returns `{:ok, %{symbol: "TICKER", exchange: "HEX", currency: "EUR"}}` or `{:error, reason}`.
   """
   def lookup_symbol_by_isin(isin) do
-    case get_api_key() do
-      {:ok, api_key} ->
-        url = "#{@finnhub_base_url}/stock/profile2"
-
-        case Req.get(url, params: [isin: isin, token: api_key]) do
-          {:ok, %{status: 200, body: body}} when is_map(body) and map_size(body) > 0 ->
-            {:ok,
-             %{
-               symbol: body["ticker"],
-               exchange: body["exchange"],
-               currency: body["currency"],
-               name: body["name"]
-             }}
-
-          {:ok, %{status: 200, body: _}} ->
-            {:error, :not_found}
-
-          {:ok, %{status: 429}} ->
-            {:error, :rate_limited}
-
-          {:ok, %{status: status, body: body}} ->
-            Logger.error("Finnhub ISIN lookup failed: #{status} - #{inspect(body)}")
-            {:error, :api_error}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-
-      {:error, :not_configured} ->
-        {:error, :not_configured}
-    end
+    Dispatcher.dispatch_for(:lookup_symbol_by_isin, [isin], :isin_lookup)
   end
 
   ## Batch Queries (for chart reconstruction)
@@ -713,21 +491,6 @@ defmodule Dividendsomatic.Stocks do
     |> Repo.all()
   end
 
-  defp date_to_unix(date) do
-    date
-    |> Date.to_iso8601()
-    |> then(&(&1 <> "T00:00:00Z"))
-    |> DateTime.from_iso8601()
-    |> elem(1)
-    |> DateTime.to_unix()
-  end
-
-  defp unix_to_date(timestamp) do
-    timestamp
-    |> DateTime.from_unix!()
-    |> DateTime.to_date()
-  end
-
   ## Company Notes
 
   @doc """
@@ -776,12 +539,12 @@ defmodule Dividendsomatic.Stocks do
     |> Repo.all()
   end
 
-  defp get_api_key do
-    case Application.get_env(:dividendsomatic, :finnhub_api_key) do
-      nil -> {:error, :not_configured}
-      key -> {:ok, key}
-    end
-  end
+  ## Helpers
+
+  defp to_decimal(nil), do: nil
+  defp to_decimal(%Decimal{} = d), do: d
+  defp to_decimal(value) when is_number(value), do: Decimal.new("#{value}")
+  defp to_decimal(value) when is_binary(value), do: Decimal.new(value)
 
   defp parse_date(nil), do: nil
 
@@ -791,8 +554,4 @@ defmodule Dividendsomatic.Stocks do
       _ -> nil
     end
   end
-
-  defp parse_market_cap(nil), do: nil
-  defp parse_market_cap(value) when is_number(value), do: Decimal.new("#{value}")
-  defp parse_market_cap(_), do: nil
 end
