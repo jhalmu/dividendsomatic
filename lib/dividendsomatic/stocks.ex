@@ -17,6 +17,7 @@ defmodule Dividendsomatic.Stocks do
   alias Dividendsomatic.Repo
 
   alias Dividendsomatic.MarketData.Dispatcher
+  alias Dividendsomatic.MarketData.Providers.YahooFinance, as: YahooProvider
 
   alias Dividendsomatic.Stocks.{
     CompanyNote,
@@ -282,12 +283,7 @@ defmodule Dividendsomatic.Stocks do
   def fetch_yahoo_candles(symbol, from_date, to_date, opts \\ []) do
     isin = Keyword.get(opts, :isin)
 
-    case Dividendsomatic.MarketData.Providers.YahooFinance.get_candles(
-           symbol,
-           from_date,
-           to_date,
-           []
-         ) do
+    case YahooProvider.get_candles(symbol, from_date, to_date, []) do
       {:ok, records} -> insert_provider_records(symbol, isin, records)
       {:error, _} = error -> error
     end
@@ -300,11 +296,7 @@ defmodule Dividendsomatic.Stocks do
   Returns `{:ok, count}`.
   """
   def fetch_yahoo_forex(oanda_pair, from_date, to_date) do
-    case Dividendsomatic.MarketData.Providers.YahooFinance.get_forex_candles(
-           oanda_pair,
-           from_date,
-           to_date
-         ) do
+    case YahooProvider.get_forex_candles(oanda_pair, from_date, to_date) do
       {:ok, records} -> insert_provider_records(oanda_pair, nil, records)
       {:error, _} = error -> error
     end
