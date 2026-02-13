@@ -24,7 +24,8 @@ defmodule Dividendsomatic.Stocks do
     HistoricalPrice,
     StockMetric,
     StockQuote,
-    SymbolMapping
+    SymbolMapping,
+    YahooFinance
   }
 
   @finnhub_base_url "https://finnhub.io/api/v1"
@@ -463,6 +464,70 @@ defmodule Dividendsomatic.Stocks do
     {:ok, count}
   end
 
+  ## Yahoo Finance Historical Data
+
+  @doc """
+  Fetches daily candle data from Yahoo Finance for a stock symbol.
+
+  Returns `{:ok, count}` with number of records inserted, or `{:error, reason}`.
+  """
+  def fetch_yahoo_candles(symbol, from_date, to_date, opts \\ []) do
+    isin = Keyword.get(opts, :isin)
+    yahoo_symbol = YahooFinance.to_yahoo_symbol(symbol)
+
+    case YahooFinance.fetch_candles(yahoo_symbol, from_date, to_date) do
+      {:ok, records} ->
+        insert_yahoo_records(symbol, isin, records)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Fetches daily forex candle data from Yahoo Finance.
+
+  Pair format: "OANDA:EUR_USD" (converted to "EURUSD=X" internally).
+  Returns `{:ok, count}`.
+  """
+  def fetch_yahoo_forex(oanda_pair, from_date, to_date) do
+    yahoo_pair = YahooFinance.forex_to_yahoo(oanda_pair)
+
+    case YahooFinance.fetch_forex(yahoo_pair, from_date, to_date) do
+      {:ok, records} ->
+        insert_yahoo_records(oanda_pair, nil, records)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp insert_yahoo_records(symbol, isin, records) do
+    count =
+      Enum.reduce(records, 0, fn record, acc ->
+        attrs = %{
+          symbol: symbol,
+          isin: isin,
+          date: record.date,
+          open: parse_decimal(record.open),
+          high: parse_decimal(record.high),
+          low: parse_decimal(record.low),
+          close: parse_decimal(record.close),
+          volume: record.volume,
+          source: "yahoo"
+        }
+
+        changeset = HistoricalPrice.changeset(%HistoricalPrice{}, attrs)
+
+        case Repo.insert(changeset, on_conflict: :nothing, conflict_target: [:symbol, :date]) do
+          {:ok, _} -> acc + 1
+          {:error, _} -> acc
+        end
+      end)
+
+    {:ok, count}
+  end
+
   @doc """
   Gets the close price for a symbol on a given date.
 
@@ -518,6 +583,47 @@ defmodule Dividendsomatic.Stocks do
     |> where([p], p.symbol == ^symbol)
     |> select([p], %{min_date: min(p.date), max_date: max(p.date), count: count()})
     |> Repo.one()
+  end
+
+  ## Finnhub ISIN Lookup
+
+  @doc """
+  Looks up a stock's Finnhub symbol by ISIN using the /stock/profile2 endpoint.
+
+  Returns `{:ok, %{symbol: "TICKER", exchange: "HEX", currency: "EUR"}}` or `{:error, reason}`.
+  """
+  def lookup_symbol_by_isin(isin) do
+    case get_api_key() do
+      {:ok, api_key} ->
+        url = "#{@finnhub_base_url}/stock/profile2"
+
+        case Req.get(url, params: [isin: isin, token: api_key]) do
+          {:ok, %{status: 200, body: body}} when is_map(body) and map_size(body) > 0 ->
+            {:ok,
+             %{
+               symbol: body["ticker"],
+               exchange: body["exchange"],
+               currency: body["currency"],
+               name: body["name"]
+             }}
+
+          {:ok, %{status: 200, body: _}} ->
+            {:error, :not_found}
+
+          {:ok, %{status: 429}} ->
+            {:error, :rate_limited}
+
+          {:ok, %{status: status, body: body}} ->
+            Logger.error("Finnhub ISIN lookup failed: #{status} - #{inspect(body)}")
+            {:error, :api_error}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+
+      {:error, :not_configured} ->
+        {:error, :not_configured}
+    end
   end
 
   ## Symbol Mappings (CRUD)

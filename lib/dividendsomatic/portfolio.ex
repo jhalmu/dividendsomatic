@@ -692,6 +692,34 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   @doc """
+  Returns sold positions grouped by symbol with aggregated stats.
+
+  Each entry: `%{symbol, trades, total_quantity, total_pnl, first_date, last_date, avg_held_days}`
+  Sorted by total_pnl descending (biggest winners first).
+  """
+  def list_sold_positions_grouped do
+    SoldPosition
+    |> group_by([s], s.symbol)
+    |> select([s], %{
+      symbol: s.symbol,
+      trades: count(s.id),
+      total_quantity: sum(s.quantity),
+      total_pnl: sum(s.realized_pnl),
+      first_date: min(s.purchase_date),
+      last_date: max(s.sale_date)
+    })
+    |> order_by([s], desc: sum(s.realized_pnl))
+    |> Repo.all()
+  end
+
+  @doc """
+  Returns count of sold positions.
+  """
+  def count_sold_positions do
+    Repo.aggregate(SoldPosition, :count)
+  end
+
+  @doc """
   Lists sold positions for a specific symbol.
   """
   def list_sold_positions_by_symbol(symbol) do

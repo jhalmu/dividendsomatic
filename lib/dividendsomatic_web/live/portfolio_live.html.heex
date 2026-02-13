@@ -312,7 +312,7 @@
         >
           <div class="flex items-center justify-between">
             <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
-              Realized P&L ({length(@sold_positions)} sold)
+              Realized P&L ({@sold_positions_count} trades, {length(@sold_positions_grouped)} symbols)
             </div>
             <div
               class={"terminal-stat-value #{if pnl_positive?(@realized_pnl), do: "gain", else: "loss"}"}
@@ -321,21 +321,20 @@
               {format_euro_signed(@realized_pnl)}
             </div>
           </div>
-          <%= if length(@sold_positions) > 0 do %>
+          <%= if length(@sold_positions_grouped) > 0 do %>
             <div class="overflow-x-auto mt-[var(--space-xs)]">
               <table class="terminal-table">
                 <thead>
                   <tr>
                     <th scope="col">Symbol</th>
-                    <th scope="col">Qty</th>
-                    <th scope="col" style="text-align: right;">Buy</th>
-                    <th scope="col" style="text-align: right;">Sell</th>
+                    <th scope="col" style="text-align: right;">Trades</th>
+                    <th scope="col" style="text-align: right;">Qty</th>
                     <th scope="col" style="text-align: right;">P&L</th>
-                    <th scope="col">Held</th>
+                    <th scope="col" style="text-align: right;">Period</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <%= for sp <- @sold_positions do %>
+                  <%= for sp <- @sold_positions_grouped do %>
                     <tr>
                       <td>
                         <.link
@@ -345,26 +344,25 @@
                           {sp.symbol}
                         </.link>
                       </td>
-                      <td class="terminal-number">{format_integer(sp.quantity)}</td>
-                      <td
-                        class="terminal-number"
-                        style="text-align: right; color: var(--terminal-dim);"
-                      >
-                        {format_decimal(sp.purchase_price)}
+                      <td class="terminal-number" style="text-align: right; color: var(--terminal-dim);">
+                        {sp.trades}
                       </td>
                       <td class="terminal-number" style="text-align: right;">
-                        {format_decimal(sp.sale_price)}
+                        {format_integer(sp.total_quantity)}
                       </td>
                       <td class="terminal-number" style="text-align: right;">
-                        <span class={pnl_badge_class(sp.realized_pnl)}>
-                          <%= if pnl_positive?(sp.realized_pnl) do %>
+                        <span class={pnl_badge_class(sp.total_pnl)}>
+                          <%= if pnl_positive?(sp.total_pnl) do %>
                             +
                           <% end %>
-                          {format_euro_decimal(sp.realized_pnl)}
+                          {format_euro_decimal(sp.total_pnl)}
                         </span>
                       </td>
-                      <td class="terminal-number" style="color: var(--terminal-dim);">
-                        {Date.diff(sp.sale_date, sp.purchase_date)}d
+                      <td
+                        class="terminal-number"
+                        style="text-align: right; color: var(--terminal-dim); font-size: 0.75rem;"
+                      >
+                        {Calendar.strftime(sp.first_date, "%Y")}–{Calendar.strftime(sp.last_date, "%Y")}
                       </td>
                     </tr>
                   <% end %>

@@ -361,7 +361,8 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:realized_pnl, Portfolio.total_realized_pnl())
     |> assign(:fear_greed, get_fear_greed_for_snapshot(socket, snapshot))
     |> assign(:fx_exposure, Portfolio.compute_fx_exposure(holdings))
-    |> assign(:sold_positions, Portfolio.list_sold_positions())
+    |> assign(:sold_positions_grouped, Portfolio.list_sold_positions_grouped())
+    |> assign(:sold_positions_count, Portfolio.count_sold_positions())
     |> assign(:cash_flow, Portfolio.dividend_cash_flow_summary())
   end
 

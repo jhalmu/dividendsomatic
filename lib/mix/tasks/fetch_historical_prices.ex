@@ -1,11 +1,15 @@
 defmodule Mix.Tasks.Fetch.HistoricalPrices do
   @moduledoc """
-  Fetch historical prices from Finnhub for portfolio reconstruction.
+  Fetch historical prices for portfolio reconstruction.
+
+  Uses Yahoo Finance (free, no API key) for OHLCV candle data and forex rates.
+  Falls back to Finnhub if `--finnhub` flag is passed (requires paid plan).
 
   Usage:
-    mix fetch.historical_prices              # Full pipeline
+    mix fetch.historical_prices              # Full pipeline (Yahoo Finance)
     mix fetch.historical_prices --resolve    # Only resolve ISIN→symbol mappings
     mix fetch.historical_prices --dry-run    # Preview what would be fetched
+    mix fetch.historical_prices --finnhub    # Use Finnhub instead of Yahoo
   """
   use Mix.Task
 
@@ -16,10 +20,10 @@ defmodule Mix.Tasks.Fetch.HistoricalPrices do
   alias Dividendsomatic.Stocks
   alias Dividendsomatic.Stocks.SymbolMapper
 
-  @shortdoc "Fetch historical prices from Finnhub"
+  @shortdoc "Fetch historical prices (Yahoo Finance)"
 
-  # Finnhub free tier: 60 calls/minute
-  @rate_limit_ms 1100
+  # Yahoo Finance is more lenient, but be polite
+  @rate_limit_ms 500
 
   # Forex pairs needed for EUR conversion
   @forex_pairs [
@@ -38,17 +42,34 @@ defmodule Mix.Tasks.Fetch.HistoricalPrices do
     cond do
       "--resolve" in args -> resolve_only()
       "--dry-run" in args -> dry_run()
-      true -> full_pipeline()
+      true -> full_pipeline(args)
     end
   end
 
   defp resolve_only do
-    IO.puts("--- Resolving ISIN → Finnhub symbol mappings ---\n")
+    IO.puts("--- Resolving ISIN → symbol mappings ---\n")
+    IO.puts("Step 1: Local resolution (cache + holdings + known ISINs)...")
     {resolved, unmappable, pending} = SymbolMapper.resolve_all()
+    IO.puts("  Resolved: #{resolved}, Unmappable: #{unmappable}, Pending: #{pending}\n")
 
-    IO.puts("  Resolved: #{resolved}")
-    IO.puts("  Unmappable: #{unmappable}")
-    IO.puts("  Pending: #{pending}")
+    if pending > 0 do
+      IO.puts("Step 2: Finnhub ISIN lookup for #{pending} pending symbols...")
+
+      IO.puts(
+        "  (rate-limited: ~1 request/sec, estimated #{div(pending * 1100, 60_000) + 1} min)\n"
+      )
+
+      {new_resolved, new_unmappable, still_pending} = SymbolMapper.resolve_pending()
+
+      IO.puts("\n--- Resolution Summary ---")
+      IO.puts("  Previously resolved: #{resolved}")
+      IO.puts("  Newly resolved: #{new_resolved}")
+      IO.puts("  Newly unmappable: #{new_unmappable}")
+      IO.puts("  Still pending: #{still_pending}")
+      IO.puts("  Total resolved: #{resolved + new_resolved}")
+    else
+      IO.puts("No pending symbols to look up.")
+    end
   end
 
   defp dry_run do
@@ -84,17 +105,20 @@ defmodule Mix.Tasks.Fetch.HistoricalPrices do
     Enum.each(needed_fx, fn {pair, currency} -> IO.puts("  #{pair} (#{currency})") end)
 
     total_calls = length(mappings) + length(needed_fx)
+    rate_ms = @rate_limit_ms
 
     IO.puts(
-      "\nEstimated API calls: #{total_calls} (~#{div(total_calls * @rate_limit_ms, 60_000) + 1} min)"
+      "\nEstimated API calls: #{total_calls} (~#{div(total_calls * rate_ms, 60_000) + 1} min)"
     )
   end
 
-  defp full_pipeline do
-    IO.puts("--- Historical Price Fetch Pipeline ---\n")
+  defp full_pipeline(args) do
+    use_finnhub = "--finnhub" in args
+    source = if use_finnhub, do: "Finnhub", else: "Yahoo Finance"
+    IO.puts("--- Historical Price Fetch Pipeline (#{source}) ---\n")
 
     # Step 1: Resolve symbols
-    IO.puts("Step 1: Resolving ISIN → Finnhub symbols...")
+    IO.puts("Step 1: Resolving ISIN → symbols...")
     {resolved, unmappable, pending} = SymbolMapper.resolve_all()
     IO.puts("  #{resolved} resolved, #{unmappable} unmappable, #{pending} pending\n")
 
@@ -106,7 +130,7 @@ defmodule Mix.Tasks.Fetch.HistoricalPrices do
 
     stock_results =
       Enum.reduce(mappings, {0, 0}, fn mapping, acc ->
-        fetch_stock_candle(mapping, date_ranges, acc)
+        fetch_stock_candle(mapping, date_ranges, acc, use_finnhub)
       end)
 
     IO.puts(
@@ -121,7 +145,7 @@ defmodule Mix.Tasks.Fetch.HistoricalPrices do
     IO.puts("Step 3: Fetching forex rates (#{length(needed_fx)} pairs)...")
 
     if global_from do
-      Enum.each(needed_fx, &fetch_forex_pair(&1, global_from, global_to))
+      Enum.each(needed_fx, &fetch_forex_pair(&1, global_from, global_to, use_finnhub))
     else
       IO.puts("  No date range found, skipping forex")
     end
@@ -129,17 +153,24 @@ defmodule Mix.Tasks.Fetch.HistoricalPrices do
     IO.puts("\n--- Done ---")
   end
 
-  defp fetch_forex_pair({pair, currency}, global_from, global_to) do
+  defp fetch_forex_pair({pair, currency}, global_from, global_to, use_finnhub) do
     IO.write("  #{pair} (#{currency})...")
     Process.sleep(@rate_limit_ms)
 
-    case Stocks.fetch_forex_candles(pair, global_from, global_to) do
+    result =
+      if use_finnhub do
+        Stocks.fetch_forex_candles(pair, global_from, global_to)
+      else
+        Stocks.fetch_yahoo_forex(pair, global_from, global_to)
+      end
+
+    case result do
       {:ok, count} -> IO.puts(" #{count} records")
       {:error, reason} -> IO.puts(" ERROR: #{inspect(reason)}")
     end
   end
 
-  defp fetch_stock_candle(mapping, date_ranges, {success, fail}) do
+  defp fetch_stock_candle(mapping, date_ranges, {success, fail}, use_finnhub) do
     case Map.get(date_ranges, mapping.isin) do
       nil ->
         {success, fail}
@@ -148,12 +179,24 @@ defmodule Mix.Tasks.Fetch.HistoricalPrices do
         IO.write("  #{mapping.finnhub_symbol}...")
         Process.sleep(@rate_limit_ms)
 
-        case Stocks.fetch_historical_candles(
-               mapping.finnhub_symbol,
-               range.first_date,
-               range.last_date,
-               isin: mapping.isin
-             ) do
+        result =
+          if use_finnhub do
+            Stocks.fetch_historical_candles(
+              mapping.finnhub_symbol,
+              range.first_date,
+              range.last_date,
+              isin: mapping.isin
+            )
+          else
+            Stocks.fetch_yahoo_candles(
+              mapping.finnhub_symbol,
+              range.first_date,
+              range.last_date,
+              isin: mapping.isin
+            )
+          end
+
+        case result do
           {:ok, count} ->
             IO.puts(" #{count} records")
             {success + 1, fail}

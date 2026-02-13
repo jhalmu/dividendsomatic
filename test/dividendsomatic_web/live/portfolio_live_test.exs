@@ -285,7 +285,8 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       {:ok, _view, html} = live(conn, ~p"/")
 
       assert html =~ "Realized P&amp;L"
-      assert html =~ "1 sold"
+      assert html =~ "1 trades"
+      assert html =~ "1 symbols"
       assert html =~ "AAPL"
     end
 
@@ -322,8 +323,9 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
 
       {:ok, _view, html} = live(conn, ~p"/")
 
-      # Date.diff(~D[2026-01-15], ~D[2025-01-01]) = 379
-      assert html =~ "379d"
+      # Grouped view shows year range instead of individual holding period
+      assert html =~ "2025"
+      assert html =~ "2026"
     end
   end
 
