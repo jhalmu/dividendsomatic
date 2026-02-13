@@ -82,28 +82,29 @@ defmodule Dividendsomatic.Portfolio.Nordnet9aParser do
     case File.read(path) do
       {:ok, binary} ->
         text =
-          cond do
+          case binary do
             # UTF-16 LE BOM
-            String.starts_with?(binary, <<0xFF, 0xFE>>) ->
-              binary
-              |> String.slice(2..-1//1)
-              |> :unicode.characters_to_binary(:utf16, :utf8)
+            <<0xFF, 0xFE, rest::binary>> ->
+              rest
+              |> :unicode.characters_to_binary({:utf16, :little}, :utf8)
               |> handle_unicode_result()
 
             # UTF-16 BE BOM
-            String.starts_with?(binary, <<0xFE, 0xFF>>) ->
-              binary
-              |> String.slice(2..-1//1)
+            <<0xFE, 0xFF, rest::binary>> ->
+              rest
               |> :unicode.characters_to_binary({:utf16, :big}, :utf8)
               |> handle_unicode_result()
 
-            # UTF-8 (possibly with BOM)
-            String.starts_with?(binary, <<0xEF, 0xBB, 0xBF>>) ->
-              String.slice(binary, 3..-1//1)
+            # UTF-8 BOM
+            <<0xEF, 0xBB, 0xBF, rest::binary>> ->
+              rest
 
-            true ->
+            _ ->
               binary
           end
+
+        # Strip any remaining UTF-8 BOM after conversion
+        text = String.replace_prefix(text, "\uFEFF", "")
 
         {:ok, text}
 
@@ -146,18 +147,31 @@ defmodule Dividendsomatic.Portfolio.Nordnet9aParser do
   defp parse_rows([]), do: []
 
   defp detect_columns(columns) do
-    # Try to detect columns by known Finnish headers
+    # Try to detect columns by known Finnish headers (multiple variations)
     %{
-      security: find_col_index(columns, ["Arvopaperi", "Nimi", "Security"]),
+      security:
+        find_col_index(columns, [
+          "Luovutettu arvopaperi",
+          "Arvopaperi",
+          "Nimi",
+          "Security"
+        ]),
       quantity: find_col_index(columns, ["Määrä", "Quantity"]),
-      purchase_date: find_col_index(columns, ["Hankintapäivä", "Purchase date"]),
-      sale_date: find_col_index(columns, ["Luovutuspäivä", "Sale date"]),
+      purchase_date:
+        find_col_index(columns, ["Hankinta-aika", "Hankintapäivä", "Purchase date"]),
+      sale_date: find_col_index(columns, ["Luovutusaika", "Luovutuspäivä", "Sale date"]),
       sale_price: find_col_index(columns, ["Luovutushinta", "Sale price"]),
       purchase_price: find_col_index(columns, ["Hankintahinta", "Purchase price"]),
       purchase_costs: find_col_index(columns, ["Hankintakulut", "Purchase costs"]),
-      sale_costs: find_col_index(columns, ["Luovutuskulut", "Sale costs"]),
+      sale_costs: find_col_index(columns, ["Myyntikulut", "Luovutuskulut", "Sale costs"]),
       deemed_cost: find_col_index(columns, ["Hankintameno-olettama", "Deemed cost"]),
-      pnl: find_col_index(columns, ["Voitto/tappio", "Voitto", "P&L"])
+      pnl:
+        find_col_index(columns, [
+          "Voitto tai tappio",
+          "Voitto/tappio",
+          "Voitto",
+          "P&L"
+        ])
     }
   end
 
