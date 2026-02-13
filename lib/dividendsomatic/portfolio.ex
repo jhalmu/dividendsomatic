@@ -1239,6 +1239,7 @@ defmodule Dividendsomatic.Portfolio do
   defp fetch_ibkr_stock_ranges do
     Holding
     |> where([h], not is_nil(h.isin))
+    |> where([h], fragment("length(?) >= 12", h.isin))
     |> group_by([h], [h.isin, h.symbol, h.description])
     |> select([h], %{
       isin: h.isin,

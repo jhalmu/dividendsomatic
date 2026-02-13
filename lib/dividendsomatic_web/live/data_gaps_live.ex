@@ -100,16 +100,10 @@ defmodule DividendsomaticWeb.DataGapsLive do
     |> assign(:summary, summary)
   end
 
-  defp sort_gaps(gaps, :name, dir), do: Enum.sort_by(gaps, & &1.name, sort_fn(dir))
-  defp sort_gaps(gaps, :gap_days, dir), do: Enum.sort_by(gaps, & &1.gap_days, sort_fn(dir))
-
-  defp sort_gaps(gaps, :brokers, dir),
-    do: Enum.sort_by(gaps, &length(&1.brokers), sort_fn(dir))
-
-  defp sort_gaps(gaps, _field, dir), do: Enum.sort_by(gaps, & &1.name, sort_fn(dir))
-
-  defp sort_fn(:asc), do: :asc
-  defp sort_fn(:desc), do: :desc
+  defp sort_gaps(gaps, :name, dir), do: Enum.sort_by(gaps, & &1.name, dir)
+  defp sort_gaps(gaps, :gap_days, dir), do: Enum.sort_by(gaps, & &1.gap_days, dir)
+  defp sort_gaps(gaps, :brokers, dir), do: Enum.sort_by(gaps, &length(&1.brokers), dir)
+  defp sort_gaps(gaps, _field, dir), do: Enum.sort_by(gaps, & &1.name, dir)
 
   defp toggle_dir(:asc), do: :desc
   defp toggle_dir(:desc), do: :asc
@@ -134,8 +128,11 @@ defmodule DividendsomaticWeb.DataGapsLive do
     total = length(stock_gaps)
     with_gap = Enum.count(stock_gaps, & &1.has_gap)
     both_brokers = Enum.count(stock_gaps, fn g -> length(g.brokers) == 2 end)
-    nordnet_only = Enum.count(stock_gaps, fn g -> g.brokers == ["nordnet"] end)
-    ibkr_only = Enum.count(stock_gaps, fn g -> g.brokers == ["ibkr"] end)
+
+    nordnet_only =
+      Enum.count(stock_gaps, fn g -> length(g.brokers) == 1 and "nordnet" in g.brokers end)
+
+    ibkr_only = Enum.count(stock_gaps, fn g -> length(g.brokers) == 1 and "ibkr" in g.brokers end)
     total_gap_days = Enum.reduce(stock_gaps, 0, fn g, acc -> acc + g.gap_days end)
 
     %{

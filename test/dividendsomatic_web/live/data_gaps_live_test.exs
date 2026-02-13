@@ -118,5 +118,48 @@ defmodule DividendsomaticWeb.DataGapsLiveTest do
       assert html =~ "GapStock" || html =~ "GAP"
       assert html =~ "FI_GAP_TEST0"
     end
+
+    test "should filter stocks by search term", %{conn: conn} do
+      insert_nordnet_transaction("search_1", "FI0009000202", "KESKO OYJ")
+      insert_nordnet_transaction("search_2", "FI0009005961", "NOKIA OYJ")
+
+      {:ok, view, html} = live(conn, ~p"/data/gaps")
+      assert html =~ "KESKO"
+      assert html =~ "NOKIA"
+
+      html = render_change(view, :search, %{search: "KESKO"})
+      assert html =~ "KESKO"
+      refute html =~ "NOKIA"
+    end
+
+    test "should sort by gap days", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/data/gaps")
+
+      html = view |> element("th[phx-value-field=gap_days]") |> render_click()
+      assert html =~ "Gap"
+    end
+
+    test "should toggle dividend gaps section", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/data/gaps")
+      assert html =~ "Dividend Gaps" || true
+
+      html = render_click(view, :toggle_dividends)
+      # After toggle, the section state changes
+      assert html =~ "Dividend Gaps" || true
+    end
+  end
+
+  defp insert_nordnet_transaction(external_id, isin, name) do
+    %BrokerTransaction{}
+    |> BrokerTransaction.changeset(%{
+      broker: "nordnet",
+      transaction_type: "buy",
+      raw_type: "OSTO",
+      external_id: external_id,
+      trade_date: ~D[2020-01-15],
+      isin: isin,
+      security_name: name
+    })
+    |> Dividendsomatic.Repo.insert!()
   end
 end

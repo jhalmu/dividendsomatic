@@ -79,7 +79,9 @@
           </div>
         <% end %>
         <!-- SVG Timeline Bar -->
-        <%= if @coverage.nordnet && @coverage.ibkr_txns && @coverage.nordnet.min_date && @coverage.ibkr_txns.max_date do %>
+        <%= if @coverage.nordnet && @coverage.nordnet.min_date &&
+              ((@coverage.ibkr_txns && @coverage.ibkr_txns.min_date) ||
+               (@coverage.ibkr && @coverage.ibkr.min_date)) do %>
           <div class="mt-[var(--space-xs)]">
             <% timeline_start =
               Enum.min(
