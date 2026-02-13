@@ -199,7 +199,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
 
       assert html =~ "Portfolio Value"
       assert html =~ "Unrealized P&amp;L"
-      assert html =~ "Dividends YTD"
+      assert html =~ "Dividends #{Date.utc_today().year}"
       assert html =~ "Holdings"
     end
 

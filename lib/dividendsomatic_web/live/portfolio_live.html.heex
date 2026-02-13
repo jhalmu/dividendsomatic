@@ -30,16 +30,38 @@
         </div>
 
         <div class="terminal-stat animate-fade-in animate-delay-3">
-          <div class="terminal-stat-label">Dividends YTD</div>
+          <div class="terminal-stat-label flex items-center justify-center gap-[var(--space-xs)]">
+            <button
+              phx-click="cycle_dividend_year"
+              phx-value-direction="prev"
+              class="terminal-nav-btn"
+              style="font-size: 0.625rem; padding: 0 2px; opacity: 0.5;"
+              aria-label="Previous year"
+            >
+              ◀
+            </button>
+            <span>Dividends {@dividend_year}</span>
+            <button
+              phx-click="cycle_dividend_year"
+              phx-value-direction="next"
+              class="terminal-nav-btn"
+              style="font-size: 0.625rem; padding: 0 2px; opacity: 0.5;"
+              aria-label="Next year"
+            >
+              ▶
+            </button>
+          </div>
           <div class="terminal-stat-value gain">
-            {format_euro_decimal(@dividends_ytd)}
+            {format_euro_decimal(@dividend_total)}
           </div>
-          <div
-            class="mt-[var(--space-inline)]"
-            style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);"
-          >
-            Proj. {format_euro_decimal(@projected_dividends)}/yr
-          </div>
+          <%= if @projected_dividends do %>
+            <div
+              class="mt-[var(--space-inline)]"
+              style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);"
+            >
+              Proj. {format_euro_decimal(@projected_dividends)}/yr
+            </div>
+          <% end %>
         </div>
 
         <div class="terminal-stat terminal-stat-fg animate-fade-in animate-delay-4">

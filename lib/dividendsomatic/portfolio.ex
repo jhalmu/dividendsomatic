@@ -462,11 +462,29 @@ defmodule Dividendsomatic.Portfolio do
   Gets total dividend income for the current year (base currency).
   """
   def total_dividends_this_year do
-    year_start = Date.new!(Date.utc_today().year, 1, 1)
-    today = Date.utc_today()
+    total_dividends_for_year(Date.utc_today().year)
+  end
 
-    dividends_by_month(year_start, today)
+  @doc """
+  Gets total dividend income for a specific year.
+  """
+  def total_dividends_for_year(year) do
+    year_start = Date.new!(year, 1, 1)
+    year_end = if year == Date.utc_today().year, do: Date.utc_today(), else: Date.new!(year, 12, 31)
+
+    dividends_by_month(year_start, year_end)
     |> Enum.reduce(Decimal.new("0"), fn %{total: t}, acc -> Decimal.add(acc, t) end)
+  end
+
+  @doc """
+  Returns years that have dividend data, most recent first.
+  """
+  def dividend_years do
+    Dividend
+    |> where([d], not is_nil(d.ex_date))
+    |> select([d], fragment("DISTINCT EXTRACT(YEAR FROM ?)::integer", d.ex_date))
+    |> Repo.all()
+    |> Enum.sort(:desc)
   end
 
   @doc """

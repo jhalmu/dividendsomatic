@@ -17,9 +17,14 @@ defmodule DividendsomaticWeb.PortfolioLive do
       Process.send_after(self(), :refresh_fear_greed, @fg_refresh_interval)
     end
 
+    current_year = Date.utc_today().year
+    dividend_years = Portfolio.dividend_years() |> Enum.filter(&(&1 >= 2017))
+
     socket =
       socket
       |> assign(:live_fear_greed, live_fg)
+      |> assign(:dividend_year, current_year)
+      |> assign(:dividend_years, dividend_years)
       |> assign_snapshot(snapshot)
 
     {:ok, socket}
@@ -111,6 +116,19 @@ defmodule DividendsomaticWeb.PortfolioLive do
   def handle_event("navigate", %{"direction" => "last"}, socket) do
     latest_snapshot = Portfolio.get_latest_snapshot()
     {:noreply, navigate_to_snapshot(socket, latest_snapshot)}
+  end
+
+  def handle_event("cycle_dividend_year", %{"direction" => direction}, socket) do
+    years = socket.assigns.dividend_years
+    current = socket.assigns.dividend_year
+
+    new_year =
+      case direction do
+        "prev" -> Enum.find(years, current, &(&1 > current))
+        "next" -> Enum.find(Enum.reverse(years), current, &(&1 < current))
+      end
+
+    {:noreply, socket |> assign(:dividend_year, new_year) |> assign_dividend_stats()}
   end
 
   @impl true
@@ -309,7 +327,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:total_snapshots, 0)
     |> assign(:chart_data, [])
     |> assign(:growth_stats, nil)
-    |> assign(:dividends_ytd, Decimal.new("0"))
+    |> assign(:dividend_total, Decimal.new("0"))
     |> assign(:projected_dividends, Decimal.new("0"))
     |> assign(:recent_dividends, [])
     |> assign(:dividend_by_month, [])
@@ -353,8 +371,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:total_snapshots, total_snapshots)
     |> assign(:chart_data, chart_data)
     |> assign(:growth_stats, Portfolio.get_growth_stats(snapshot))
-    |> assign(:dividends_ytd, Portfolio.total_dividends_this_year())
-    |> assign(:projected_dividends, Portfolio.projected_annual_dividends())
+    |> assign_dividend_stats()
     |> assign(:recent_dividends, Portfolio.list_dividends_with_income() |> Enum.take(5))
     |> assign(:dividend_by_month, dividends_for_chart(chart_data))
     |> assign(:sparkline_values, sparkline_values)
@@ -372,4 +389,21 @@ defmodule DividendsomaticWeb.PortfolioLive do
   end
 
   defp dividends_for_chart(_), do: []
+
+  defp assign_dividend_stats(socket) do
+    year = socket.assigns.dividend_year
+    total = Portfolio.total_dividends_for_year(year)
+    current_year = Date.utc_today().year
+
+    projected =
+      if year == current_year do
+        Portfolio.projected_annual_dividends()
+      else
+        nil
+      end
+
+    socket
+    |> assign(:dividend_total, total)
+    |> assign(:projected_dividends, projected)
+  end
 end
