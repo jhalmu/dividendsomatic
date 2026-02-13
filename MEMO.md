@@ -51,10 +51,23 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.16.0 (EUR Currency Conversion for Realized P&L)
-**Status:** P&L totals now correctly converted to EUR across all currencies
+**Version:** 0.17.0 (Lynx 9A PDF Trade Import)
+**Status:** 6,291 sold positions across all sources (2019-2026)
 
-**Latest session (2026-02-13, EVENING):**
+**Latest session (2026-02-13, LATE EVENING):**
+- **Lynx 9A PDF trade extraction & import**
+  - Extracted 7,163 trades from 9 Lynx/IBKR PDF files (9A Vero tax forms, 2019-2024)
+  - Two extraction methods: pikepdf widget annotations (2019-2020, 2022-2024) and pdftotext (2021 lukittu PDFs)
+  - Created `mix import_lynx9a` task with 553 name→ticker mappings (DB lookup + manual map)
+  - Imported 4,666 sold positions (source: `lynx_9a`)
+  - **2020 was completely missing** — now filled with 254 positions across 57 stocks
+  - **2019 expanded** from 9 to 129 positions (added IBKR account U2299935)
+  - 2021-2024: 4,292 lot-level trade details added
+  - Grand total: 6,291 sold positions, P&L: -302,301 EUR across all sources
+  - Also extracted summary CSV: `csv_data/archive/lynx_all_9a_trades.csv` (7,163 rows)
+- 426 tests, 0 failures
+
+**Previous session (2026-02-13, EVENING):**
 - **Automated IBKR Flex CSV import pipeline**
   - `bin/fetch_flex_email.sh` — AppleScript email fetcher (Mail.app → csv_data/)
   - launchd plist — Mon-Fri 11:30 EET, extracts CSV attachments from Activity Flex mailbox
@@ -95,7 +108,7 @@ mix ecto.reset              # Drop + create + migrate
   - Nordnet-only / IBKR-only counts in summary (6 stats instead of 4)
   - Collapsible dividend gaps section
   - Broker badges + gap row highlighting
-- DB totals: 159 snapshots, 3,930 holdings, 7,404 broker txns, 6,148 dividends, 1,625 sold positions, 4,598 costs
+- DB totals: 159 snapshots, 3,930 holdings, 7,404 broker txns, 6,148 dividends, 6,291 sold positions, 4,598 costs
 - 409 tests, 0 failures, 0 credo issues
 
 **Previous session (2026-02-13, EVE):**

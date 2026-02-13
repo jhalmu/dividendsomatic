@@ -14,6 +14,7 @@ defmodule Dividendsomatic.Portfolio.PortfolioSnapshot do
   schema "portfolio_snapshots" do
     field :report_date, :date
     field :raw_csv_data, :string
+    field :source, :string
 
     has_many :holdings, Dividendsomatic.Portfolio.Holding
 
@@ -22,7 +23,7 @@ defmodule Dividendsomatic.Portfolio.PortfolioSnapshot do
 
   def changeset(snapshot, attrs) do
     snapshot
-    |> cast(attrs, [:report_date, :raw_csv_data])
+    |> cast(attrs, [:report_date, :raw_csv_data, :source])
     |> validate_required([:report_date])
     |> unique_constraint(:report_date)
   end

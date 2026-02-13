@@ -185,6 +185,7 @@ defmodule Dividendsomatic.Portfolio do
   """
   def get_ibkr_chart_data do
     PortfolioSnapshot
+    |> where([s], is_nil(s.source) or s.source != "nordnet_reconstructed")
     |> order_by([s], asc: s.report_date)
     |> preload(:holdings)
     |> Repo.all()
@@ -402,6 +403,16 @@ defmodule Dividendsomatic.Portfolio do
     |> order_by([s], asc: s.report_date)
     |> limit(1)
     |> preload(:holdings)
+    |> Repo.one()
+  end
+
+  @doc """
+  Returns the report_date of the latest IBKR snapshot (excludes reconstructed).
+  """
+  def get_latest_snapshot_date do
+    PortfolioSnapshot
+    |> where([s], is_nil(s.source) or s.source != "nordnet_reconstructed")
+    |> select([s], max(s.report_date))
     |> Repo.one()
   end
 

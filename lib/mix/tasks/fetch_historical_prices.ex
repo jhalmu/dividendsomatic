@@ -33,7 +33,9 @@ defmodule Mix.Tasks.Fetch.HistoricalPrices do
     {"OANDA:EUR_GBP", "GBP"},
     {"OANDA:EUR_JPY", "JPY"},
     {"OANDA:EUR_HKD", "HKD"},
-    {"OANDA:EUR_CAD", "CAD"}
+    {"OANDA:EUR_CAD", "CAD"},
+    {"OANDA:EUR_CHF", "CHF"},
+    {"OANDA:EUR_DKK", "DKK"}
   ]
 
   def run(args) do

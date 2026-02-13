@@ -412,27 +412,54 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     ~s[<path d="#{d}" fill="none" stroke="#eab308" stroke-width="0.5" stroke-linejoin="round"/>]
   end
 
-  # Era gap indicator: shows "NO DATA" label in gaps between data segments
+  # Era gap indicator: shows "NO DATA" zone and era labels between data segments
   defp svg_era_gap_indicator(chart_data, x_fn, mt, main_h) do
     segments = split_at_gaps(chart_data)
 
     if length(segments) > 1 do
-      segments
-      |> Enum.chunk_every(2, 1, :discard)
-      |> Enum.map_join("\n", fn [seg_a, seg_b] ->
-        {_, last_idx} = List.last(seg_a)
-        {_, first_idx} = hd(seg_b)
-        mid_x = r((x_fn.(last_idx) + x_fn.(first_idx)) / 2)
-        mid_y = r(mt + main_h / 2)
-        left_x = r(x_fn.(last_idx))
-        right_x = r(x_fn.(first_idx))
+      gap_svg =
+        segments
+        |> Enum.chunk_every(2, 1, :discard)
+        |> Enum.map_join("\n", fn [seg_a, seg_b] ->
+          {_, last_idx} = List.last(seg_a)
+          {_, first_idx} = hd(seg_b)
+          mid_x = r((x_fn.(last_idx) + x_fn.(first_idx)) / 2)
+          mid_y = r(mt + main_h / 2)
+          left_x = r(x_fn.(last_idx))
+          right_x = r(x_fn.(first_idx))
+          gap_w = r(right_x - left_x)
 
-        """
-        <line x1="#{left_x}" y1="#{mt}" x2="#{left_x}" y2="#{r(mt + main_h)}" stroke="#334155" stroke-width="1" stroke-dasharray="4 4" opacity="0.4"/>
-        <line x1="#{right_x}" y1="#{mt}" x2="#{right_x}" y2="#{r(mt + main_h)}" stroke="#334155" stroke-width="1" stroke-dasharray="4 4" opacity="0.4"/>
-        <text x="#{mid_x}" y="#{mid_y}" fill="#475569" font-size="8" text-anchor="middle" opacity="0.6">NO DATA</text>
-        """
-      end)
+          """
+          <rect x="#{left_x}" y="#{mt}" width="#{gap_w}" height="#{main_h}" fill="#1e293b" opacity="0.15"/>
+          <line x1="#{left_x}" y1="#{mt}" x2="#{left_x}" y2="#{r(mt + main_h)}" stroke="#334155" stroke-width="1" stroke-dasharray="4 4" opacity="0.4"/>
+          <line x1="#{right_x}" y1="#{mt}" x2="#{right_x}" y2="#{r(mt + main_h)}" stroke="#334155" stroke-width="1" stroke-dasharray="4 4" opacity="0.4"/>
+          <text x="#{mid_x}" y="#{mid_y}" fill="#475569" font-size="8" text-anchor="middle" opacity="0.6">NO DATA</text>
+          """
+        end)
+
+      era_labels =
+        segments
+        |> Enum.with_index()
+        |> Enum.map_join("\n", &svg_era_label(&1, x_fn, mt, main_h))
+
+      gap_svg <> "\n" <> era_labels
+    else
+      ""
+    end
+  end
+
+  defp svg_era_label({segment, seg_idx}, x_fn, mt, main_h) do
+    {_, first_idx} = hd(segment)
+    {_, last_idx} = List.last(segment)
+    seg_mid_x = r((x_fn.(first_idx) + x_fn.(last_idx)) / 2)
+    label_y = r(mt + main_h - 8)
+
+    {first_point, _} = hd(segment)
+    era_label = if Map.get(first_point, :source) == :nordnet, do: "NORDNET", else: "IBKR"
+    seg_px = x_fn.(last_idx) - x_fn.(first_idx)
+
+    if seg_px > 60 or seg_idx == 0 do
+      ~s[<text x="#{seg_mid_x}" y="#{label_y}" fill="#334155" font-size="7" text-anchor="middle" letter-spacing="0.1em" opacity="0.5">#{era_label}</text>]
     else
       ""
     end

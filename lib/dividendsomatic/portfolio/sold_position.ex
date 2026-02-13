@@ -26,6 +26,7 @@ defmodule Dividendsomatic.Portfolio.SoldPosition do
     field :notes, :string
     field :isin, :string
     field :source, :string
+    field :identifier_key, :string
 
     timestamps()
   end
@@ -39,7 +40,8 @@ defmodule Dividendsomatic.Portfolio.SoldPosition do
     :exchange_rate_to_eur,
     :notes,
     :isin,
-    :source
+    :source,
+    :identifier_key
   ]
 
   @doc false
@@ -51,6 +53,7 @@ defmodule Dividendsomatic.Portfolio.SoldPosition do
     |> validate_number(:purchase_price, greater_than: 0)
     |> validate_number(:sale_price, greater_than: 0)
     |> calculate_realized_pnl()
+    |> compute_identifier_key()
   end
 
   defp calculate_realized_pnl(changeset) do
@@ -69,6 +72,20 @@ defmodule Dividendsomatic.Portfolio.SoldPosition do
     else
       changeset
     end
+  end
+
+  defp compute_identifier_key(changeset) do
+    isin = get_field(changeset, :isin)
+    symbol = get_field(changeset, :symbol)
+
+    key =
+      cond do
+        is_binary(isin) and isin != "" -> isin
+        is_binary(symbol) and symbol != "" -> "symbol:#{symbol}"
+        true -> ""
+      end
+
+    put_change(changeset, :identifier_key, key)
   end
 
   defp maybe_set_eur_pnl(changeset, pnl) do

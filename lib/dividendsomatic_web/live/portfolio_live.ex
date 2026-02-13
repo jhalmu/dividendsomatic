@@ -332,6 +332,10 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:cash_flow, [])
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
+    |> assign(:data_age_days, nil)
+    |> assign(:latest_data_date, nil)
+    |> assign(:is_reconstructed, false)
+    |> assign(:missing_price_count, 0)
     |> assign(:pnl, %{
       total_pnl: Decimal.new("0"),
       total_trades: 0,
@@ -402,7 +406,21 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:cash_flow, dividend_dashboard.cash_flow_summary)
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
+    |> assign_freshness_and_source(snapshot, holdings)
     |> assign_pnl_summary()
+  end
+
+  defp assign_freshness_and_source(socket, snapshot, holdings) do
+    latest_date = Portfolio.get_latest_snapshot_date()
+    data_age_days = if latest_date, do: Date.diff(Date.utc_today(), latest_date), else: nil
+    is_reconstructed = snapshot.source == "nordnet_reconstructed"
+    missing = if is_reconstructed, do: Enum.count(holdings, &is_nil(&1.mark_price)), else: 0
+
+    socket
+    |> assign(:data_age_days, data_age_days)
+    |> assign(:latest_data_date, latest_date)
+    |> assign(:is_reconstructed, is_reconstructed)
+    |> assign(:missing_price_count, missing)
   end
 
   defp assign_pnl_summary(socket) do

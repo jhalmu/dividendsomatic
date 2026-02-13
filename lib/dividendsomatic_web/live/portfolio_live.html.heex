@@ -130,15 +130,74 @@
       
 <!-- Compact Nav (before holdings) -->
       <div class="mb-[var(--space-xs)] animate-fade-in animate-delay-3">
-        <.nav_bar
-          current_snapshot={@current_snapshot}
-          has_prev={@has_prev}
-          has_next={@has_next}
-          snapshot_position={@snapshot_position}
-          total_snapshots={@total_snapshots}
-          compact
-        />
+        <div class="flex items-center justify-between mb-[var(--space-inline)]">
+          <.nav_bar
+            current_snapshot={@current_snapshot}
+            has_prev={@has_prev}
+            has_next={@has_next}
+            snapshot_position={@snapshot_position}
+            total_snapshots={@total_snapshots}
+            compact
+          />
+          <div
+            class="flex items-center gap-1"
+            style="font-family: var(--font-mono); font-size: 0.5625rem;"
+          >
+            <%= if @is_reconstructed do %>
+              <span
+                class="badge badge-sm"
+                style="background: #1e293b; color: #94a3b8; border: 1px solid #334155; font-size: 0.5rem;"
+              >
+                Weekly snapshot
+              </span>
+            <% end %>
+            <%= if @latest_data_date do %>
+              <span
+                class={"badge badge-sm #{if @data_age_days && @data_age_days > 3, do: "badge-warning", else: "badge-ghost"}"}
+                style="font-size: 0.5rem;"
+                title={"Latest IBKR data: #{@latest_data_date}"}
+              >
+                Data as of {Calendar.strftime(@latest_data_date, "%b %d")}
+                <%= if @data_age_days && @data_age_days > 0 do %>
+                  <span style="opacity: 0.7; margin-left: 2px;">
+                    ({@data_age_days}d ago)
+                  </span>
+                <% end %>
+              </span>
+            <% end %>
+          </div>
+        </div>
       </div>
+      
+<!-- Reconstruction Banner -->
+      <%= if @is_reconstructed do %>
+        <div
+          class="mb-[var(--space-xs)] animate-fade-in"
+          style="font-family: var(--font-mono); font-size: 0.625rem; color: #94a3b8; background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 4px; padding: 0.375rem 0.5rem; display: flex; align-items: center; gap: 0.375rem;"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="1.5"
+            stroke="currentColor"
+            class="w-3.5 h-3.5"
+            style="flex-shrink: 0; opacity: 0.6;"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z"
+            />
+          </svg>
+          <span>
+            Reconstructed from Nordnet transactions
+            <%= if @missing_price_count > 0 do %>
+              — {@missing_price_count} positions with unavailable prices
+            <% end %>
+          </span>
+        </div>
+      <% end %>
       
 <!-- Holdings Table -->
       <div class="terminal-card animate-fade-in animate-delay-4">
@@ -194,13 +253,25 @@
                       <span style="flex-align: left;">{format_integer(holding.quantity)}</span>
                     </td>
                     <td class="terminal-number" style="text-align: right;">
-                      {format_decimal(holding.mark_price)}
-                      <span style="color: var(--terminal-dim); font-size: 0.625rem; position: absolute; margin-left: 0.35rem;">
-                        {holding.currency_primary}
-                      </span>
+                      <%= if is_nil(holding.mark_price) do %>
+                        <span style="color: #ef4444; opacity: 0.6; font-size: 0.625rem;">
+                          N/A
+                        </span>
+                      <% else %>
+                        {format_decimal(holding.mark_price)}
+                        <span style="color: var(--terminal-dim); font-size: 0.625rem; position: absolute; margin-left: 0.35rem;">
+                          {holding.currency_primary}
+                        </span>
+                      <% end %>
                     </td>
                     <td class="terminal-number" style="font-weight: 500;text-align: right;">
-                      {format_decimal(holding.position_value)}
+                      <%= if is_nil(holding.position_value) do %>
+                        <span style="color: #ef4444; opacity: 0.6; font-size: 0.625rem;">
+                          N/A
+                        </span>
+                      <% else %>
+                        {format_decimal(holding.position_value)}
+                      <% end %>
                     </td>
                     <td
                       class="terminal-number"
