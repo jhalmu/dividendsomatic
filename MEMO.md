@@ -51,10 +51,24 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.15.0 (Multi-Provider Market Data Architecture)
-**Status:** Multi-provider architecture operational, EODHD ready
+**Version:** 0.16.0 (EUR Currency Conversion for Realized P&L)
+**Status:** P&L totals now correctly converted to EUR across all currencies
 
-**Latest session (2026-02-13, NIGHT):**
+**Latest session (2026-02-13, AFTERNOON):**
+- **Realized P&L EUR conversion** — mixed-currency P&L values now converted to EUR
+  - Added `realized_pnl_eur` + `exchange_rate_to_eur` columns to `sold_positions`
+  - COALESCE fallback in all summary/total queries (graceful if backfill not run)
+  - `mix backfill.sold_pnl_eur` task: diagnostic phase + conversion phase (--dry-run supported)
+  - SoldPositionProcessor: FX lookup at import time for non-EUR positions
+  - Nordnet 9A parser: explicit EUR fields
+  - UI: "FX pending" badge when unconverted positions exist
+  - All 7 currencies converted (HKD, CAD, SEK, JPY, NOK, USD, GBP) — 0 skipped
+- **Housekeeping**
+  - Added `.env.example` with all config keys
+  - Updated `.gitignore` for `.DS_Store` and `/csv_data/`
+- 426 tests, 0 failures, 0 credo issues
+
+**Previous session (2026-02-13, NIGHT):**
 - **CSV processing & archive** — imported all CSV data, verified DB completeness, archived files
   - IBKR: 7,699 transactions (all previously imported)
   - Flex: 159 portfolio snapshots (all previously imported)
@@ -119,7 +133,7 @@ mix ecto.reset              # Drop + create + migrate
 - Costs system, FX exposure, sold positions (grouped), data gaps analysis
 - Rule of 72 calculator, dividend analytics
 - Custom SVG charts with era-aware gap rendering
-- 409 tests + 13 Playwright E2E tests, 0 credo issues
+- 426 tests + 13 Playwright E2E tests, 0 credo issues
 - Multi-provider market data: Finnhub + Yahoo Finance + EODHD with fallback chains
 
 **Next priorities:**
@@ -145,7 +159,7 @@ All issues (#1-#22) closed.
 - [ ] No production deployment (Hetzner via docker-compose)
 - [x] Chart reconstruction N+1 queries fixed (3,700+ → 3 queries + persistent_term cache)
 - [x] Multi-provider market data architecture (Finnhub + Yahoo + EODHD)
-- [x] Test coverage: 409 tests + 13 Playwright E2E, 0 credo issues
+- [x] Test coverage: 426 tests + 13 Playwright E2E, 0 credo issues
 - [x] Historical prices: 53/63 stocks + 7 forex pairs fetched
 - [x] Symbol resolution: 64 resolved, 44 unmappable, 0 pending
 
