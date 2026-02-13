@@ -48,6 +48,12 @@ dividendsomatic-*.tar
 .env.*
 !.env.example
 
+# OS files
+.DS_Store
+
+# CSV data directory (contains sensitive portfolio data)
+/csv_data/
+
 # In case you use Node.js/npm, you want to ignore these.
 npm-debug.log
 /assets/node_modules/
