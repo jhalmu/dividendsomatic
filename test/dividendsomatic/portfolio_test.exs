@@ -294,6 +294,102 @@ defmodule Dividendsomatic.PortfolioTest do
       assert Decimal.equal?(sold.realized_pnl, Decimal.new("2500.00"))
     end
 
+    test "create_sold_position/1 should set realized_pnl_eur for EUR positions" do
+      {:ok, sold} =
+        Portfolio.create_sold_position(%{
+          symbol: "KESKOB",
+          quantity: Decimal.new("100"),
+          purchase_price: Decimal.new("18.00"),
+          purchase_date: ~D[2025-01-01],
+          sale_price: Decimal.new("21.00"),
+          sale_date: ~D[2026-01-15],
+          currency: "EUR"
+        })
+
+      assert Decimal.equal?(sold.realized_pnl_eur, Decimal.new("300.00"))
+      assert Decimal.equal?(sold.exchange_rate_to_eur, Decimal.new("1"))
+    end
+
+    test "create_sold_position/1 should not set realized_pnl_eur for non-EUR positions" do
+      {:ok, sold} =
+        Portfolio.create_sold_position(%{
+          symbol: "8031",
+          quantity: Decimal.new("100"),
+          purchase_price: Decimal.new("5000"),
+          purchase_date: ~D[2025-01-01],
+          sale_price: Decimal.new("6000"),
+          sale_date: ~D[2026-01-15],
+          currency: "JPY"
+        })
+
+      assert is_nil(sold.realized_pnl_eur)
+    end
+
+    test "create_sold_position/1 should not overwrite explicit realized_pnl_eur" do
+      {:ok, sold} =
+        Portfolio.create_sold_position(%{
+          symbol: "KESKOB",
+          quantity: Decimal.new("100"),
+          purchase_price: Decimal.new("18.00"),
+          purchase_date: ~D[2025-01-01],
+          sale_price: Decimal.new("21.00"),
+          sale_date: ~D[2026-01-15],
+          currency: "EUR",
+          realized_pnl_eur: Decimal.new("999.99")
+        })
+
+      assert Decimal.equal?(sold.realized_pnl_eur, Decimal.new("999.99"))
+    end
+
+    test "total_realized_pnl/0 should prefer realized_pnl_eur over realized_pnl" do
+      # EUR position: realized_pnl_eur auto-set
+      {:ok, _} =
+        Portfolio.create_sold_position(%{
+          symbol: "AAPL",
+          quantity: Decimal.new("100"),
+          purchase_price: Decimal.new("100.00"),
+          purchase_date: ~D[2025-01-01],
+          sale_price: Decimal.new("150.00"),
+          sale_date: ~D[2026-01-15]
+        })
+
+      # Non-EUR position with explicit realized_pnl_eur (as if backfilled)
+      {:ok, _} =
+        Portfolio.create_sold_position(%{
+          symbol: "8031",
+          quantity: Decimal.new("100"),
+          purchase_price: Decimal.new("5000"),
+          purchase_date: ~D[2025-01-01],
+          sale_price: Decimal.new("6000"),
+          sale_date: ~D[2026-01-15],
+          currency: "JPY",
+          realized_pnl_eur: Decimal.new("600.00"),
+          exchange_rate_to_eur: Decimal.new("166.67")
+        })
+
+      total = Portfolio.total_realized_pnl()
+      # AAPL: 5000.00 (EUR), 8031: 600.00 (converted)
+      assert Decimal.equal?(total, Decimal.new("5600.00"))
+    end
+
+    test "total_realized_pnl/0 should fall back to realized_pnl when pnl_eur is nil" do
+      # Non-EUR position without conversion (e.g. backfill not run)
+      {:ok, _} =
+        Portfolio.create_sold_position(%{
+          symbol: "8031",
+          quantity: Decimal.new("100"),
+          purchase_price: Decimal.new("5000"),
+          purchase_date: ~D[2025-01-01],
+          sale_price: Decimal.new("6000"),
+          sale_date: ~D[2026-01-15],
+          currency: "JPY"
+        })
+
+      total = Portfolio.total_realized_pnl()
+      # Falls back to realized_pnl = 100000 JPY (raw, unconverted)
+      assert Decimal.equal?(total, Decimal.new("100000.00"))
+    end
+
     test "total_realized_pnl/0 sums all realized P&L" do
       {:ok, _} =
         Portfolio.create_sold_position(%{
@@ -358,6 +454,77 @@ defmodule Dividendsomatic.PortfolioTest do
       # Current value: 100 * 200 = 20000
       # Opportunity cost: 15000 - 20000 = -5000 (bad decision)
       assert Decimal.equal?(opportunity, Decimal.new("-5000.00"))
+    end
+  end
+
+  describe "realized_pnl_summary/1 EUR conversion" do
+    test "should set has_unconverted to false when all positions are EUR" do
+      {:ok, _} =
+        Portfolio.create_sold_position(%{
+          symbol: "KESKOB",
+          quantity: Decimal.new("100"),
+          purchase_price: Decimal.new("18.00"),
+          purchase_date: ~D[2025-01-01],
+          sale_price: Decimal.new("21.00"),
+          sale_date: ~D[2026-01-15],
+          currency: "EUR"
+        })
+
+      summary = Portfolio.realized_pnl_summary()
+      refute summary.has_unconverted
+    end
+
+    test "should set has_unconverted to true when non-EUR positions lack pnl_eur" do
+      {:ok, _} =
+        Portfolio.create_sold_position(%{
+          symbol: "8031",
+          quantity: Decimal.new("100"),
+          purchase_price: Decimal.new("5000"),
+          purchase_date: ~D[2025-01-01],
+          sale_price: Decimal.new("6000"),
+          sale_date: ~D[2026-01-15],
+          currency: "JPY"
+        })
+
+      summary = Portfolio.realized_pnl_summary()
+      assert summary.has_unconverted
+    end
+
+    test "should set has_unconverted to false when non-EUR positions have pnl_eur" do
+      {:ok, _} =
+        Portfolio.create_sold_position(%{
+          symbol: "8031",
+          quantity: Decimal.new("100"),
+          purchase_price: Decimal.new("5000"),
+          purchase_date: ~D[2025-01-01],
+          sale_price: Decimal.new("6000"),
+          sale_date: ~D[2026-01-15],
+          currency: "JPY",
+          realized_pnl_eur: Decimal.new("600.00"),
+          exchange_rate_to_eur: Decimal.new("166.67")
+        })
+
+      summary = Portfolio.realized_pnl_summary()
+      refute summary.has_unconverted
+    end
+
+    test "should use realized_pnl_eur in grouped totals" do
+      {:ok, _} =
+        Portfolio.create_sold_position(%{
+          symbol: "8031",
+          quantity: Decimal.new("100"),
+          purchase_price: Decimal.new("5000"),
+          purchase_date: ~D[2025-01-01],
+          sale_price: Decimal.new("6000"),
+          sale_date: ~D[2026-01-15],
+          currency: "JPY",
+          realized_pnl_eur: Decimal.new("600.00"),
+          exchange_rate_to_eur: Decimal.new("166.67")
+        })
+
+      summary = Portfolio.realized_pnl_summary()
+      # Should use pnl_eur (600) not realized_pnl (100000)
+      assert Decimal.equal?(summary.total_pnl, Decimal.new("600.00"))
     end
   end
 

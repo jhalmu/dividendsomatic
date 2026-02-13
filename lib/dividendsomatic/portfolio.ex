@@ -928,11 +928,11 @@ defmodule Dividendsomatic.Portfolio do
       symbol: s.symbol,
       trades: count(s.id),
       total_quantity: sum(s.quantity),
-      total_pnl: sum(s.realized_pnl),
+      total_pnl: sum(fragment("COALESCE(?, ?)", s.realized_pnl_eur, s.realized_pnl)),
       first_date: min(s.purchase_date),
       last_date: max(s.sale_date)
     })
-    |> order_by([s], desc: sum(s.realized_pnl))
+    |> order_by([s], desc: sum(fragment("COALESCE(?, ?)", s.realized_pnl_eur, s.realized_pnl)))
     |> Repo.all()
   end
 
@@ -990,8 +990,100 @@ defmodule Dividendsomatic.Portfolio do
   """
   def total_realized_pnl do
     SoldPosition
-    |> select([s], sum(s.realized_pnl))
+    |> select([s], sum(fragment("COALESCE(?, ?)", s.realized_pnl_eur, s.realized_pnl)))
     |> Repo.one() || Decimal.new("0")
+  end
+
+  @doc """
+  Returns a comprehensive realized P&L summary, optionally filtered by sale year.
+
+  Replaces separate calls to `total_realized_pnl/0`, `list_sold_positions_grouped/0`,
+  and `count_sold_positions/0` with one consolidated function.
+
+  ## Options
+    - `:year` — Filter to positions sold in the given year
+
+  ## Returns
+  A map with: total_pnl, total_trades, symbol_count, total_gains, total_losses,
+  win_count, loss_count, top_winners, top_losers, all_grouped, available_years.
+  """
+  def realized_pnl_summary(opts \\ []) do
+    year = Keyword.get(opts, :year)
+
+    base =
+      if year,
+        do:
+          where(
+            SoldPosition,
+            [s],
+            fragment("EXTRACT(YEAR FROM ?)::integer = ?", s.sale_date, ^year)
+          ),
+        else: SoldPosition
+
+    grouped =
+      base
+      |> group_by([s], s.symbol)
+      |> select([s], %{
+        symbol: s.symbol,
+        trades: count(s.id),
+        total_quantity: sum(s.quantity),
+        total_pnl: sum(fragment("COALESCE(?, ?)", s.realized_pnl_eur, s.realized_pnl)),
+        first_date: min(s.purchase_date),
+        last_date: max(s.sale_date)
+      })
+      |> Repo.all()
+
+    zero = Decimal.new("0")
+
+    total_pnl =
+      Enum.reduce(grouped, zero, fn g, acc ->
+        Decimal.add(acc, g.total_pnl || zero)
+      end)
+
+    total_trades = Enum.reduce(grouped, 0, fn g, acc -> acc + g.trades end)
+    winners = Enum.filter(grouped, fn g -> Decimal.positive?(g.total_pnl) end)
+    losers = Enum.filter(grouped, fn g -> not Decimal.positive?(g.total_pnl) end)
+
+    total_gains =
+      Enum.reduce(winners, zero, fn g, acc -> Decimal.add(acc, g.total_pnl) end)
+
+    total_losses =
+      Enum.reduce(losers, zero, fn g, acc -> Decimal.add(acc, g.total_pnl) end)
+
+    sorted = Enum.sort_by(grouped, & &1.total_pnl, {:desc, Decimal})
+    top_winners = Enum.take(sorted, 10)
+    top_losers = sorted |> Enum.reverse() |> Enum.take(10) |> Enum.reverse()
+
+    has_unconverted =
+      Repo.exists?(
+        from s in base,
+          where: is_nil(s.realized_pnl_eur) and s.currency != "EUR"
+      )
+
+    %{
+      total_pnl: total_pnl,
+      total_trades: total_trades,
+      symbol_count: length(grouped),
+      total_gains: total_gains,
+      total_losses: total_losses,
+      win_count: length(winners),
+      loss_count: length(losers),
+      top_winners: top_winners,
+      top_losers: top_losers,
+      all_grouped: sorted,
+      available_years: list_sale_years(),
+      has_unconverted: has_unconverted
+    }
+  end
+
+  @doc """
+  Returns distinct sale years from sold positions, most recent first.
+  """
+  def list_sale_years do
+    SoldPosition
+    |> select([s], fragment("DISTINCT EXTRACT(YEAR FROM ?)::integer", s.sale_date))
+    |> order_by([s], fragment("1 DESC"))
+    |> Repo.all()
   end
 
   @doc """

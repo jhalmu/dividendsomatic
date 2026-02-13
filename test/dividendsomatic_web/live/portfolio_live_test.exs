@@ -269,7 +269,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
   end
 
   describe "realized P&L with sold positions (Feature 4)" do
-    test "should show sold positions table with details", %{conn: conn} do
+    setup %{conn: conn} do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
       {:ok, _} =
@@ -282,50 +282,92 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
           sale_date: ~D[2026-01-15]
         })
 
+      %{conn: conn}
+    end
+
+    test "should show realized P&L section with summary stats", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
 
       assert html =~ "Realized P&amp;L"
-      assert html =~ "1 trades"
-      assert html =~ "1 symbols"
+      assert html =~ "pnl-summary-stats"
+      assert html =~ "Gains"
+      assert html =~ "Losses"
+      assert html =~ "Win Rate"
+      assert html =~ "Trades"
+    end
+
+    test "should show top winners table with AAPL", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ "Top Winners"
       assert html =~ "AAPL"
     end
 
     test "should link sold symbol to stock page", %{conn: conn} do
-      {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
-
-      {:ok, _} =
-        Portfolio.create_sold_position(%{
-          symbol: "AAPL",
-          quantity: Decimal.new("100"),
-          purchase_price: Decimal.new("150.00"),
-          purchase_date: ~D[2025-01-01],
-          sale_price: Decimal.new("175.00"),
-          sale_date: ~D[2026-01-15]
-        })
-
       {:ok, _view, html} = live(conn, ~p"/")
 
       assert html =~ ~s{href="/stocks/AAPL"}
     end
 
-    test "should show holding period", %{conn: conn} do
-      {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
-
-      {:ok, _} =
-        Portfolio.create_sold_position(%{
-          symbol: "AAPL",
-          quantity: Decimal.new("100"),
-          purchase_price: Decimal.new("150.00"),
-          purchase_date: ~D[2025-01-01],
-          sale_price: Decimal.new("175.00"),
-          sale_date: ~D[2026-01-15]
-        })
-
+    test "should show holding period years", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
 
-      # Grouped view shows year range instead of individual holding period
       assert html =~ "2025"
       assert html =~ "2026"
+    end
+
+    test "should show year filter buttons", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      # Should have "All" button and year buttons
+      assert html =~ "All"
+      assert html =~ "2026"
+    end
+
+    test "should filter by year when year button clicked", %{conn: conn} do
+      # Add a sold position in a different year
+      {:ok, _} =
+        Portfolio.create_sold_position(%{
+          symbol: "MSFT",
+          quantity: Decimal.new("50"),
+          purchase_price: Decimal.new("200.00"),
+          purchase_date: ~D[2024-01-01],
+          sale_price: Decimal.new("180.00"),
+          sale_date: ~D[2025-06-15]
+        })
+
+      {:ok, view, html} = live(conn, ~p"/")
+
+      # Both symbols visible in "All" mode
+      assert html =~ "AAPL"
+      assert html =~ "MSFT"
+
+      # Filter to 2026 - only AAPL sold in 2026
+      html = render_hook(view, "pnl_year", %{"year" => "2026"})
+      assert html =~ "AAPL"
+      refute html =~ "MSFT"
+
+      # Filter to 2025 - only MSFT sold in 2025
+      html = render_hook(view, "pnl_year", %{"year" => "2025"})
+      assert html =~ "MSFT"
+      refute html =~ "AAPL"
+
+      # Back to all
+      html = render_hook(view, "pnl_year", %{"year" => "all"})
+      assert html =~ "AAPL"
+      assert html =~ "MSFT"
+    end
+
+    test "should toggle show all symbols", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/")
+
+      assert html =~ "Show all"
+
+      html = render_hook(view, "pnl_show_all", %{})
+      assert html =~ "Hide"
+
+      html = render_hook(view, "pnl_show_all", %{})
+      assert html =~ "Show all"
     end
   end
 

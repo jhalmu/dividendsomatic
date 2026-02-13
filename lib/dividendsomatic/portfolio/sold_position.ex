@@ -21,6 +21,8 @@ defmodule Dividendsomatic.Portfolio.SoldPosition do
     field :sale_date, :date
     field :currency, :string, default: "EUR"
     field :realized_pnl, :decimal
+    field :realized_pnl_eur, :decimal
+    field :exchange_rate_to_eur, :decimal
     field :notes, :string
     field :isin, :string
     field :source, :string
@@ -29,7 +31,16 @@ defmodule Dividendsomatic.Portfolio.SoldPosition do
   end
 
   @required_fields [:symbol, :quantity, :purchase_price, :purchase_date, :sale_price, :sale_date]
-  @optional_fields [:description, :currency, :realized_pnl, :notes, :isin, :source]
+  @optional_fields [
+    :description,
+    :currency,
+    :realized_pnl,
+    :realized_pnl_eur,
+    :exchange_rate_to_eur,
+    :notes,
+    :isin,
+    :source
+  ]
 
   @doc false
   def changeset(sold_position, attrs) do
@@ -51,7 +62,22 @@ defmodule Dividendsomatic.Portfolio.SoldPosition do
       cost = Decimal.mult(quantity, purchase_price)
       proceeds = Decimal.mult(quantity, sale_price)
       pnl = Decimal.sub(proceeds, cost)
-      put_change(changeset, :realized_pnl, pnl)
+
+      changeset
+      |> put_change(:realized_pnl, pnl)
+      |> maybe_set_eur_pnl(pnl)
+    else
+      changeset
+    end
+  end
+
+  defp maybe_set_eur_pnl(changeset, pnl) do
+    currency = get_field(changeset, :currency)
+
+    if currency == "EUR" && is_nil(get_field(changeset, :realized_pnl_eur)) do
+      changeset
+      |> put_change(:realized_pnl_eur, pnl)
+      |> put_change(:exchange_rate_to_eur, Decimal.new("1"))
     else
       changeset
     end

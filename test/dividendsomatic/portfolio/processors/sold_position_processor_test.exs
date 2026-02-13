@@ -101,6 +101,26 @@ defmodule Dividendsomatic.Portfolio.Processors.SoldPositionProcessorTest do
       assert second == 0
     end
 
+    test "should set realized_pnl_eur for EUR transactions" do
+      insert_transaction(%{
+        transaction_type: "sell",
+        trade_date: ~D[2017-04-21],
+        security_name: "Test Stock",
+        isin: "TEST123",
+        quantity: Decimal.new("30"),
+        price: Decimal.new("7.17"),
+        result: Decimal.new("-29.85"),
+        currency: "EUR"
+      })
+
+      {:ok, _} = SoldPositionProcessor.process()
+
+      [sp] = Repo.all(SoldPosition)
+      assert Decimal.equal?(sp.exchange_rate_to_eur, Decimal.new("1"))
+      # realized_pnl_eur set by changeset calculate_realized_pnl (EUR auto-set)
+      assert not is_nil(sp.realized_pnl_eur)
+    end
+
     test "should skip sell with zero quantity" do
       insert_transaction(%{
         transaction_type: "sell",

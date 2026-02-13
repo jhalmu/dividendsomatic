@@ -113,6 +113,18 @@ defmodule DividendsomaticWeb.PortfolioLive do
     {:noreply, navigate_to_snapshot(socket, latest_snapshot)}
   end
 
+  def handle_event("pnl_year", %{"year" => "all"}, socket) do
+    {:noreply, socket |> assign(:pnl_year, nil) |> assign_pnl_summary()}
+  end
+
+  def handle_event("pnl_year", %{"year" => year}, socket) do
+    {:noreply, socket |> assign(:pnl_year, String.to_integer(year)) |> assign_pnl_summary()}
+  end
+
+  def handle_event("pnl_show_all", _params, socket) do
+    {:noreply, assign(socket, :pnl_show_all, !socket.assigns.pnl_show_all)}
+  end
+
   @impl true
   def handle_info(:refresh_fear_greed, socket) do
     live_fg = get_fear_greed_live()
@@ -315,11 +327,25 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:recent_dividends, [])
     |> assign(:dividend_by_month, [])
     |> assign(:sparkline_values, [])
-    |> assign(:realized_pnl, Decimal.new("0"))
     |> assign(:fear_greed, nil)
     |> assign(:fx_exposure, [])
-    |> assign(:sold_positions, [])
     |> assign(:cash_flow, [])
+    |> assign(:pnl_year, nil)
+    |> assign(:pnl_show_all, false)
+    |> assign(:pnl, %{
+      total_pnl: Decimal.new("0"),
+      total_trades: 0,
+      symbol_count: 0,
+      total_gains: Decimal.new("0"),
+      total_losses: Decimal.new("0"),
+      win_count: 0,
+      loss_count: 0,
+      top_winners: [],
+      top_losers: [],
+      all_grouped: [],
+      available_years: [],
+      has_unconverted: false
+    })
   end
 
   defp assign_snapshot(socket, snapshot) do
@@ -371,11 +397,16 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:recent_dividends, dividend_dashboard.recent_with_income)
     |> assign(:dividend_by_month, dividend_dashboard.by_month_full_range)
     |> assign(:sparkline_values, sparkline_values)
-    |> assign(:realized_pnl, Portfolio.total_realized_pnl())
     |> assign(:fear_greed, get_fear_greed_for_snapshot(socket, snapshot))
     |> assign(:fx_exposure, Portfolio.compute_fx_exposure(holdings))
-    |> assign(:sold_positions_grouped, Portfolio.list_sold_positions_grouped())
-    |> assign(:sold_positions_count, Portfolio.count_sold_positions())
     |> assign(:cash_flow, dividend_dashboard.cash_flow_summary)
+    |> assign(:pnl_year, nil)
+    |> assign(:pnl_show_all, false)
+    |> assign_pnl_summary()
+  end
+
+  defp assign_pnl_summary(socket) do
+    opts = if socket.assigns.pnl_year, do: [year: socket.assigns.pnl_year], else: []
+    assign(socket, :pnl, Portfolio.realized_pnl_summary(opts))
   end
 end

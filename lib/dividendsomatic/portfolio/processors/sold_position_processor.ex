@@ -11,6 +11,7 @@ defmodule Dividendsomatic.Portfolio.Processors.SoldPositionProcessor do
 
   alias Dividendsomatic.Portfolio.{BrokerTransaction, SoldPosition}
   alias Dividendsomatic.Repo
+  alias Dividendsomatic.Stocks
 
   @doc """
   Processes all sell transactions and inserts into sold_positions table.
@@ -68,26 +69,53 @@ defmodule Dividendsomatic.Portfolio.Processors.SoldPositionProcessor do
 
   defp insert_position(txn, quantity, sale_price, purchase_price, purchase_date) do
     symbol = ibkr_symbol(txn) || txn.security_name
+    currency = txn.currency || "EUR"
 
-    attrs = %{
-      symbol: symbol,
-      quantity: quantity,
-      purchase_price: purchase_price,
-      purchase_date: purchase_date || txn.trade_date,
-      sale_price: sale_price,
-      sale_date: txn.trade_date,
-      currency: txn.currency || "EUR",
-      realized_pnl: txn.result,
-      isin: txn.isin,
-      source: txn.broker,
-      notes: "Imported from #{txn.broker}"
-    }
+    eur_fields = compute_eur_fields(currency, txn.result, txn.trade_date)
+
+    attrs =
+      %{
+        symbol: symbol,
+        quantity: quantity,
+        purchase_price: purchase_price,
+        purchase_date: purchase_date || txn.trade_date,
+        sale_price: sale_price,
+        sale_date: txn.trade_date,
+        currency: currency,
+        realized_pnl: txn.result,
+        isin: txn.isin,
+        source: txn.broker,
+        notes: "Imported from #{txn.broker}"
+      }
+      |> Map.merge(eur_fields)
 
     case %SoldPosition{} |> SoldPosition.changeset(attrs) |> Repo.insert() do
       {:ok, _} -> :created
       {:error, _} -> :skipped
     end
   end
+
+  defp compute_eur_fields("EUR", _pnl, _sale_date) do
+    %{realized_pnl_eur: nil, exchange_rate_to_eur: Decimal.new("1")}
+  end
+
+  defp compute_eur_fields(currency, pnl, sale_date) when not is_nil(pnl) do
+    pair = "OANDA:EUR_#{currency}"
+
+    case Stocks.get_fx_rate(pair, sale_date) do
+      {:ok, rate} ->
+        if Decimal.compare(rate, Decimal.new("0")) == :gt do
+          %{realized_pnl_eur: Decimal.div(pnl, rate), exchange_rate_to_eur: rate}
+        else
+          %{}
+        end
+
+      _ ->
+        %{}
+    end
+  end
+
+  defp compute_eur_fields(_currency, _pnl, _sale_date), do: %{}
 
   defp zero?(decimal), do: Decimal.compare(decimal, Decimal.new("0")) == :eq
 

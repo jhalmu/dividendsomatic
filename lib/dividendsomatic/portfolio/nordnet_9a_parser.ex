@@ -70,6 +70,8 @@ defmodule Dividendsomatic.Portfolio.Nordnet9aParser do
         sale_date: trade.sale_date,
         currency: "EUR",
         realized_pnl: trade.pnl,
+        realized_pnl_eur: trade.pnl,
+        exchange_rate_to_eur: Decimal.new("1"),
         source: "nordnet_9a",
         notes:
           "9A report: costs #{Decimal.to_string(trade.purchase_costs)}+#{Decimal.to_string(trade.sale_costs)}"
