@@ -54,7 +54,16 @@ mix ecto.reset              # Drop + create + migrate
 **Version:** 0.16.0 (EUR Currency Conversion for Realized P&L)
 **Status:** P&L totals now correctly converted to EUR across all currencies
 
-**Latest session (2026-02-13, AFTERNOON):**
+**Latest session (2026-02-13, EVENING):**
+- **Automated IBKR Flex CSV import pipeline**
+  - `bin/fetch_flex_email.sh` — AppleScript email fetcher (Mail.app → csv_data/)
+  - launchd plist — Mon-Fri 11:30 EET, extracts CSV attachments from Activity Flex mailbox
+  - Archive step — CSVs moved to `csv_data/archive/flex/` after successful import
+  - Oban cron updated to 12:00 EET, removed GmailImportWorker cron
+  - Daily flow: IBKR email (10:14) → fetch script (11:30) → import+archive (12:00)
+- 426 tests, 0 failures
+
+**Previous session (2026-02-13, AFTERNOON):**
 - **Realized P&L EUR conversion** — mixed-currency P&L values now converted to EUR
   - Added `realized_pnl_eur` + `exchange_rate_to_eur` columns to `sold_positions`
   - COALESCE fallback in all summary/total queries (graceful if backfill not run)

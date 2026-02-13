@@ -44,7 +44,7 @@ defmodule Dividendsomatic.DataIngestion do
       {:ok, entries} ->
         results =
           Enum.map(entries, fn entry ->
-            import_entry(adapter, entry)
+            import_entry(adapter, entry, opts)
           end)
 
         imported = Enum.count(results, &(&1 == :ok))
@@ -63,20 +63,33 @@ defmodule Dividendsomatic.DataIngestion do
     end
   end
 
-  defp import_entry(adapter, %{date: date, ref: ref}) do
+  defp import_entry(adapter, %{date: date, ref: ref}, opts) do
     if Portfolio.get_snapshot_by_date(date) do
       :skipped
     else
-      do_import(adapter, ref, date)
+      do_import(adapter, ref, date, opts)
     end
   end
 
-  defp do_import(adapter, ref, date) do
+  defp do_import(adapter, ref, date, opts) do
     with {:ok, csv_data} <- adapter.fetch_data(ref),
          {:ok, _snapshot} <- Portfolio.create_snapshot_from_csv(csv_data, date) do
+      maybe_archive(adapter, ref, opts)
       :ok
     else
       {:error, _} -> :error
+    end
+  end
+
+  defp maybe_archive(adapter, ref, opts) do
+    if function_exported?(adapter, :archive_file, 2) do
+      case adapter.archive_file(ref, opts) do
+        :ok ->
+          Logger.info("DataIngestion: archived #{ref}")
+
+        {:error, reason} ->
+          Logger.warning("DataIngestion: failed to archive #{ref}: #{inspect(reason)}")
+      end
     end
   end
 end

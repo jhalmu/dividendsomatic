@@ -54,6 +54,9 @@ dividendsomatic-*.tar
 # CSV data directory (contains sensitive portfolio data)
 /csv_data/
 
+# Log files from automation scripts
+/log/
+
 # In case you use Node.js/npm, you want to ignore these.
 npm-debug.log
 /assets/node_modules/

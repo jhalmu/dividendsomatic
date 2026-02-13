@@ -1,39 +1,32 @@
-# Session Report — 2026-02-13 (AFTERNOON)
+# Session Report — 2026-02-13 (EVENING)
 
-## Realized P&L EUR Currency Conversion
+## Automate IBKR Flex CSV Import Pipeline
 
 ### Problem
-The `realized_pnl` field on `sold_positions` stored values in mixed currencies (EUR, JPY, USD, SEK, etc.). Summing them produced incorrect P&L totals — e.g. JPY profits added raw to EUR values.
+The daily import pipeline had a manual gap. IBKR sends the Activity Flex CSV via email at ~10:14 EET, and the Oban `DataImportWorker` cron imports from `csv_data/`, but the Automator service that extracts email attachments to `csv_data/` was never triggered automatically.
 
 ### Solution
-Added `realized_pnl_eur` and `exchange_rate_to_eur` columns. EUR-converted values stored alongside originals for fast SQL SUM and auditability.
+Fully automated daily pipeline: email arrives → CSV extracted via AppleScript → snapshot imported → CSV archived.
 
 ### Changes
 
 | File | Change |
 |------|--------|
-| Migration | Add `realized_pnl_eur` + `exchange_rate_to_eur` columns, backfill EUR records |
-| `sold_position.ex` | New fields in schema/changeset, auto-set for EUR positions |
-| `backfill_sold_pnl_eur.ex` | **New** mix task with diagnostic + conversion phases |
-| `sold_position_processor.ex` | FX lookup at import time for non-EUR positions |
-| `nordnet_9a_parser.ex` | Explicit EUR fields on 9A data |
-| `portfolio.ex` | COALESCE(pnl_eur, pnl) in summary/total queries, `has_unconverted` flag |
-| `portfolio_live.html.heex` | "FX pending" badge when unconverted positions exist |
-| `.gitignore` | Added `.DS_Store` and `/csv_data/` |
-| `.env.example` | **New** template with all config keys |
+| `bin/fetch_flex_email.sh` | **New** — AppleScript-based email fetcher (Mail.app → csv_data/) |
+| `~/Library/LaunchAgents/com.dividendsomatic.fetch-flex.plist` | **New** — launchd schedule Mon-Fri 09:30 UTC (11:30 EET) |
+| `lib/dividendsomatic/data_ingestion/csv_directory.ex` | Added `archive_file/2` — moves processed CSVs to `csv_data/archive/flex/` |
+| `lib/dividendsomatic/data_ingestion.ex` | Added `maybe_archive/3` — archives after successful import |
+| `config/config.exs` | DataImportWorker cron → `00 10 * * 1-5` (12:00 EET), removed GmailImportWorker cron |
+| `.gitignore` | Added `/log/` |
 
-### Backfill Results
-All 7 non-EUR currencies converted successfully:
-- HKD (7 records), CAD (19), SEK (11), JPY (7), NOK (10), USD (899), GBP (6)
-- 100% FX rate coverage from existing OANDA historical prices
-- 0 positions skipped
+### Daily Timeline (EET)
+```
+~10:14  IBKR sends email (03:14 EST)
+ 11:30  launchd → fetch_flex_email.sh → CSV lands in csv_data/
+ 12:00  Oban DataImportWorker → imports CSV → archives to csv_data/archive/flex/
+```
 
 ### Verification
-- `mix test.all` — 426 tests, 0 failures, 0 credo issues
-- `mix compile --warnings-as-errors` — clean
-- `mix format --check-formatted` — clean
-- `mix backfill.sold_pnl_eur` — all positions converted
-
-### Commits
-- `00e8218` feat: Add EUR currency conversion for realized P&L
-- `0554af9` chore: Add .env.example and update .gitignore
+- `mix test.all` — 426 tests, 0 failures
+- `launchctl list | grep dividendsomatic` — plist loaded
+- Credo: 2 pre-existing refactoring opportunities (backfill_isin.ex nesting depth)
