@@ -16,14 +16,14 @@ defmodule DividendsomaticWeb.DataGapsLiveTest do
 
     test "should show toggle filter button", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/data/gaps")
-      assert html =~ "Current holdings only"
+      assert html =~ "All stocks"
     end
 
     test "should toggle filter", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/data/gaps")
 
-      html = view |> element("button", "Current holdings only") |> render_click()
-      assert html =~ "Show all stocks"
+      html = view |> element("button", "All stocks") |> render_click()
+      assert html =~ "Current only"
     end
 
     test "should show broker coverage when data exists", %{conn: conn} do
@@ -82,7 +82,7 @@ defmodule DividendsomaticWeb.DataGapsLiveTest do
         raw_type: "OSTO",
         external_id: "gap_test_1",
         trade_date: ~D[2017-03-06],
-        isin: "FI_GAP_TEST",
+        isin: "FI_GAP_TEST0",
         security_name: "GapStock"
       })
       |> Dividendsomatic.Repo.insert!()
@@ -107,7 +107,7 @@ defmodule DividendsomaticWeb.DataGapsLiveTest do
         open_price: Decimal.new("8"),
         percent_of_nav: Decimal.new("5"),
         fx_rate_to_base: Decimal.new("1"),
-        isin: "FI_GAP_TEST",
+        isin: "FI_GAP_TEST0",
         listing_exchange: "HEX",
         asset_class: "STK"
       })
@@ -116,7 +116,7 @@ defmodule DividendsomaticWeb.DataGapsLiveTest do
       {:ok, _view, html} = live(conn, ~p"/data/gaps")
 
       assert html =~ "GapStock" || html =~ "GAP"
-      assert html =~ "FI_GAP_TEST"
+      assert html =~ "FI_GAP_TEST0"
     end
   end
 end

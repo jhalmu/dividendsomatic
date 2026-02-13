@@ -1183,7 +1183,7 @@ defmodule Dividendsomatic.Portfolio do
       |> select([t], %{min_date: min(t.trade_date), max_date: max(t.trade_date), count: count()})
       |> Repo.one()
 
-    ibkr_range =
+    ibkr_snapshot_range =
       PortfolioSnapshot
       |> select([s], %{
         min_date: min(s.report_date),
@@ -1192,7 +1192,13 @@ defmodule Dividendsomatic.Portfolio do
       })
       |> Repo.one()
 
-    %{nordnet: nordnet_range, ibkr: ibkr_range}
+    ibkr_txn_range =
+      BrokerTransaction
+      |> where([t], t.broker == "ibkr")
+      |> select([t], %{min_date: min(t.trade_date), max_date: max(t.trade_date), count: count()})
+      |> Repo.one()
+
+    %{nordnet: nordnet_range, ibkr: ibkr_snapshot_range, ibkr_txns: ibkr_txn_range}
   end
 
   @doc """
@@ -1218,6 +1224,7 @@ defmodule Dividendsomatic.Portfolio do
   defp fetch_nordnet_stock_ranges do
     BrokerTransaction
     |> where([t], t.broker == "nordnet" and not is_nil(t.isin))
+    |> where([t], fragment("length(?) >= 12", t.isin))
     |> group_by([t], [t.isin, t.security_name])
     |> select([t], %{
       isin: t.isin,
@@ -1232,10 +1239,11 @@ defmodule Dividendsomatic.Portfolio do
   defp fetch_ibkr_stock_ranges do
     Holding
     |> where([h], not is_nil(h.isin))
-    |> group_by([h], [h.isin, h.symbol])
+    |> group_by([h], [h.isin, h.symbol, h.description])
     |> select([h], %{
       isin: h.isin,
-      name: h.symbol,
+      symbol: h.symbol,
+      name: h.description,
       first_date: min(h.report_date),
       last_date: max(h.report_date),
       broker: "ibkr"
@@ -1269,11 +1277,13 @@ defmodule Dividendsomatic.Portfolio do
       nordnet = Map.get(nordnet_map, isin)
       ibkr = Map.get(ibkr_map, isin)
       name = (ibkr && ibkr.name) || (nordnet && nordnet.name) || "Unknown"
+      symbol = (ibkr && Map.get(ibkr, :symbol)) || name
       gap_days = compute_gap_days(nordnet, ibkr)
 
       %{
         isin: isin,
         name: name,
+        symbol: symbol,
         nordnet: nordnet,
         ibkr: ibkr,
         gap_days: gap_days,

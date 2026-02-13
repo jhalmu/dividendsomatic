@@ -145,6 +145,7 @@ defmodule Mix.Tasks.Import.Nordnet do
         path
         |> File.ls!()
         |> Enum.filter(&String.ends_with?(&1, ".csv"))
+        |> Enum.reject(&String.starts_with?(&1, "9a-report"))
         |> Enum.map(&Path.join(path, &1))
         |> Enum.sort()
 
