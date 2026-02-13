@@ -141,11 +141,43 @@ defmodule Dividendsomatic.Portfolio do
   - IBKR era (2025+): Direct from portfolio_snapshots
 
   Gap between eras is preserved as-is (honest representation).
+  Uses `:persistent_term` cache for reconstructed data (only changes on import).
   """
   def get_all_chart_data do
-    reconstructed = get_reconstructed_chart_data()
+    reconstructed = get_reconstructed_chart_data_cached()
     ibkr = get_ibkr_chart_data()
     reconstructed ++ ibkr
+  end
+
+  @chart_cache_key :dividendsomatic_reconstructed_chart
+
+  @doc """
+  Returns cached reconstructed chart data. Uses `:persistent_term` since this
+  data only changes when transactions or prices are imported.
+  """
+  def get_reconstructed_chart_data_cached do
+    case safe_persistent_term_get(@chart_cache_key) do
+      nil ->
+        data = get_reconstructed_chart_data()
+        :persistent_term.put(@chart_cache_key, data)
+        data
+
+      data ->
+        data
+    end
+  end
+
+  @doc """
+  Invalidates the reconstructed chart data cache.
+  Call after importing transactions or fetching historical prices.
+  """
+  def invalidate_chart_cache do
+    _ = safe_persistent_term_get(@chart_cache_key) && :persistent_term.erase(@chart_cache_key)
+    :ok
+  end
+
+  defp safe_persistent_term_get(key) do
+    :persistent_term.get(key, nil)
   end
 
   @doc """
@@ -162,21 +194,74 @@ defmodule Dividendsomatic.Portfolio do
   @doc """
   Returns reconstructed chart data from Nordnet broker transactions.
 
-  Uses PositionReconstructor to rebuild positions, then prices them
-  using historical price data and FX rates.
+  Uses PositionReconstructor to rebuild positions, then batch-loads all
+  symbol mappings and historical prices to avoid N+1 queries.
+  Total: 3 queries (reconstruct + mappings + prices) instead of ~3,700+.
   """
   def get_reconstructed_chart_data do
     positions_over_time = PositionReconstructor.reconstruct()
 
-    positions_over_time
-    |> Enum.map(&price_reconstructed_point/1)
-    |> Enum.reject(&is_nil/1)
+    case positions_over_time do
+      [] ->
+        []
+
+      points ->
+        # Collect all unique ISINs across all date points
+        all_isins =
+          points
+          |> Enum.flat_map(fn %{positions: positions} -> Enum.map(positions, & &1.isin) end)
+          |> Enum.uniq()
+
+        # 1 query: load all symbol mappings
+        mappings = Stocks.batch_symbol_mappings(all_isins)
+
+        # Derive all symbols we need prices for (stock symbols + FX pairs)
+        {stock_symbols, fx_pairs} = collect_needed_symbols(points, mappings)
+        all_symbols = stock_symbols ++ fx_pairs
+
+        # Calculate date range with 5-day lookback buffer
+        all_dates = Enum.map(points, & &1.date)
+        min_date = Date.add(Enum.min(all_dates, Date), -5)
+        max_date = Enum.max(all_dates, Date)
+
+        # 1 query: load all historical prices
+        price_map = Stocks.batch_historical_prices(all_symbols, min_date, max_date)
+
+        # Pure in-memory map — no more DB queries
+        points
+        |> Enum.map(&price_reconstructed_point_batched(&1, mappings, price_map))
+        |> Enum.reject(&is_nil/1)
+    end
   end
 
-  defp price_reconstructed_point(%{date: date, positions: positions}) do
+  # Collect stock symbols and FX pairs needed for pricing
+  defp collect_needed_symbols(points, mappings) do
+    all_positions = Enum.flat_map(points, & &1.positions)
+
+    {symbols, currencies} =
+      Enum.reduce(all_positions, {MapSet.new(), MapSet.new()}, fn pos, {syms, curs} ->
+        collect_position_symbols(pos, mappings, syms, curs)
+      end)
+
+    fx_pairs = Enum.map(currencies, fn cur -> "OANDA:EUR_#{cur}" end)
+    {MapSet.to_list(symbols), fx_pairs}
+  end
+
+  defp collect_position_symbols(pos, mappings, syms, curs) do
+    case Map.get(mappings, pos.isin) do
+      %{finnhub_symbol: sym} when is_binary(sym) ->
+        curs = if pos.currency != "EUR", do: MapSet.put(curs, pos.currency), else: curs
+        {MapSet.put(syms, sym), curs}
+
+      _ ->
+        {syms, curs}
+    end
+  end
+
+  defp price_reconstructed_point_batched(%{date: date, positions: positions}, mappings, price_map) do
     {total_value, total_cost_basis} =
       Enum.reduce(positions, {Decimal.new("0"), Decimal.new("0")}, fn pos, {val_acc, cost_acc} ->
-        case get_position_value(pos, date) do
+        case get_position_value_batched(pos, date, mappings, price_map) do
           {:ok, value} ->
             {Decimal.add(val_acc, value), Decimal.add(cost_acc, pos.cost_basis)}
 
@@ -185,7 +270,6 @@ defmodule Dividendsomatic.Portfolio do
         end
       end)
 
-    # Only include points where we have at least some price data
     if Decimal.compare(total_value, Decimal.new("0")) == :gt do
       %{
         date: date,
@@ -200,42 +284,31 @@ defmodule Dividendsomatic.Portfolio do
     end
   end
 
-  defp get_position_value(position, date) do
-    # Resolve ISIN to Finnhub symbol
-    mapping = Stocks.get_symbol_mapping(position.isin)
+  defp get_position_value_batched(position, date, mappings, price_map) do
+    case Map.get(mappings, position.isin) do
+      %{finnhub_symbol: symbol} when is_binary(symbol) ->
+        case Stocks.batch_get_close_price(price_map, symbol, date) do
+          {:ok, close_price} ->
+            value = Decimal.mult(position.quantity, close_price)
+            eur_value = apply_fx_conversion_batched(value, position.currency, date, price_map)
+            {:ok, eur_value}
 
-    symbol =
-      case mapping do
-        %{status: "resolved", finnhub_symbol: s} -> s
-        _ -> nil
-      end
+          {:error, _} ->
+            :skip
+        end
 
-    if symbol do
-      case Stocks.get_close_price(symbol, date) do
-        {:ok, close_price} ->
-          value = Decimal.mult(position.quantity, close_price)
-
-          # Apply FX conversion if non-EUR
-          eur_value = apply_fx_conversion(value, position.currency, date)
-          {:ok, eur_value}
-
-        {:error, _} ->
-          :skip
-      end
-    else
-      :skip
+      _ ->
+        :skip
     end
   end
 
-  defp apply_fx_conversion(value, "EUR", _date), do: value
+  defp apply_fx_conversion_batched(value, "EUR", _date, _price_map), do: value
 
-  defp apply_fx_conversion(value, currency, date) do
+  defp apply_fx_conversion_batched(value, currency, date, price_map) do
     pair = "OANDA:EUR_#{currency}"
 
-    case Stocks.get_fx_rate(pair, date) do
+    case Stocks.batch_get_close_price(price_map, pair, date) do
       {:ok, rate} ->
-        # EUR/XXX rate means 1 EUR = X units of currency
-        # To convert from currency to EUR: value / rate
         if Decimal.compare(rate, Decimal.new("0")) == :gt do
           Decimal.div(value, rate)
         else
@@ -243,7 +316,6 @@ defmodule Dividendsomatic.Portfolio do
         end
 
       {:error, _} ->
-        # No FX data, return unconverted (approximate)
         value
     end
   end
@@ -470,7 +542,9 @@ defmodule Dividendsomatic.Portfolio do
   """
   def total_dividends_for_year(year) do
     year_start = Date.new!(year, 1, 1)
-    year_end = if year == Date.utc_today().year, do: Date.utc_today(), else: Date.new!(year, 12, 31)
+
+    year_end =
+      if year == Date.utc_today().year, do: Date.utc_today(), else: Date.new!(year, 12, 31)
 
     dividends_by_month(year_start, year_end)
     |> Enum.reduce(Decimal.new("0"), fn %{total: t}, acc -> Decimal.add(acc, t) end)
@@ -622,6 +696,138 @@ defmodule Dividendsomatic.Portfolio do
     else
       Decimal.new("0")
     end
+  end
+
+  ## Dividend Dashboard (batch computation)
+
+  @doc """
+  Computes all dividend-related data in one pass, avoiding redundant queries.
+
+  Builds the holdings map ONCE with the widest date range needed, loads dividends
+  ONCE, and computes all values from that shared data. Reduces ~25 queries to ~5.
+
+  ## Parameters
+    - `year` — The dividend year to report on
+    - `chart_date_range` — `{first_date, last_date}` from chart data, or `nil`
+
+  ## Returns
+  A map with:
+    - `total_for_year` — Total dividend income for the given year
+    - `projected_annual` — Projected annual dividends (nil if not current year)
+    - `recent_with_income` — Last 5 dividend income entries (current year)
+    - `cash_flow_summary` — Monthly cash flow with cumulative totals (current year)
+    - `by_month_full_range` — Monthly dividends across the full chart range
+  """
+  def compute_dividend_dashboard(year, chart_date_range) do
+    today = Date.utc_today()
+    year_start = Date.new!(year, 1, 1)
+    year_end = if year == today.year, do: today, else: Date.new!(year, 12, 31)
+
+    {widest_from, widest_to} = dashboard_date_range(year_start, year_end, chart_date_range)
+    holdings_map = build_holdings_map(widest_from, widest_to)
+    all_dividends = load_dividends_in_range(widest_from, widest_to)
+
+    year_dividends = filter_date_range(all_dividends, year_start, year_end)
+    year_by_month = compute_by_month(year_dividends, holdings_map)
+    total_for_year = sum_monthly_totals(year_by_month)
+
+    %{
+      total_for_year: total_for_year,
+      projected_annual: compute_projected_annual(year, today, year_start, total_for_year),
+      recent_with_income: compute_recent_with_income(year_dividends, holdings_map),
+      cash_flow_summary: compute_cash_flow(year, today.year, year_by_month),
+      by_month_full_range:
+        compute_chart_range_months(chart_date_range, all_dividends, holdings_map, year_by_month)
+    }
+  end
+
+  defp dashboard_date_range(year_start, year_end, nil), do: {year_start, year_end}
+
+  defp dashboard_date_range(year_start, year_end, {chart_start, chart_end}) do
+    {Enum.min([year_start, chart_start], Date), Enum.max([year_end, chart_end], Date)}
+  end
+
+  defp load_dividends_in_range(from, to) do
+    Dividend
+    |> where([d], d.ex_date >= ^from and d.ex_date <= ^to)
+    |> order_by([d], asc: d.ex_date)
+    |> Repo.all()
+  end
+
+  defp filter_date_range(dividends, from, to) do
+    Enum.filter(dividends, fn d ->
+      Date.compare(d.ex_date, from) != :lt and Date.compare(d.ex_date, to) != :gt
+    end)
+  end
+
+  defp sum_monthly_totals(by_month) do
+    Enum.reduce(by_month, Decimal.new("0"), fn %{total: t}, acc -> Decimal.add(acc, t) end)
+  end
+
+  defp compute_projected_annual(year, today, year_start, total) do
+    if year == today.year do
+      days_elapsed = Date.diff(today, year_start) + 1
+
+      if days_elapsed > 0 do
+        Decimal.div(total, Decimal.new(days_elapsed))
+        |> Decimal.mult(Decimal.new(365))
+        |> Decimal.round(2)
+      else
+        Decimal.new("0")
+      end
+    else
+      nil
+    end
+  end
+
+  defp compute_recent_with_income(year_dividends, holdings_map) do
+    year_dividends
+    |> Enum.reverse()
+    |> Enum.map(fn div ->
+      %{dividend: div, income: compute_dividend_income(div, holdings_map)}
+    end)
+    |> Enum.filter(fn entry -> Decimal.compare(entry.income, Decimal.new("0")) == :gt end)
+    |> Enum.take(5)
+  end
+
+  defp compute_cash_flow(year, current_year, _year_by_month) when year != current_year, do: []
+
+  defp compute_cash_flow(_year, current_year, year_by_month) do
+    year_prefix = Integer.to_string(current_year)
+
+    {entries, _} =
+      year_by_month
+      |> Enum.filter(fn %{month: m} -> String.starts_with?(m, year_prefix) end)
+      |> Enum.map_reduce(Decimal.new("0"), fn %{month: month, total: total}, acc ->
+        cumulative = Decimal.add(acc, total)
+        {%{month: month, income: total, cumulative: cumulative}, cumulative}
+      end)
+
+    entries
+  end
+
+  defp compute_chart_range_months(nil, _all_dividends, _holdings_map, year_by_month),
+    do: year_by_month
+
+  defp compute_chart_range_months({chart_start, chart_end}, all_dividends, holdings_map, _) do
+    all_dividends
+    |> filter_date_range(chart_start, chart_end)
+    |> compute_by_month(holdings_map)
+  end
+
+  # Compute dividends grouped by month from pre-loaded data (no DB calls)
+  defp compute_by_month(dividends, holdings_map) do
+    dividends
+    |> Enum.map(fn div ->
+      month = Calendar.strftime(div.ex_date, "%Y-%m")
+      income = compute_dividend_income(div, holdings_map)
+      {month, income}
+    end)
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+    |> Enum.map(fn {month, incomes} ->
+      %{month: month, total: Enum.reduce(incomes, Decimal.new("0"), &Decimal.add/2)}
+    end)
+    |> Enum.sort_by(& &1.month)
   end
 
   ## FX Exposure

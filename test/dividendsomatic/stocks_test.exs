@@ -3,7 +3,15 @@ defmodule Dividendsomatic.StocksTest do
 
   alias Dividendsomatic.Repo
   alias Dividendsomatic.Stocks
-  alias Dividendsomatic.Stocks.{CompanyNote, CompanyProfile, StockMetric, StockQuote}
+
+  alias Dividendsomatic.Stocks.{
+    CompanyNote,
+    CompanyProfile,
+    HistoricalPrice,
+    StockMetric,
+    StockQuote,
+    SymbolMapping
+  }
 
   describe "stock quote schema" do
     test "should reject empty changeset" do
@@ -366,6 +374,136 @@ defmodule Dividendsomatic.StocksTest do
       watchlist = Stocks.list_watchlist()
       assert length(watchlist) == 1
       assert hd(watchlist).symbol == "KESKOB"
+    end
+  end
+
+  describe "batch_symbol_mappings/1" do
+    test "should return resolved mappings keyed by ISIN" do
+      Repo.insert!(%SymbolMapping{
+        isin: "FI0009000202",
+        finnhub_symbol: "KESKOB.HE",
+        status: "resolved"
+      })
+
+      Repo.insert!(%SymbolMapping{
+        isin: "SE0000667925",
+        finnhub_symbol: "TELIA1.ST",
+        status: "resolved"
+      })
+
+      result = Stocks.batch_symbol_mappings(["FI0009000202", "SE0000667925"])
+
+      assert map_size(result) == 2
+      assert result["FI0009000202"].finnhub_symbol == "KESKOB.HE"
+      assert result["SE0000667925"].finnhub_symbol == "TELIA1.ST"
+    end
+
+    test "should exclude non-resolved mappings" do
+      Repo.insert!(%SymbolMapping{isin: "FI0009000202", status: "resolved", finnhub_symbol: "X"})
+      Repo.insert!(%SymbolMapping{isin: "SE0000667925", status: "pending"})
+      Repo.insert!(%SymbolMapping{isin: "US0000000000", status: "unmappable"})
+
+      result = Stocks.batch_symbol_mappings(["FI0009000202", "SE0000667925", "US0000000000"])
+
+      assert map_size(result) == 1
+      assert Map.has_key?(result, "FI0009000202")
+    end
+
+    test "should return empty map for empty input" do
+      assert Stocks.batch_symbol_mappings([]) == %{}
+    end
+  end
+
+  describe "batch_historical_prices/3" do
+    test "should return prices keyed by symbol then date" do
+      Repo.insert!(%HistoricalPrice{
+        symbol: "KESKOB.HE",
+        date: ~D[2026-01-15],
+        close: Decimal.new("21.00")
+      })
+
+      Repo.insert!(%HistoricalPrice{
+        symbol: "KESKOB.HE",
+        date: ~D[2026-01-16],
+        close: Decimal.new("21.50")
+      })
+
+      Repo.insert!(%HistoricalPrice{
+        symbol: "TELIA1.ST",
+        date: ~D[2026-01-15],
+        close: Decimal.new("3.85")
+      })
+
+      result =
+        Stocks.batch_historical_prices(
+          ["KESKOB.HE", "TELIA1.ST"],
+          ~D[2026-01-15],
+          ~D[2026-01-16]
+        )
+
+      assert map_size(result) == 2
+      assert Decimal.equal?(result["KESKOB.HE"][~D[2026-01-15]], Decimal.new("21.00"))
+      assert Decimal.equal?(result["KESKOB.HE"][~D[2026-01-16]], Decimal.new("21.50"))
+      assert Decimal.equal?(result["TELIA1.ST"][~D[2026-01-15]], Decimal.new("3.85"))
+    end
+
+    test "should respect date range" do
+      Repo.insert!(%HistoricalPrice{
+        symbol: "X",
+        date: ~D[2026-01-10],
+        close: Decimal.new("10")
+      })
+
+      Repo.insert!(%HistoricalPrice{
+        symbol: "X",
+        date: ~D[2026-01-20],
+        close: Decimal.new("20")
+      })
+
+      result = Stocks.batch_historical_prices(["X"], ~D[2026-01-15], ~D[2026-01-25])
+
+      assert map_size(result["X"]) == 1
+      assert Map.has_key?(result["X"], ~D[2026-01-20])
+    end
+
+    test "should return empty map for empty symbols" do
+      assert Stocks.batch_historical_prices([], ~D[2026-01-01], ~D[2026-01-31]) == %{}
+    end
+  end
+
+  describe "batch_get_close_price/3" do
+    test "should return exact date price" do
+      price_map = %{
+        "KESKOB.HE" => %{~D[2026-01-15] => Decimal.new("21.00")}
+      }
+
+      assert {:ok, price} = Stocks.batch_get_close_price(price_map, "KESKOB.HE", ~D[2026-01-15])
+      assert Decimal.equal?(price, Decimal.new("21.00"))
+    end
+
+    test "should fall back to previous days within 5-day window" do
+      price_map = %{
+        "X" => %{~D[2026-01-10] => Decimal.new("100")}
+      }
+
+      # 3 days after last price — within 5-day window
+      assert {:ok, price} = Stocks.batch_get_close_price(price_map, "X", ~D[2026-01-13])
+      assert Decimal.equal?(price, Decimal.new("100"))
+    end
+
+    test "should return error when no price within 5-day window" do
+      price_map = %{
+        "X" => %{~D[2026-01-01] => Decimal.new("100")}
+      }
+
+      # 10 days after — outside window
+      assert {:error, :no_price} =
+               Stocks.batch_get_close_price(price_map, "X", ~D[2026-01-11])
+    end
+
+    test "should return error for unknown symbol" do
+      assert {:error, :no_price} =
+               Stocks.batch_get_close_price(%{}, "UNKNOWN", ~D[2026-01-15])
     end
   end
 end

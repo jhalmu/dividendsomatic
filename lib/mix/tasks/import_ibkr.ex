@@ -57,6 +57,8 @@ defmodule Mix.Tasks.Import.Ibkr do
     {:ok, cost_count} = CostProcessor.process()
     IO.puts("  Costs: #{cost_count} new")
 
+    Dividendsomatic.Portfolio.invalidate_chart_cache()
+
     IO.puts("\n--- Summary ---")
     IO.puts("  Transactions: #{total_txns} parsed, #{total_new} new")
     IO.puts("  Dividends: #{div_count}")

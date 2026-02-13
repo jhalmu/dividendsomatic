@@ -626,6 +626,56 @@ defmodule Dividendsomatic.Stocks do
     end
   end
 
+  ## Batch Queries (for chart reconstruction)
+
+  @doc """
+  Loads all symbol mappings for a list of ISINs in a single query.
+
+  Returns `%{isin => %SymbolMapping{}}`.
+  """
+  def batch_symbol_mappings(isins) when is_list(isins) do
+    SymbolMapping
+    |> where([m], m.isin in ^isins and m.status == "resolved")
+    |> Repo.all()
+    |> Map.new(fn m -> {m.isin, m} end)
+  end
+
+  @doc """
+  Loads all historical prices for multiple symbols in a date range in a single query.
+
+  Returns `%{symbol => %{date => close_price}}`.
+  """
+  def batch_historical_prices(symbols, from_date, to_date) when is_list(symbols) do
+    HistoricalPrice
+    |> where([p], p.symbol in ^symbols and p.date >= ^from_date and p.date <= ^to_date)
+    |> select([p], {p.symbol, p.date, p.close})
+    |> Repo.all()
+    |> Enum.group_by(&elem(&1, 0))
+    |> Map.new(fn {symbol, rows} ->
+      date_map = Map.new(rows, fn {_sym, date, close} -> {date, close} end)
+      {symbol, date_map}
+    end)
+  end
+
+  @doc """
+  Pure in-memory close price lookup with 5-day fallback.
+
+  Same logic as `get_close_price/2` but reads from pre-loaded price map.
+  """
+  def batch_get_close_price(price_map, symbol, date) do
+    symbol_prices = Map.get(price_map, symbol, %{})
+
+    # Try exact date, then walk back up to 5 days
+    Enum.find_value(0..5, fn offset ->
+      lookup_date = Date.add(date, -offset)
+
+      case Map.get(symbol_prices, lookup_date) do
+        nil -> nil
+        close when not is_nil(close) -> {:ok, close}
+      end
+    end) || {:error, :no_price}
+  end
+
   ## Symbol Mappings (CRUD)
 
   @doc """

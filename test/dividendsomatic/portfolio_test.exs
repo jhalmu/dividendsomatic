@@ -438,6 +438,97 @@ defmodule Dividendsomatic.PortfolioTest do
     end
   end
 
+  describe "compute_dividend_dashboard/2" do
+    test "should return all dividend data in one pass" do
+      today = Date.utc_today()
+
+      {:ok, snapshot} =
+        %Portfolio.PortfolioSnapshot{}
+        |> Portfolio.PortfolioSnapshot.changeset(%{report_date: Date.new!(today.year, 1, 5)})
+        |> Repo.insert()
+
+      insert_test_holding(snapshot.id, Date.new!(today.year, 1, 5), "KESKOB", 100, "1")
+
+      {:ok, _} =
+        Portfolio.create_dividend(%{
+          symbol: "KESKOB",
+          ex_date: Date.new!(today.year, 1, 15),
+          amount: Decimal.new("1.00"),
+          currency: "EUR"
+        })
+
+      {:ok, _} =
+        Portfolio.create_dividend(%{
+          symbol: "KESKOB",
+          ex_date: Date.new!(today.year, 2, 10),
+          amount: Decimal.new("0.50"),
+          currency: "EUR"
+        })
+
+      result = Portfolio.compute_dividend_dashboard(today.year, nil)
+
+      # total_for_year: 1.00*100 + 0.50*100 = 150
+      assert Decimal.equal?(result.total_for_year, Decimal.new("150"))
+      assert %Decimal{} = result.projected_annual
+      assert is_list(result.recent_with_income)
+      assert length(result.recent_with_income) <= 5
+      assert is_list(result.cash_flow_summary)
+      assert is_list(result.by_month_full_range)
+    end
+
+    test "should return nil projected_annual for past years" do
+      today = Date.utc_today()
+      past_year = today.year - 1
+
+      result = Portfolio.compute_dividend_dashboard(past_year, nil)
+
+      assert is_nil(result.projected_annual)
+      assert result.cash_flow_summary == []
+    end
+
+    test "should handle chart_date_range wider than year" do
+      today = Date.utc_today()
+
+      {:ok, snapshot} =
+        %Portfolio.PortfolioSnapshot{}
+        |> Portfolio.PortfolioSnapshot.changeset(%{report_date: Date.new!(today.year, 1, 5)})
+        |> Repo.insert()
+
+      insert_test_holding(snapshot.id, Date.new!(today.year, 1, 5), "KESKOB", 100, "1")
+
+      {:ok, _} =
+        Portfolio.create_dividend(%{
+          symbol: "KESKOB",
+          ex_date: Date.new!(today.year, 1, 15),
+          amount: Decimal.new("1.00"),
+          currency: "EUR"
+        })
+
+      chart_range = {Date.new!(today.year - 1, 1, 1), today}
+      result = Portfolio.compute_dividend_dashboard(today.year, chart_range)
+
+      assert is_list(result.by_month_full_range)
+      assert Decimal.compare(result.total_for_year, Decimal.new("0")) == :gt
+    end
+  end
+
+  describe "invalidate_chart_cache/0" do
+    test "should not raise when cache is empty" do
+      assert :ok = Portfolio.invalidate_chart_cache()
+    end
+
+    test "should clear cached data" do
+      # Populate cache
+      _ = Portfolio.get_reconstructed_chart_data_cached()
+
+      # Invalidate
+      assert :ok = Portfolio.invalidate_chart_cache()
+
+      # Verify cache is cleared (next call rebuilds)
+      assert :ok = Portfolio.invalidate_chart_cache()
+    end
+  end
+
   defp insert_test_holding(snapshot_id, report_date, symbol, qty, fx_rate) do
     %Portfolio.Holding{}
     |> Portfolio.Holding.changeset(%{

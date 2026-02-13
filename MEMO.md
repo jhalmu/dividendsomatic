@@ -51,25 +51,34 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.13.0 (Yahoo Finance + 9A Tax Report + Chart Reconstruction)
-**Status:** Full historical reconstruction pipeline operational
+**Version:** 0.14.0 (N+1 Query Fix + Batch Loading + Dividend Dashboard)
+**Status:** Full historical reconstruction pipeline operational, page load optimized
 
-**Latest session (2026-02-13):**
+**Latest session (2026-02-13, PM):**
+- **Phase 1:** Batch-loaded historical prices — 3,700+ queries → 3 queries
+  - `batch_symbol_mappings/1`, `batch_historical_prices/3`, `batch_get_close_price/3` in Stocks context
+  - Rewrote `get_reconstructed_chart_data/0` to use in-memory pricing after batch load
+- **Phase 2:** Deduplicated dividend queries — ~25 queries → ~5 queries
+  - `compute_dividend_dashboard/2` builds holdings map once, loads dividends once
+  - Refactored `assign_snapshot/2` in LiveView to use single dashboard call
+- **Phase 3:** `:persistent_term` cache for reconstructed chart data
+  - Invalidated on import (nordnet, ibkr, csv, historical prices)
+- 15 new tests covering batch functions + dividend dashboard + cache invalidation
+- Fixed 2 credo issues (nesting depth, cyclomatic complexity)
+
+**Previous session (2026-02-13, AM):**
 - Yahoo Finance adapter for free historical OHLCV data (no API key needed)
 - Enhanced SymbolMapper: Finnhub ISIN lookup + static Nordic/EU maps (64 resolved, 44 unmappable, 0 pending)
 - Historical prices fetched: 53/63 stocks + 7 forex pairs via Yahoo Finance
-- Chart reconstruction working: 417 points from 2017-03 to 2026-02 (~872ms)
+- Chart reconstruction working: 417 points from 2017-03 to 2026-02
 - Nordnet 9A tax report parser fixed and 605 trades imported (439 new sold positions)
 - Sold positions grouped by symbol (274 symbols instead of 1625 individual rows)
 - Imported new IBKR CSV data: 999 new transactions (2025-2026)
 
-**Previous session (2026-02-12):**
-- IBKR PDF Parser via `pdftotext -layout` (1,565 transactions)
-- IBKR CSV/PDF import pipeline (`mix import.ibkr`)
-
 **Key capabilities:**
 - Nordnet CSV Import + IBKR CSV/PDF Import + 9A Tax Report
 - Historical price reconstruction (Yahoo Finance, 2017-2026 continuous chart)
+- Batch-loaded chart pricing (3 queries instead of 3,700+, cached in persistent_term)
 - Symbol resolution: ISIN → Finnhub/Yahoo via cascading lookup
 - Dividend tracking (5,498 records across 60+ symbols)
 - Finnhub financial metrics, company profiles, stock quotes
@@ -77,11 +86,10 @@ mix ecto.reset              # Drop + create + migrate
 - Costs system, FX exposure, sold positions (grouped), data gaps analysis
 - Rule of 72 calculator, dividend analytics
 - Custom SVG charts with era-aware gap rendering
-- 348 tests + 13 Playwright E2E tests, 0 credo issues
+- 363 tests + 13 Playwright E2E tests, 0 credo issues
 
 **Next priorities:**
-- Visual verification of reconstructed chart at localhost:4000
-- Optimize chart data generation (N+1 queries, ~872ms)
+- Visual verification of optimized page load at localhost:4000
 - Multi-provider market data architecture (#22)
 - Production deployment
 
@@ -99,10 +107,10 @@ All other issues (#1-#21) closed.
 
 - [ ] Gmail integration needs OAuth env vars (`GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`)
 - [ ] Finnhub free tier: quotes work, candles return 403 (using Yahoo Finance instead)
-- [ ] Chart reconstruction N+1 queries (~872ms, could batch price lookups)
 - [ ] 10 stocks missing Yahoo Finance data (delisted/renamed)
 - [ ] No production deployment (Hetzner via docker-compose)
-- [x] Test coverage: 348 tests + 13 Playwright E2E, 0 credo issues
+- [x] Chart reconstruction N+1 queries fixed (3,700+ → 3 queries + persistent_term cache)
+- [x] Test coverage: 363 tests + 13 Playwright E2E, 0 credo issues
 - [x] Historical prices: 53/63 stocks + 7 forex pairs fetched
 - [x] Symbol resolution: 64 resolved, 44 unmappable, 0 pending
 

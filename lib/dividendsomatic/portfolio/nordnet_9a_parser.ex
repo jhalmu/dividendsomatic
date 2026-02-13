@@ -157,8 +157,7 @@ defmodule Dividendsomatic.Portfolio.Nordnet9aParser do
           "Security"
         ]),
       quantity: find_col_index(columns, ["Määrä", "Quantity"]),
-      purchase_date:
-        find_col_index(columns, ["Hankinta-aika", "Hankintapäivä", "Purchase date"]),
+      purchase_date: find_col_index(columns, ["Hankinta-aika", "Hankintapäivä", "Purchase date"]),
       sale_date: find_col_index(columns, ["Luovutusaika", "Luovutuspäivä", "Sale date"]),
       sale_price: find_col_index(columns, ["Luovutushinta", "Sale price"]),
       purchase_price: find_col_index(columns, ["Hankintahinta", "Purchase price"]),

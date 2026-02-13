@@ -47,6 +47,7 @@ defmodule Mix.Tasks.Import.Csv do
             :count
           )
 
+        Portfolio.invalidate_chart_cache()
         IO.puts("✓ Successfully imported #{count} holdings")
 
       {:error, changeset} ->

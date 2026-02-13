@@ -165,7 +165,9 @@ defmodule Dividendsomatic.Stocks.SymbolMapper do
       |> order_by([m], asc: m.isin)
       |> Repo.all()
 
-    Logger.info("SymbolMapper: attempting to resolve #{length(pending)} pending ISINs via Finnhub")
+    Logger.info(
+      "SymbolMapper: attempting to resolve #{length(pending)} pending ISINs via Finnhub"
+    )
 
     Enum.reduce(pending, {0, 0, 0}, fn mapping, {res, unmap, pend} ->
       # Rate limit: 1 request per 1.1 seconds (safe margin for 60/min)

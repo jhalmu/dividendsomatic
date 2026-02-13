@@ -346,7 +346,10 @@
                           {sp.symbol}
                         </.link>
                       </td>
-                      <td class="terminal-number" style="text-align: right; color: var(--terminal-dim);">
+                      <td
+                        class="terminal-number"
+                        style="text-align: right; color: var(--terminal-dim);"
+                      >
                         {sp.trades}
                       </td>
                       <td class="terminal-number" style="text-align: right;">
@@ -364,7 +367,10 @@
                         class="terminal-number"
                         style="text-align: right; color: var(--terminal-dim); font-size: 0.75rem;"
                       >
-                        {Calendar.strftime(sp.first_date, "%Y")}–{Calendar.strftime(sp.last_date, "%Y")}
+                        {Calendar.strftime(sp.first_date, "%Y")}–{Calendar.strftime(
+                          sp.last_date,
+                          "%Y"
+                        )}
                       </td>
                     </tr>
                   <% end %>

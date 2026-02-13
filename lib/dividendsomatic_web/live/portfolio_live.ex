@@ -343,6 +343,17 @@ defmodule DividendsomaticWeb.PortfolioLive do
     chart_data = Portfolio.get_all_chart_data()
     sparkline_values = Enum.map(chart_data, & &1.value_float)
 
+    # Compute all dividend data in one pass
+    year = snapshot.report_date.year
+
+    chart_date_range =
+      case chart_data do
+        [first | _] -> {first.date, List.last(chart_data).date}
+        _ -> nil
+      end
+
+    dividend_dashboard = Portfolio.compute_dividend_dashboard(year, chart_date_range)
+
     socket
     |> assign(:current_snapshot, snapshot)
     |> assign(:holdings, holdings)
@@ -354,41 +365,17 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:total_snapshots, total_snapshots)
     |> assign(:chart_data, chart_data)
     |> assign(:growth_stats, Portfolio.get_growth_stats(snapshot))
-    |> assign_dividend_stats()
-    |> assign(:recent_dividends, Portfolio.list_dividends_with_income() |> Enum.take(5))
-    |> assign(:dividend_by_month, dividends_for_chart(chart_data))
+    |> assign(:dividend_year, year)
+    |> assign(:dividend_total, dividend_dashboard.total_for_year)
+    |> assign(:projected_dividends, dividend_dashboard.projected_annual)
+    |> assign(:recent_dividends, dividend_dashboard.recent_with_income)
+    |> assign(:dividend_by_month, dividend_dashboard.by_month_full_range)
     |> assign(:sparkline_values, sparkline_values)
     |> assign(:realized_pnl, Portfolio.total_realized_pnl())
     |> assign(:fear_greed, get_fear_greed_for_snapshot(socket, snapshot))
     |> assign(:fx_exposure, Portfolio.compute_fx_exposure(holdings))
     |> assign(:sold_positions_grouped, Portfolio.list_sold_positions_grouped())
     |> assign(:sold_positions_count, Portfolio.count_sold_positions())
-    |> assign(:cash_flow, Portfolio.dividend_cash_flow_summary())
-  end
-
-  defp dividends_for_chart([first | _] = chart_data) do
-    last_date = List.last(chart_data).date
-    Portfolio.dividends_by_month(first.date, last_date)
-  end
-
-  defp dividends_for_chart(_), do: []
-
-  defp assign_dividend_stats(socket) do
-    snapshot = socket.assigns.current_snapshot
-    year = if snapshot, do: snapshot.report_date.year, else: Date.utc_today().year
-    total = Portfolio.total_dividends_for_year(year)
-    current_year = Date.utc_today().year
-
-    projected =
-      if year == current_year do
-        Portfolio.projected_annual_dividends()
-      else
-        nil
-      end
-
-    socket
-    |> assign(:dividend_year, year)
-    |> assign(:dividend_total, total)
-    |> assign(:projected_dividends, projected)
+    |> assign(:cash_flow, dividend_dashboard.cash_flow_summary)
   end
 end
