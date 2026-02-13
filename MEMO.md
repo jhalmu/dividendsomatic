@@ -54,7 +54,18 @@ mix ecto.reset              # Drop + create + migrate
 **Version:** 0.17.0 (Lynx 9A PDF Trade Import)
 **Status:** 6,291 sold positions across all sources (2019-2026)
 
-**Latest session (2026-02-13, LATE EVENING):**
+**Latest session (2026-02-13, NIGHT 2):**
+- **Code review fixes for feature/automate-flex-import branch**
+  - Fixed hardcoded Dropbox path in AppleScript → passes `$CSV_DIR` via `osascript` argument
+  - Fixed `String.to_atom/1` on CSV headers → uses string keys throughout `import_lynx_9a.ex`
+  - Extracted duplicate ISIN static map → shared `Portfolio.IsinMap` module
+  - Fixed 3 credo nesting depth warnings (import_lynx_9a, backfill_isin phases 3&4)
+  - Added deprecation note to `GmailImportWorker` (retained for manual use)
+  - Added 21 unit tests for Lynx 9A import (date parsing, decimal math, dedup, format_pnl)
+  - Added 4 tests for CsvDirectory.archive_file/2 (move, mkdir, error, filename)
+- 451 tests, 0 failures, 0 credo issues
+
+**Previous session (2026-02-13, LATE EVENING):**
 - **Lynx 9A PDF trade extraction & import**
   - Extracted 7,163 trades from 9 Lynx/IBKR PDF files (9A Vero tax forms, 2019-2024)
   - Two extraction methods: pikepdf widget annotations (2019-2020, 2022-2024) and pdftotext (2021 lukittu PDFs)
@@ -155,7 +166,7 @@ mix ecto.reset              # Drop + create + migrate
 - Costs system, FX exposure, sold positions (grouped), data gaps analysis
 - Rule of 72 calculator, dividend analytics
 - Custom SVG charts with era-aware gap rendering
-- 426 tests + 13 Playwright E2E tests, 0 credo issues
+- 451 tests + 13 Playwright E2E tests, 0 credo issues
 - Multi-provider market data: Finnhub + Yahoo Finance + EODHD with fallback chains
 
 **Next priorities:**

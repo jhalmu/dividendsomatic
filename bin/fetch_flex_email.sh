@@ -29,12 +29,9 @@ log() {
 log "=== Starting fetch_flex_email ==="
 
 # Run AppleScript to fetch CSV attachments from Mail.app
-RESULT=$(/usr/bin/osascript <<'APPLESCRIPT'
-use AppleScript version "2.4"
-use scripting additions
-
--- Configuration
-set csvDir to (do shell script "echo ~/Library/CloudStorage/Dropbox/Projektit/Elixir/dividendsomatic/csv_data")
+RESULT=$(/usr/bin/osascript - "$CSV_DIR" <<'APPLESCRIPT'
+on run argv
+set csvDir to item 1 of argv
 set savedCount to 0
 set skippedCount to 0
 set errorList to {}
@@ -136,6 +133,7 @@ if (count of errorList) > 0 then
 end if
 
 return resultStr
+end run
 APPLESCRIPT
 )
 

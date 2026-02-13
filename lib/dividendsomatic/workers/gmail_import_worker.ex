@@ -1,6 +1,10 @@
 defmodule Dividendsomatic.Workers.GmailImportWorker do
   @moduledoc """
-  Oban worker for automatically importing portfolio CSV files from Gmail.
+  Oban worker for importing portfolio CSV files from Gmail.
+
+  > **Note:** No longer cron-scheduled. Replaced by `bin/fetch_flex_email.sh`
+  > (launchd) + `DataImportWorker` (Oban cron) pipeline as of 2026-02.
+  > Retained for manual/one-off use only.
 
   This worker:
   1. Searches Gmail for "Activity Flex" emails from Interactive Brokers
@@ -15,8 +19,6 @@ defmodule Dividendsomatic.Workers.GmailImportWorker do
       |> Oban.insert()
 
   ## Configuration
-
-  Scheduled to run daily at 8 AM via Oban.Plugins.Cron in config.exs
 
   Required environment variables:
   - `GOOGLE_CLIENT_ID` - Google OAuth client ID

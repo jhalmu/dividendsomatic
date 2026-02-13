@@ -24,64 +24,7 @@ defmodule Mix.Tasks.Backfill.Isin do
 
   @shortdoc "Backfill ISIN on broker_transactions and sold_positions"
 
-  # Static map for tickers not resolvable from holdings or dividend rows.
-  # Verified ISINs for well-known stocks.
-  @static_isin_map %{
-    "AIO" => "US92838Y1029",
-    "AQN" => "CA0158571053",
-    "ARR" => "US0423155078",
-    "AXL" => "US0240611030",
-    "BABA" => "US01609W1027",
-    "BIIB" => "US09062X1037",
-    "BST" => "US09260D1081",
-    "CCJ" => "CA13321L1085",
-    "CGBD" => "US14316A1088",
-    "CHCT" => "US20369C1062",
-    "CTO" => "US1264081035",
-    "DFN" => "CA25490A1084",
-    "DHT" => "MHY2065G1219",
-    "ECC" => "US26982Y1091",
-    "ENB" => "CA29250N1050",
-    "ET" => "US29273V1008",
-    "FCX" => "US35671D8570",
-    "FSZ" => "CA31660A1049",
-    "GILD" => "US3755581036",
-    "GNK" => "MHY2685T1313",
-    "GOLD" => "CA0679011084",
-    "GSBD" => "US38147U1016",
-    "HTGC" => "US4271143047",
-    "HYT" => "US09255P1075",
-    "IAF" => "US0030281010",
-    "KMF" => "US48661E1082",
-    "NAT" => "BMG657731060",
-    "NEWT" => "US65253E1010",
-    "OCCI" => "US67111Q1076",
-    "OCSL" => "US67401P1084",
-    "OMF" => "US68268W1036",
-    "ORA" => "FR0000133308",
-    "ORCC" => "US69121K1043",
-    "OXY" => "US6745991058",
-    "PBR" => "US71654V4086",
-    "PRA" => "US74267C1062",
-    "REI.UN" => "CA7669101031",
-    "RNP" => "US19247X1000",
-    "SACH PRA" => "US78590A2079",
-    "SBRA" => "US78573L1061",
-    "SBSW" => "US82575P1075",
-    "SCCO" => "US84265V1052",
-    "SSSS" => "US86885M1053",
-    "TDS PRU" => "US87943P1030",
-    "TDS PRV" => "US87943P2020",
-    "TEF" => "US8793822086",
-    "TELL" => "US87968A1043",
-    "TY" => "US8955731080",
-    "UMH" => "US9030821043",
-    "UUUU" => "CA2926717083",
-    "WF" => "US98105F1049",
-    "XFLT" => "US98400U1016",
-    "ZM" => "US98980L1017",
-    "ZTR" => "US92837G1004"
-  }
+  alias Dividendsomatic.Portfolio.IsinMap
 
   def run(args) do
     Mix.Task.run("app.start")
@@ -171,7 +114,7 @@ defmodule Mix.Tasks.Backfill.Isin do
 
     # Merge: holdings takes priority over dividends, static map fills the rest
     merged =
-      @static_isin_map
+      IsinMap.static_map()
       |> Map.merge(div_map)
       |> Map.merge(holdings_map)
 
@@ -191,7 +134,7 @@ defmodule Mix.Tasks.Backfill.Isin do
 
     IO.puts("  Holdings pairs: #{map_size(holdings_map)}")
     IO.puts("  Dividend pairs: #{map_size(div_map)}")
-    IO.puts("  Static map pairs: #{map_size(@static_isin_map)}")
+    IO.puts("  Static map pairs: #{map_size(IsinMap.static_map())}")
     IO.puts("  Merged total: #{map_size(merged)}")
     IO.puts("  Coverage: #{resolved}/#{MapSet.size(all_tickers)} tickers")
 
@@ -226,23 +169,7 @@ defmodule Mix.Tasks.Backfill.Isin do
           )
           |> Repo.aggregate(:count)
 
-        if count > 0 do
-          if dry_run? do
-            IO.puts("  Would update #{count} transactions: #{ticker} → #{isin}")
-          else
-            {updated, _} =
-              BrokerTransaction
-              |> where(
-                [t],
-                t.broker == "ibkr" and
-                  is_nil(t.isin) and
-                  fragment("?->>? = ?", t.raw_data, "symbol", ^ticker)
-              )
-              |> Repo.update_all(set: [isin: isin])
-
-            if updated > 0, do: IO.puts("  Updated #{updated}: #{ticker} → #{isin}")
-          end
-        end
+        if count > 0, do: update_broker_transactions(ticker, isin, count, dry_run?)
 
         acc + count
       end)
@@ -250,6 +177,24 @@ defmodule Mix.Tasks.Backfill.Isin do
     IO.puts(
       "\n  Total: #{total_updated} broker_transactions #{if dry_run?, do: "would be", else: ""} updated\n"
     )
+  end
+
+  defp update_broker_transactions(ticker, isin, count, true) do
+    IO.puts("  Would update #{count} transactions: #{ticker} → #{isin}")
+  end
+
+  defp update_broker_transactions(ticker, isin, _count, false) do
+    {updated, _} =
+      BrokerTransaction
+      |> where(
+        [t],
+        t.broker == "ibkr" and
+          is_nil(t.isin) and
+          fragment("?->>? = ?", t.raw_data, "symbol", ^ticker)
+      )
+      |> Repo.update_all(set: [isin: isin])
+
+    if updated > 0, do: IO.puts("  Updated #{updated}: #{ticker} → #{isin}")
   end
 
   # --- Phase 4: Update sold_positions ---
@@ -265,18 +210,7 @@ defmodule Mix.Tasks.Backfill.Isin do
           |> where([s], s.symbol == ^ticker and is_nil(s.isin))
           |> Repo.aggregate(:count)
 
-        if count > 0 do
-          if dry_run? do
-            IO.puts("  Would update #{count} sold_positions: #{ticker} → #{isin}")
-          else
-            {updated, _} =
-              SoldPosition
-              |> where([s], s.symbol == ^ticker and is_nil(s.isin))
-              |> Repo.update_all(set: [isin: isin])
-
-            if updated > 0, do: IO.puts("  Updated #{updated}: #{ticker} → #{isin}")
-          end
-        end
+        if count > 0, do: update_sold_positions(ticker, isin, count, dry_run?)
 
         acc + count
       end)
@@ -284,6 +218,19 @@ defmodule Mix.Tasks.Backfill.Isin do
     IO.puts(
       "\n  Total: #{total_updated} sold_positions #{if dry_run?, do: "would be", else: ""} updated\n"
     )
+  end
+
+  defp update_sold_positions(ticker, isin, count, true) do
+    IO.puts("  Would update #{count} sold_positions: #{ticker} → #{isin}")
+  end
+
+  defp update_sold_positions(ticker, isin, _count, false) do
+    {updated, _} =
+      SoldPosition
+      |> where([s], s.symbol == ^ticker and is_nil(s.isin))
+      |> Repo.update_all(set: [isin: isin])
+
+    if updated > 0, do: IO.puts("  Updated #{updated}: #{ticker} → #{isin}")
   end
 
   # --- Phase 5: Backfill identifier_key on all sold_positions ---

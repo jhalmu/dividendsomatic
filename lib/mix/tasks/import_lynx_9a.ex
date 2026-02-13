@@ -41,7 +41,7 @@ defmodule Mix.Tasks.ImportLynx9a do
 
     trades =
       if years != [] do
-        filtered = Enum.filter(trades, &(&1.tax_year in years))
+        filtered = Enum.filter(trades, &(&1["tax_year"] in years))
         IO.puts("Filtered to years #{inspect(years)}: #{length(filtered)} trades")
         filtered
       else
@@ -64,7 +64,7 @@ defmodule Mix.Tasks.ImportLynx9a do
     |> NimbleCSV.RFC4180.parse_stream(skip_headers: false)
     |> Enum.to_list()
     |> then(fn [header | rows] ->
-      keys = Enum.map(header, &String.to_atom/1)
+      keys = Enum.map(header, &String.trim/1)
       Enum.map(rows, fn row -> Enum.zip(keys, row) |> Map.new() end)
     end)
   end
@@ -82,66 +82,70 @@ defmodule Mix.Tasks.ImportLynx9a do
   defp import_one(trade, name_map, dry_run) do
     with {:ok, attrs} <- build_attrs(trade, name_map),
          false <- position_exists?(attrs) do
-      if dry_run do
-        IO.puts(
-          "  WOULD CREATE: #{attrs.symbol} qty=#{attrs.quantity} " <>
-            "sold=#{attrs.sale_date} pnl=~#{format_pnl(trade)}"
-        )
-
-        :created
-      else
-        case %SoldPosition{} |> SoldPosition.changeset(attrs) |> Repo.insert() do
-          {:ok, _} ->
-            :created
-
-          {:error, cs} ->
-            IO.puts("  ERROR: #{trade.stock_name} — #{inspect(cs.errors)}")
-            :error
-        end
-      end
+      create_or_preview(attrs, trade, dry_run)
     else
       true ->
         :skipped
 
       {:error, reason} ->
-        IO.puts("  SKIP: #{trade.stock_name} — #{reason}")
+        IO.puts("  SKIP: #{trade["stock_name"]} — #{reason}")
         :skipped
     end
   end
 
+  defp create_or_preview(attrs, trade, true) do
+    IO.puts(
+      "  WOULD CREATE: #{attrs.symbol} qty=#{attrs.quantity} " <>
+        "sold=#{attrs.sale_date} pnl=~#{format_pnl(trade)}"
+    )
+
+    :created
+  end
+
+  defp create_or_preview(attrs, trade, false) do
+    case %SoldPosition{} |> SoldPosition.changeset(attrs) |> Repo.insert() do
+      {:ok, _} ->
+        :created
+
+      {:error, cs} ->
+        IO.puts("  ERROR: #{trade["stock_name"]} — #{inspect(cs.errors)}")
+        :error
+    end
+  end
+
   defp build_attrs(trade, name_map) do
-    quantity = parse_decimal(trade.quantity)
-    sell_price_total = parse_decimal(trade.sell_price)
-    buy_price_total = parse_decimal(trade.buy_price)
+    quantity = parse_decimal(trade["quantity"])
+    sell_price_total = parse_decimal(trade["sell_price"])
+    buy_price_total = parse_decimal(trade["buy_price"])
 
     cond do
       is_nil(quantity) or Decimal.compare(quantity, 0) != :gt ->
-        {:error, "invalid quantity: #{trade.quantity}"}
+        {:error, "invalid quantity: #{trade["quantity"]}"}
 
       is_nil(sell_price_total) or Decimal.compare(sell_price_total, 0) != :gt ->
-        {:error, "invalid sell_price: #{trade.sell_price}"}
+        {:error, "invalid sell_price: #{trade["sell_price"]}"}
 
       is_nil(buy_price_total) or Decimal.compare(buy_price_total, 0) != :gt ->
-        {:error, "invalid buy_price: #{trade.buy_price}"}
+        {:error, "invalid buy_price: #{trade["buy_price"]}"}
 
       true ->
         sale_price = Decimal.div(sell_price_total, quantity) |> Decimal.round(6)
         purchase_price = Decimal.div(buy_price_total, quantity) |> Decimal.round(6)
 
-        symbol = resolve_symbol(trade.stock_name, name_map)
+        symbol = resolve_symbol(trade["stock_name"], name_map)
 
         {:ok,
          %{
            symbol: symbol,
-           description: trade.stock_name,
+           description: trade["stock_name"],
            quantity: quantity,
            purchase_price: purchase_price,
-           purchase_date: parse_date(trade.buy_date),
+           purchase_date: parse_date(trade["buy_date"]),
            sale_price: sale_price,
-           sale_date: parse_date(trade.sell_date),
+           sale_date: parse_date(trade["sell_date"]),
            currency: "EUR",
            source: "lynx_9a",
-           notes: "Tax year #{trade.tax_year}, account #{trade.account}"
+           notes: "Tax year #{trade["tax_year"]}, account #{trade["account"]}"
          }}
     end
   end
@@ -430,8 +434,8 @@ defmodule Mix.Tasks.ImportLynx9a do
 
   defp format_pnl(trade) do
     cond do
-      trade.gain != "" -> "+#{trade.gain}"
-      trade.loss != "" -> "-#{trade.loss}"
+      trade["gain"] != "" -> "+#{trade["gain"]}"
+      trade["loss"] != "" -> "-#{trade["loss"]}"
       true -> "0"
     end
   end
