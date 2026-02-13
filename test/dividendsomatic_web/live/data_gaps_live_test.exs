@@ -3,7 +3,7 @@ defmodule DividendsomaticWeb.DataGapsLiveTest do
 
   import Phoenix.LiveViewTest
 
-  alias Dividendsomatic.Portfolio.{BrokerTransaction, Holding, PortfolioSnapshot}
+  alias Dividendsomatic.Portfolio.{BrokerTransaction, Dividend, Holding, PortfolioSnapshot}
 
   describe "Data Gaps page" do
     test "should render the page with broker coverage", %{conn: conn} do
@@ -132,21 +132,49 @@ defmodule DividendsomaticWeb.DataGapsLiveTest do
       refute html =~ "NOKIA"
     end
 
-    test "should sort by gap days", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/data/gaps")
+    test "should sort by gap days descending on click", %{conn: conn} do
+      insert_nordnet_transaction("sort_1", "FI0009000202", "ALPHA STOCK")
+      insert_nordnet_transaction("sort_2", "FI0009005961", "BETA STOCK")
 
-      html = view |> element("th[phx-value-field=gap_days]") |> render_click()
-      assert html =~ "Gap"
-    end
-
-    test "should toggle dividend gaps section", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/data/gaps")
-      assert html =~ "Dividend Gaps" || true
+      # Both stocks visible before sort
+      assert html =~ "ALPHA STOCK"
+      assert html =~ "BETA STOCK"
 
-      html = render_click(view, :toggle_dividends)
-      # After toggle, the section state changes
-      assert html =~ "Dividend Gaps" || true
+      # Clicking sort triggers the event without error
+      html = view |> element("th[phx-value-field=gap_days]") |> render_click()
+      assert html =~ "ALPHA STOCK"
+      assert html =~ "BETA STOCK"
     end
+
+    test "should toggle dividend gaps section visibility", %{conn: conn} do
+      # Insert dividends with a >400 day gap to trigger the section
+      insert_dividend("TESTCO", ~D[2020-01-15], "1.00")
+      insert_dividend("TESTCO", ~D[2022-01-15], "1.50")
+
+      {:ok, view, html} = live(conn, ~p"/data/gaps")
+
+      # Section header visible but table content collapsed
+      assert html =~ "Dividend Gaps"
+      refute html =~ "Missing Periods"
+
+      # After toggle, table headers should appear
+      html = render_click(view, :toggle_dividends)
+      assert html =~ "Missing Periods"
+      assert html =~ "TESTCO"
+    end
+  end
+
+  defp insert_dividend(symbol, ex_date, amount) do
+    %Dividend{}
+    |> Dividend.changeset(%{
+      symbol: symbol,
+      ex_date: ex_date,
+      amount: Decimal.new(amount),
+      currency: "EUR",
+      source: "test"
+    })
+    |> Dividendsomatic.Repo.insert!()
   end
 
   defp insert_nordnet_transaction(external_id, isin, name) do
