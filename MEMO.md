@@ -51,10 +51,22 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.14.0 (N+1 Query Fix + Batch Loading + Dividend Dashboard)
-**Status:** Full historical reconstruction pipeline operational, page load optimized
+**Version:** 0.15.0 (Multi-Provider Market Data Architecture)
+**Status:** Multi-provider architecture operational, EODHD ready
 
-**Latest session (2026-02-13, PM):**
+**Latest session (2026-02-13, EVE):**
+- **Multi-provider market data architecture (#22)**
+  - `MarketData.Provider` behaviour with 6 callbacks (3 required, 3 optional)
+  - `MarketData.Dispatcher` with configurable fallback chains per data type
+  - **Finnhub provider** — extracted from stocks.ex (quotes, profiles, metrics, candles, forex, ISIN lookup)
+  - **Yahoo Finance provider** — wrapped existing module (candles, forex only)
+  - **EODHD provider** — new (quotes, candles, forex, company profiles)
+  - Stocks context rewired as facade — zero breaking changes for callers
+  - stocks.ex reduced from 798 to ~550 lines
+  - Config: provider chains in config.exs, EODHD_API_KEY in runtime.exs
+- 46 new tests (409 total), 0 credo issues
+
+**Previous session (2026-02-13, PM):**
 - **Phase 1:** Batch-loaded historical prices — 3,700+ queries → 3 queries
   - `batch_symbol_mappings/1`, `batch_historical_prices/3`, `batch_get_close_price/3` in Stocks context
   - Rewrote `get_reconstructed_chart_data/0` to use in-memory pricing after batch load
@@ -86,11 +98,12 @@ mix ecto.reset              # Drop + create + migrate
 - Costs system, FX exposure, sold positions (grouped), data gaps analysis
 - Rule of 72 calculator, dividend analytics
 - Custom SVG charts with era-aware gap rendering
-- 363 tests + 13 Playwright E2E tests, 0 credo issues
+- 409 tests + 13 Playwright E2E tests, 0 credo issues
+- Multi-provider market data: Finnhub + Yahoo Finance + EODHD with fallback chains
 
 **Next priorities:**
 - Visual verification of optimized page load at localhost:4000
-- Multi-provider market data architecture (#22)
+- EODHD historical data backfill (30+ years available)
 - Production deployment
 
 ---
@@ -99,9 +112,9 @@ mix ecto.reset              # Drop + create + migrate
 
 | # | Title | Status |
 |---|-------|--------|
-| [#22](https://github.com/jhalmu/dividendsomatic/issues/22) | Multi-provider market data architecture | Open |
+| [#22](https://github.com/jhalmu/dividendsomatic/issues/22) | Multi-provider market data architecture | Done |
 
-All other issues (#1-#21) closed.
+All issues (#1-#22) closed.
 
 ## Technical Debt
 
@@ -110,7 +123,8 @@ All other issues (#1-#21) closed.
 - [ ] 10 stocks missing Yahoo Finance data (delisted/renamed)
 - [ ] No production deployment (Hetzner via docker-compose)
 - [x] Chart reconstruction N+1 queries fixed (3,700+ → 3 queries + persistent_term cache)
-- [x] Test coverage: 363 tests + 13 Playwright E2E, 0 credo issues
+- [x] Multi-provider market data architecture (Finnhub + Yahoo + EODHD)
+- [x] Test coverage: 409 tests + 13 Playwright E2E, 0 credo issues
 - [x] Historical prices: 53/63 stocks + 7 forex pairs fetched
 - [x] Symbol resolution: 64 resolved, 44 unmappable, 0 pending
 
