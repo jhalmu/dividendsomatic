@@ -51,36 +51,37 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.12.0 (IBKR PDF Parser + Historical Reconstruction)
-**Status:** All phases complete including IBKR PDF import
+**Version:** 0.13.0 (Yahoo Finance + 9A Tax Report + Chart Reconstruction)
+**Status:** Full historical reconstruction pipeline operational
 
-**Latest session (2026-02-12 late night):**
-- IBKR PDF Parser: parses Transaction History PDFs via `pdftotext -layout`
-  - Two-pass type detection (date-line tokens → context fallback)
-  - Amount-based correction for foreign_tax/dividend misclassification
-  - Multi-word symbol extraction, ISIN extraction with line-break handling
-  - Noise line filtering, description truncation to 255 chars
-- Updated `mix import.ibkr` to handle both CSV and PDF files
-- Enhanced SoldPositionProcessor with JSONB ticker fallback matching
-- Added fallback PDF regex in DividendProcessor for interleaved descriptions
-- Fixed 3 credo issues (cyclomatic complexity, redundant with clause)
-- All 3 IBKR PDFs parsed: 1,565 transactions (2019-2025)
+**Latest session (2026-02-13):**
+- Yahoo Finance adapter for free historical OHLCV data (no API key needed)
+- Enhanced SymbolMapper: Finnhub ISIN lookup + static Nordic/EU maps (64 resolved, 44 unmappable, 0 pending)
+- Historical prices fetched: 53/63 stocks + 7 forex pairs via Yahoo Finance
+- Chart reconstruction working: 417 points from 2017-03 to 2026-02 (~872ms)
+- Nordnet 9A tax report parser fixed and 605 trades imported (439 new sold positions)
+- Sold positions grouped by symbol (274 symbols instead of 1625 individual rows)
+- Imported new IBKR CSV data: 999 new transactions (2025-2026)
+
+**Previous session (2026-02-12):**
+- IBKR PDF Parser via `pdftotext -layout` (1,565 transactions)
+- IBKR CSV/PDF import pipeline (`mix import.ibkr`)
 
 **Key capabilities:**
-- Nordnet CSV Import + IBKR CSV/PDF Import
-- Historical price reconstruction (2017-2022 Nordnet era)
+- Nordnet CSV Import + IBKR CSV/PDF Import + 9A Tax Report
+- Historical price reconstruction (Yahoo Finance, 2017-2026 continuous chart)
+- Symbol resolution: ISIN → Finnhub/Yahoo via cascading lookup
 - Dividend tracking (5,498 records across 60+ symbols)
 - Finnhub financial metrics, company profiles, stock quotes
 - Fear & Greed Index (365 days history)
-- Costs system, FX exposure, sold positions, data gaps analysis
+- Costs system, FX exposure, sold positions (grouped), data gaps analysis
 - Rule of 72 calculator, dividend analytics
-- Custom SVG charts with era-aware rendering
+- Custom SVG charts with era-aware gap rendering
 - 348 tests + 13 Playwright E2E tests, 0 credo issues
 
 **Next priorities:**
-- Run `mix fetch.historical_prices` to populate historical data
 - Visual verification of reconstructed chart at localhost:4000
-- Phase 5A: GetLynxPortfolio automation
+- Optimize chart data generation (N+1 queries, ~872ms)
 - Multi-provider market data architecture (#22)
 - Production deployment
 
@@ -97,9 +98,13 @@ All other issues (#1-#21) closed.
 ## Technical Debt
 
 - [ ] Gmail integration needs OAuth env vars (`GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`)
-- [ ] Finnhub integration needs API key (`FINNHUB_API_KEY`)
-- [ ] No production deployment (Fly.io or similar)
+- [ ] Finnhub free tier: quotes work, candles return 403 (using Yahoo Finance instead)
+- [ ] Chart reconstruction N+1 queries (~872ms, could batch price lookups)
+- [ ] 10 stocks missing Yahoo Finance data (delisted/renamed)
+- [ ] No production deployment (Hetzner via docker-compose)
 - [x] Test coverage: 348 tests + 13 Playwright E2E, 0 credo issues
+- [x] Historical prices: 53/63 stocks + 7 forex pairs fetched
+- [x] Symbol resolution: 64 resolved, 44 unmappable, 0 pending
 
 ---
 

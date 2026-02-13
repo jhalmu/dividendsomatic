@@ -4,6 +4,38 @@ Archived session notes from Dividendsomatic development. See [MEMO.md](../MEMO.m
 
 ---
 
+## 2026-02-13 - Yahoo Finance, 9A Tax Report & Chart Reconstruction
+
+### Session Summary
+
+Added Yahoo Finance adapter for free historical OHLCV data (Finnhub free tier doesn't support candles). Enhanced SymbolMapper with Finnhub ISIN lookup and static Nordic/EU symbol maps. Fixed Nordnet 9A tax report parser and imported 605 realized trades. Grouped sold positions display by symbol. Full chart reconstruction pipeline operational (2017-2026).
+
+### Features
+1. **Yahoo Finance Adapter** - HTTP adapter for chart API v8, no API key needed
+2. **Symbol Resolution** - Finnhub ISIN lookup + static maps: 64 resolved, 44 unmappable, 0 pending
+3. **Historical Prices** - 53/63 stocks + 7 forex pairs fetched via Yahoo Finance
+4. **9A Tax Report** - Fixed parser column detection, imported 605 trades (439 new sold positions)
+5. **Sold Positions Grouped** - 274 symbol summaries instead of 1625 individual rows
+6. **Chart Reconstruction** - 417 data points from 2017-03 to 2026-02 (~872ms)
+
+### Test Results
+- 348 tests, 0 failures (17 excluded)
+- Credo --strict: 0 issues
+
+---
+
+## 2026-02-12 (late) - IBKR PDF Parser
+
+### Session Summary
+
+Built IBKR PDF parser for Transaction History PDFs via `pdftotext -layout`. Two-pass type detection, amount-based correction, multi-word symbol extraction, ISIN handling. All 3 IBKR PDFs parsed: 1,565 transactions.
+
+### Test Results
+- 348 tests, 0 failures (17 excluded)
+- Credo --strict: 0 issues
+
+---
+
 ## 2026-02-12 - Nordnet CSV Import, Costs System & Data Gaps Page
 
 ### Session Summary
