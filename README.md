@@ -1,6 +1,6 @@
 # Dividendsomatic
 
-Portfolio and dividend tracking system for Interactive Brokers. Built with Phoenix LiveView, custom terminal-themed UI, and PostgreSQL.
+Portfolio and dividend tracking system for multi-broker data (Interactive Brokers, Nordnet). Built with Phoenix LiveView, custom terminal-themed UI, and PostgreSQL.
 
 ## Setup
 
@@ -16,28 +16,43 @@ Visit http://localhost:4000
 ## Import Data
 
 ```bash
-# Single CSV file
+# IBKR Activity Flex CSV
 mix import.csv path/to/flex.csv
 
 # Batch import from directory
 mix import.batch path/to/csv_directory
+
+# Nordnet transactions
+mix import.nordnet
+
+# Nordnet 9A tax report (sold positions)
+mix import.nordnet --9a path/to/9a.csv
+
+# IBKR transactions
+mix import.ibkr
+
+# Historical prices (Yahoo Finance)
+mix fetch.historical_prices
 ```
 
 ## Features
 
-- CSV import from Interactive Brokers Activity Flex reports
-- Batch import from directory with duplicate detection
-- Generic data ingestion pipeline (CSV directory + Gmail adapters)
-- Automated daily import via Oban cron (weekdays 12:00)
-- Portfolio viewer with date navigation (arrow keys)
-- Custom SVG combined chart (value + cost basis + dividends)
-- Chart animations (path drawing, pulsing markers)
-- Circular Fear & Greed gauge (market sentiment)
-- Holdings table with P&L highlighting
-- Stock detail pages with external links (Yahoo, SeekingAlpha, Nordnet)
-- Dividend and sold position tracking
-- Stock quotes and company profiles (Finnhub API)
-- WCAG AA accessible (axe-core tested)
+- **Multi-broker import:** IBKR Flex CSV, Nordnet CSV, Lynx 9A tax reports
+- **Automated daily import:** AppleScript email fetcher + Oban cron (weekdays)
+- **Unified portfolio history:** All sources write to one schema, no runtime reconstruction
+- **Portfolio viewer:** Date navigation (arrow keys), date slider, year filters
+- **Custom SVG charts:** Portfolio value + cost basis lines, era-aware gap rendering
+- **Separate dividend chart:** Monthly bars + cumulative line with year-aware labels
+- **Investment summary:** Net invested, realized/unrealized P&L, dividends, costs, total return
+- **Dividend analytics:** Per-year tracking, cash flow, projections, IEx diagnostics
+- **Realized P&L:** Grouped by symbol, year filters, top winners/losers, EUR conversion
+- **Market data:** Multi-provider (Finnhub + Yahoo Finance + EODHD) with fallback chains
+- **Fear & Greed gauge:** Market sentiment with 365-day history
+- **Stock detail pages:** External links (Yahoo, SeekingAlpha, Nordnet)
+- **Data coverage page:** Broker timelines, per-stock gaps, dividend gaps
+- **FX exposure:** Currency breakdown with EUR conversion
+- **Chart animations:** Path drawing, pulsing markers
+- **WCAG AA accessible** (axe-core tested)
 
 ## Tech Stack
 
@@ -51,7 +66,7 @@ mix import.batch path/to/csv_directory
 ## Testing
 
 ```bash
-mix test              # Run tests (180 tests)
+mix test              # Run tests (447 tests)
 mix precommit         # compile --warnings-as-errors + format + test
 mix test.all          # precommit + credo --strict
 ```
@@ -72,6 +87,7 @@ mix compile --warnings-as-errors    # Compiler warnings check
 |----------|----------|-------------|
 | `DATABASE_URL` | prod | PostgreSQL connection URL |
 | `FINNHUB_API_KEY` | optional | Stock quotes & company profiles |
+| `EODHD_API_KEY` | optional | Historical data & company profiles |
 | `GMAIL_CLIENT_ID` | optional | Gmail auto-import OAuth |
 | `GMAIL_CLIENT_SECRET` | optional | Gmail auto-import OAuth |
 
