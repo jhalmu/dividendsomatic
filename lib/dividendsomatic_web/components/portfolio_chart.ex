@@ -21,7 +21,6 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
       socket
       |> assign(assigns)
       |> assign_new(:fear_greed, fn -> nil end)
-      |> assign_new(:dividend_data, fn -> [] end)
 
     {:ok, socket}
   end
@@ -37,7 +36,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
       aria-labelledby="chart-title"
       aria-describedby="chart-legend"
     >
-      {render_combined(@chart_data, @current_date, @dividend_data, @fear_greed)}
+      {render_combined(@chart_data, @current_date, @fear_greed)}
       <p class="sr-only">
         Portfolio value and cost basis chart showing {length(@chart_data)} data points.
       </p>
@@ -47,10 +46,8 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
 
   # --- Main combined chart renderer ---
 
-  defp render_combined(chart_data, current_date, dividend_data, _fear_greed)
+  defp render_combined(chart_data, current_date, _fear_greed)
        when is_list(chart_data) and length(chart_data) > 1 do
-    has_div = is_list(dividend_data) and dividend_data != []
-
     mt = 20
     main_h = 250
     chart_bottom = mt + main_h
@@ -70,21 +67,12 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     y_range = max(y_hi - y_lo, 1.0)
     y_fn = fn v -> mt + main_h - (v - y_lo) / y_range * main_h end
 
-    # Dividend bars overlaid at bottom of main chart area
-    div_overlay =
-      if has_div do
-        svg_dividend_overlay(dividend_data, chart_data, x_fn, mt, main_h, chart_bottom)
-      else
-        ""
-      end
-
     parts =
       [
         svg_defs(false),
         svg_grid(mt, main_h, y_lo, y_range),
         svg_era_gap_indicator(chart_data, x_fn, mt, main_h),
         svg_area_fill(chart_data, x_fn, y_fn, chart_bottom),
-        div_overlay,
         svg_line(chart_data, :cost_basis_float, x_fn, y_fn, "#3b82f6", "1", "6 3"),
         svg_current_marker(chart_data, current_date, x_fn, y_fn, mt, chart_bottom),
         svg_x_labels(chart_data, x_fn, chart_bottom + 15),
@@ -100,7 +88,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     """)
   end
 
-  defp render_combined(_, _, _, _) do
+  defp render_combined(_, _, _) do
     Phoenix.HTML.raw("""
     <div style="text-align: center; padding: 2.5rem; font-size: 0.75rem; color: #475569; font-family: 'JetBrains Mono', monospace;">
       Not enough data for chart
@@ -232,7 +220,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
 
   defp svg_x_labels(chart_data, x_fn, label_y) do
     n = length(chart_data)
-    count = min(6, n)
+    count = min(12, n)
     step = max(div(n - 1, count), 1)
 
     # Use year-month format for wide ranges (>365 days), day format for narrow
@@ -285,131 +273,6 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     <text x="#{label_x}" y="#{val_y - 6}" fill="#10b981" font-size="8" font-weight="600" text-anchor="#{anchor}">€#{format_compact(last.value_float)}</text>
     <text x="#{label_x}" y="#{cost_y + 12}" fill="#3b82f6" font-size="7" text-anchor="#{anchor}" opacity="0.6">€#{format_compact(last.cost_basis_float)}</text>
     """
-  end
-
-  # Dividend bars overlaid at the bottom of the main chart area + cumulative orange line
-  defp svg_dividend_overlay(dividend_data, chart_data, x_fn, mt, main_h, chart_bottom) do
-    # Map each dividend month to the chart x-position
-    # Find the mid-point index in chart_data for each month "YYYY-MM"
-    month_positions =
-      Enum.map(dividend_data, fn d ->
-        month_str = d.month
-        # Find all chart_data indices whose date matches this month
-        matching_indices =
-          chart_data
-          |> Enum.with_index()
-          |> Enum.filter(fn {point, _idx} ->
-            Calendar.strftime(point.date, "%Y-%m") == month_str
-          end)
-          |> Enum.map(fn {_point, idx} -> idx end)
-
-        mid_idx =
-          case matching_indices do
-            [] -> nil
-            indices -> Enum.at(indices, div(length(indices), 2))
-          end
-
-        total = Decimal.to_float(d.total)
-        {mid_idx, total, d.month}
-      end)
-      |> Enum.reject(fn {idx, _, _} -> is_nil(idx) end)
-
-    case month_positions do
-      [] ->
-        ""
-
-      positions ->
-        bars = svg_dividend_bars(positions, x_fn, main_h, chart_bottom, chart_data)
-        cum_svg = svg_cumulative_line(positions, x_fn, mt, main_h)
-
-        """
-        #{bars}
-        #{cum_svg}
-        """
-    end
-  end
-
-  defp svg_dividend_bars(positions, x_fn, main_h, chart_bottom, _chart_data) do
-    totals = Enum.map(positions, fn {_, t, _} -> t end)
-    max_total = Enum.max(totals)
-    bar_zone_h = main_h * 0.18
-
-    # Yellow line connecting dividend bar tops
-    line_points =
-      positions
-      |> Enum.with_index()
-      |> Enum.map_join(" ", fn {{idx, total, _}, i} ->
-        cx = r(x_fn.(idx))
-        bh = if max_total > 0, do: r(total / max_total * bar_zone_h), else: 0
-        by = r(chart_bottom - bh)
-        if i == 0, do: "M#{cx} #{by}", else: "L#{cx} #{by}"
-      end)
-
-    line =
-      ~s[<path d="#{line_points}" fill="none" stroke="#eab308" stroke-width="0.75" stroke-linejoin="round"/>]
-
-    # Value labels at each point
-    labels =
-      Enum.map_join(positions, "\n", fn {idx, total, _month} ->
-        cx = r(x_fn.(idx))
-        bh = if max_total > 0, do: r(total / max_total * bar_zone_h), else: 0
-        by = r(chart_bottom - bh)
-
-        ~s[<text x="#{cx}" y="#{r(by - 4)}" fill="#eab308" font-size="7" text-anchor="middle" font-weight="600">€#{format_compact(total)}</text>]
-      end)
-
-    """
-    #{line}
-    #{labels}
-    """
-  end
-
-  # Cumulative dividend yellow line with end label
-  defp svg_cumulative_line(month_positions, x_fn, mt, main_h) do
-    cumulative =
-      Enum.scan(month_positions, {0, 0, ""}, fn {idx, total, month}, {_, cum, _} ->
-        {idx, cum + total, month}
-      end)
-
-    max_cum = elem(List.last(cumulative), 1)
-    cum_zone_h = main_h * 0.30
-    cum_base = mt + main_h * 0.15
-
-    cum_y_fn = fn val ->
-      if max_cum > 0,
-        do: cum_base + cum_zone_h - val / max_cum * cum_zone_h,
-        else: cum_base + cum_zone_h
-    end
-
-    cum_path = svg_cumulative_path(cumulative, x_fn, cum_y_fn)
-
-    {last_idx, last_cum, _} = List.last(cumulative)
-    last_x = r(x_fn.(last_idx))
-    last_y = r(cum_y_fn.(last_cum))
-    {label_x, anchor} = if last_x > @w - 80, do: {last_x - 8, "end"}, else: {last_x + 8, "start"}
-
-    cum_label =
-      ~s[<text x="#{label_x}" y="#{r(last_y - 4)}" fill="#eab308" font-size="7" font-weight="600" text-anchor="#{anchor}">€#{format_compact(last_cum)} div</text>]
-
-    """
-    #{cum_path}
-    #{cum_label}
-    """
-  end
-
-  defp svg_cumulative_path(cumulative, _x_fn, _cum_y_fn) when length(cumulative) <= 1, do: ""
-
-  defp svg_cumulative_path(cumulative, x_fn, cum_y_fn) do
-    d =
-      cumulative
-      |> Enum.with_index()
-      |> Enum.map_join(" ", fn {{idx, cum, _}, i} ->
-        x = r(x_fn.(idx))
-        y = r(cum_y_fn.(cum))
-        if i == 0, do: "M#{x} #{y}", else: "L#{x} #{y}"
-      end)
-
-    ~s[<path d="#{d}" fill="none" stroke="#eab308" stroke-width="0.5" stroke-linejoin="round"/>]
   end
 
   # Era gap indicator: shows "NO DATA" zone and era labels between data segments
@@ -467,6 +330,32 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
 
   # --- Helpers ---
 
+  @month_abbrs %{
+    1 => "Jan",
+    2 => "Feb",
+    3 => "Mar",
+    4 => "Apr",
+    5 => "May",
+    6 => "Jun",
+    7 => "Jul",
+    8 => "Aug",
+    9 => "Sep",
+    10 => "Oct",
+    11 => "Nov",
+    12 => "Dec"
+  }
+
+  defp format_month_label(month_string, total_months) do
+    month_num = month_string |> String.slice(5, 2) |> String.to_integer()
+    year_2d = String.slice(month_string, 2, 2)
+
+    if total_months <= 24 do
+      "#{@month_abbrs[month_num]} #{year_2d}"
+    else
+      if month_num == 1, do: "'#{year_2d}", else: "#{String.first(@month_abbrs[month_num])}#{year_2d}"
+    end
+  end
+
   defp r(val), do: Float.round(val + 0.0, 1)
 
   defp format_compact(val) when is_number(val) do
@@ -486,6 +375,123 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
   defp fg_color_hex("emerald"), do: "#10b981"
   defp fg_color_hex("green"), do: "#22c55e"
   defp fg_color_hex(_), do: "#64748b"
+
+  # --- Standalone Dividend Chart (public, used as separate section) ---
+
+  @doc """
+  Renders a standalone dividend chart SVG with monthly bars and cumulative line.
+  Expects a list of `%{month: "YYYY-MM", total: Decimal}` maps.
+  """
+  def render_dividend_chart(dividend_data) when is_list(dividend_data) and length(dividend_data) > 0 do
+    mt = 20
+    bar_h = 120
+    chart_bottom = mt + bar_h
+    total_h = chart_bottom + 25
+
+    n = length(dividend_data)
+    bar_gap = 2
+    bar_w = max((@pw - bar_gap * (n - 1)) / n, 4)
+
+    totals = Enum.map(dividend_data, fn d -> Decimal.to_float(d.total) end)
+    max_total = Enum.max(totals) |> max(0.01)
+
+    # Cumulative values for the line
+    cumulative =
+      Enum.scan(totals, 0, &(&1 + &2))
+
+    max_cum = List.last(cumulative) |> max(0.01)
+
+    # Bar SVG
+    bars =
+      dividend_data
+      |> Enum.with_index()
+      |> Enum.map_join("\n", fn {d, i} ->
+        total = Decimal.to_float(d.total)
+        bx = r(@ml + i * (bar_w + bar_gap))
+        bh = r(total / max_total * bar_h * 0.85)
+        by = r(chart_bottom - bh)
+
+        label =
+          if total > 0,
+            do:
+              ~s[<text x="#{r(bx + bar_w / 2)}" y="#{r(by - 3)}" fill="#eab308" font-size="6" text-anchor="middle" font-weight="600">#{format_compact(total)}</text>],
+            else: ""
+
+        """
+        <rect x="#{bx}" y="#{by}" width="#{r(bar_w)}" height="#{bh}" fill="#eab308" opacity="0.7" rx="1"/>
+        #{label}
+        """
+      end)
+
+    # Cumulative line overlay
+    cum_line =
+      cumulative
+      |> Enum.with_index()
+      |> Enum.map_join(" ", fn {cum, i} ->
+        cx = r(@ml + i * (bar_w + bar_gap) + bar_w / 2)
+        cy = r(mt + bar_h * 0.85 - cum / max_cum * bar_h * 0.75)
+        if i == 0, do: "M#{cx} #{cy}", else: "L#{cx} #{cy}"
+      end)
+
+    cum_svg = ~s[<path d="#{cum_line}" fill="none" stroke="#f97316" stroke-width="1.5" stroke-linejoin="round"/>]
+
+    # Cumulative end label
+    last_cum = List.last(cumulative)
+    last_cx = r(@ml + (n - 1) * (bar_w + bar_gap) + bar_w / 2)
+    last_cy = r(mt + bar_h * 0.85 - last_cum / max_cum * bar_h * 0.75)
+    {label_x, anchor} = if last_cx > @w - 80, do: {last_cx - 8, "end"}, else: {last_cx + 8, "start"}
+
+    cum_label =
+      ~s[<text x="#{label_x}" y="#{r(last_cy - 4)}" fill="#f97316" font-size="7" font-weight="600" text-anchor="#{anchor}">#{format_compact(last_cum)}</text>]
+
+    # X labels (month abbreviations with year context)
+    x_labels =
+      dividend_data
+      |> Enum.with_index()
+      |> Enum.map_join("\n", fn {d, i} ->
+        lx = r(@ml + i * (bar_w + bar_gap) + bar_w / 2)
+        # Show short month label; skip some if too many
+        show = n <= 36 or rem(i, max(div(n, 24), 1)) == 0
+        month_label = format_month_label(d.month, n)
+
+        if show do
+          ~s[<text x="#{lx}" y="#{r(chart_bottom + 12)}" fill="#475569" font-size="7" text-anchor="middle">#{month_label}</text>]
+        else
+          ""
+        end
+      end)
+
+    # Y labels (left side)
+    y_labels =
+      for i <- 0..4 do
+        gy = r(mt + bar_h - i / 4 * bar_h * 0.85 + 3)
+        val = i / 4 * max_total
+
+        ~s[<text x="#{@ml - 8}" y="#{gy}" fill="#475569" font-size="7" text-anchor="end">#{format_compact(val)}</text>]
+      end
+      |> Enum.join("\n")
+
+    # Grid lines
+    grid =
+      for i <- 0..4 do
+        gy = r(mt + bar_h - i / 4 * bar_h * 0.85)
+        ~s[<line x1="#{@ml}" y1="#{gy}" x2="#{@ml + @pw}" y2="#{gy}" stroke="#1e293b" stroke-width="1"/>]
+      end
+      |> Enum.join("\n")
+
+    Phoenix.HTML.raw("""
+    <svg width="#{@w}" height="#{round(total_h)}" viewBox="0 0 #{@w} #{round(total_h)}" xmlns="http://www.w3.org/2000/svg" style="font-family: 'JetBrains Mono', monospace;">
+      #{grid}
+      #{bars}
+      #{cum_svg}
+      #{cum_label}
+      #{x_labels}
+      #{y_labels}
+    </svg>
+    """)
+  end
+
+  def render_dividend_chart(_), do: Phoenix.HTML.raw("")
 
   # --- Sparkline (public, used in stats cards) ---
 

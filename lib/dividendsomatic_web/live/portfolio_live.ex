@@ -136,6 +136,66 @@ defmodule DividendsomaticWeb.PortfolioLive do
     {:noreply, assign(socket, :pnl_show_all, !socket.assigns.pnl_show_all)}
   end
 
+  def handle_event("chart_year", %{"year" => "all"}, socket) do
+    n = length(socket.assigns.all_chart_data)
+
+    socket =
+      socket
+      |> assign(:chart_year, nil)
+      |> assign(:chart_start, 1)
+      |> assign(:chart_end, n)
+      |> assign_chart_range()
+
+    {:noreply, socket}
+  end
+
+  def handle_event("chart_year", %{"year" => year_str}, socket) do
+    year = String.to_integer(year_str)
+    all = socket.assigns.all_chart_data
+
+    # Find first and last index for this year (1-based)
+    indices =
+      all
+      |> Enum.with_index(1)
+      |> Enum.filter(fn {point, _idx} -> point.date.year == year end)
+      |> Enum.map(fn {_point, idx} -> idx end)
+
+    case indices do
+      [] ->
+        {:noreply, socket}
+
+      idxs ->
+        socket =
+          socket
+          |> assign(:chart_year, year)
+          |> assign(:chart_start, Enum.min(idxs))
+          |> assign(:chart_end, Enum.max(idxs))
+          |> assign_chart_range()
+
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("chart_range", %{"start" => start_str, "end" => end_str}, socket) do
+    with {s, _} <- Integer.parse(start_str),
+         {e, _} <- Integer.parse(end_str) do
+      n = length(socket.assigns.all_chart_data)
+      s = max(1, min(s, n))
+      e = max(s, min(e, n))
+
+      socket =
+        socket
+        |> assign(:chart_year, nil)
+        |> assign(:chart_start, s)
+        |> assign(:chart_end, e)
+        |> assign_chart_range()
+
+      {:noreply, socket}
+    else
+      _ -> {:noreply, socket}
+    end
+  end
+
   @impl true
   def handle_info(:refresh_fear_greed, socket) do
     live_fg = get_fear_greed_live()
@@ -330,7 +390,12 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:total_pnl, Decimal.new("0"))
     |> assign(:snapshot_position, 0)
     |> assign(:total_snapshots, 0)
+    |> assign(:all_chart_data, [])
     |> assign(:chart_data, [])
+    |> assign(:chart_start, 1)
+    |> assign(:chart_end, 0)
+    |> assign(:chart_year, nil)
+    |> assign(:chart_available_years, [])
     |> assign(:growth_stats, nil)
     |> assign(:dividend_year, Date.utc_today().year)
     |> assign(:dividend_total, Decimal.new("0"))
@@ -341,6 +406,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:fear_greed, nil)
     |> assign(:fx_exposure, [])
     |> assign(:cash_flow, [])
+    |> assign(:investment_summary, nil)
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
     |> assign(:is_reconstructed, false)
@@ -379,18 +445,26 @@ defmodule DividendsomaticWeb.PortfolioLive do
     total_snapshots = Portfolio.count_snapshots()
     snapshot_position = Portfolio.get_snapshot_position(snapshot.date)
 
-    chart_data = Portfolio.get_all_chart_data()
-    sparkline_values = Enum.map(chart_data, & &1.value_float)
+    all_chart_data = Portfolio.get_all_chart_data()
+    sparkline_values = Enum.map(all_chart_data, & &1.value_float)
 
     year = snapshot.date.year
 
     chart_date_range =
-      case chart_data do
-        [first | _] -> {first.date, List.last(chart_data).date}
+      case all_chart_data do
+        [first | _] -> {first.date, List.last(all_chart_data).date}
         _ -> nil
       end
 
     dividend_dashboard = Portfolio.compute_dividend_dashboard(year, chart_date_range)
+
+    chart_available_years =
+      all_chart_data
+      |> Enum.map(& &1.date.year)
+      |> Enum.uniq()
+      |> Enum.sort()
+
+    n = length(all_chart_data)
 
     socket
     |> assign(:current_snapshot, snapshot)
@@ -401,7 +475,12 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:total_pnl, total_pnl)
     |> assign(:snapshot_position, snapshot_position)
     |> assign(:total_snapshots, total_snapshots)
-    |> assign(:chart_data, chart_data)
+    |> assign(:all_chart_data, all_chart_data)
+    |> assign(:chart_data, all_chart_data)
+    |> assign(:chart_start, 1)
+    |> assign(:chart_end, n)
+    |> assign(:chart_year, nil)
+    |> assign(:chart_available_years, chart_available_years)
     |> assign(:growth_stats, Portfolio.get_growth_stats(snapshot))
     |> assign(:dividend_year, year)
     |> assign(:dividend_total, dividend_dashboard.total_for_year)
@@ -416,6 +495,50 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:pnl_show_all, false)
     |> assign_freshness_and_source(snapshot, positions)
     |> assign_pnl_summary()
+    |> assign_investment_summary()
+  end
+
+  defp assign_chart_range(socket) do
+    all = socket.assigns.all_chart_data
+    s = socket.assigns.chart_start
+    e = socket.assigns.chart_end
+
+    sliced = Enum.slice(all, (s - 1)..(e - 1)//1)
+
+    growth_stats =
+      case sliced do
+        [first | _] ->
+          last = List.last(sliced)
+          first_val = Decimal.new("#{first.value_float}")
+          last_val = Decimal.new("#{last.value_float}")
+          abs_change = Decimal.sub(last_val, first_val)
+
+          pct =
+            if Decimal.compare(first_val, Decimal.new("0")) == :gt do
+              first_val
+              |> Decimal.div(Decimal.new("100"))
+              |> then(&Decimal.div(abs_change, &1))
+              |> Decimal.round(2)
+            else
+              Decimal.new("0")
+            end
+
+          %{
+            first_date: first.date,
+            latest_date: last.date,
+            first_value: first_val,
+            latest_value: last_val,
+            absolute_change: abs_change,
+            percent_change: pct
+          }
+
+        _ ->
+          socket.assigns.growth_stats
+      end
+
+    socket
+    |> assign(:chart_data, sliced)
+    |> assign(:growth_stats, growth_stats)
   end
 
   defp assign_freshness_and_source(socket, snapshot, positions) do
@@ -430,5 +553,20 @@ defmodule DividendsomaticWeb.PortfolioLive do
   defp assign_pnl_summary(socket) do
     opts = if socket.assigns.pnl_year, do: [year: socket.assigns.pnl_year], else: []
     assign(socket, :pnl, Portfolio.realized_pnl_summary(opts))
+  end
+
+  defp assign_investment_summary(socket) do
+    summary = Portfolio.investment_summary()
+    unrealized_pnl = socket.assigns.total_pnl
+    current_value = socket.assigns.total_value
+    total_return = Decimal.add(summary.net_profit, unrealized_pnl)
+
+    investment_summary =
+      summary
+      |> Map.put(:unrealized_pnl, unrealized_pnl)
+      |> Map.put(:current_value, current_value)
+      |> Map.put(:total_return, total_return)
+
+    assign(socket, :investment_summary, investment_summary)
   end
 end

@@ -59,10 +59,10 @@
         </div>
       </div>
       
-<!-- Combined Chart Panel -->
-      <%= if length(@chart_data) > 1 do %>
+<!-- Chart Year Filter + Portfolio Chart -->
+      <%= if length(@all_chart_data) > 1 do %>
         <div class="terminal-chart mb-[var(--space-xs)] animate-fade-in animate-delay-3">
-          <!-- Chart Header: Legend + F&G Gauge + Growth Badge -->
+          <!-- Chart Header: Legend + Growth Badge -->
           <div class="terminal-chart-header">
             <div class="flex items-center gap-[var(--space-sm)]">
               <%= if @growth_stats do %>
@@ -93,25 +93,42 @@
                 <span class="terminal-legend-item">
                   <span class="terminal-legend-line terminal-legend-dashed"></span> Cost Basis
                 </span>
-                <span class="terminal-legend-item">
-                  <span class="terminal-legend-line" style="background: #eab308;"></span>
-                  Dividends
-                </span>
               </div>
             </div>
           </div>
-          
-<!-- Portfolio Value + Cost Basis Lines + Dividend Bars -->
-          <.live_component
-            module={DividendsomaticWeb.Components.PortfolioChart}
-            id="portfolio-chart"
-            chart_data={@chart_data}
-            current_date={@current_snapshot.date}
-            dividend_data={@dividend_by_month}
-            fear_greed={@fear_greed}
-          />
-          
-<!-- Chart Footer -->
+
+          <!-- Year Filter Buttons -->
+          <div class="flex items-center gap-1 flex-wrap mb-[var(--space-xs)]">
+            <button
+              phx-click="chart_year"
+              phx-value-year="all"
+              class={"btn btn-xs #{if @chart_year == nil, do: "btn-primary", else: "btn-outline"}"}
+            >
+              All
+            </button>
+            <%= for y <- @chart_available_years do %>
+              <button
+                phx-click="chart_year"
+                phx-value-year={to_string(y)}
+                class={"btn btn-xs #{if @chart_year == y, do: "btn-primary", else: "btn-outline"}"}
+              >
+                {y}
+              </button>
+            <% end %>
+          </div>
+
+          <!-- Portfolio Value + Cost Basis Lines -->
+          <%= if length(@chart_data) > 1 do %>
+            <.live_component
+              module={DividendsomaticWeb.Components.PortfolioChart}
+              id="portfolio-chart"
+              chart_data={@chart_data}
+              current_date={@current_snapshot.date}
+              fear_greed={@fear_greed}
+            />
+          <% end %>
+
+          <!-- Chart Footer -->
           <%= if @growth_stats do %>
             <div
               class="mt-[var(--space-xs)] flex items-center justify-between"
@@ -122,27 +139,33 @@
                   @growth_stats.latest_date
                 )}
               </span>
-              <span>{@total_snapshots} trading days</span>
+              <span>{length(@chart_data)} trading days</span>
             </div>
           <% end %>
         </div>
       <% end %>
-      
-<!-- Date Slider -->
-      <%= if @total_snapshots > 1 do %>
-        <div class="mb-[var(--space-xs)] animate-fade-in animate-delay-3 px-1">
-          <input
-            type="range"
-            min="1"
-            max={@total_snapshots}
-            value={@snapshot_position}
-            name="position"
-            phx-change="slider_navigate"
-            phx-debounce="100"
-            class="w-full"
-            style="accent-color: #10b981; height: 4px;"
-            aria-label="Navigate snapshots by date"
-          />
+
+      <!-- Dividend Chart (separate section) -->
+      <%= if length(@dividend_by_month) > 0 do %>
+        <div class="terminal-chart mb-[var(--space-xs)] animate-fade-in animate-delay-3">
+          <div class="terminal-chart-header">
+            <div class="terminal-chart-title">Dividend History</div>
+            <div
+              class="terminal-chart-legend"
+              aria-label="Dividend chart legend"
+              style="justify-content: flex-end;"
+            >
+              <span class="terminal-legend-item">
+                <span class="terminal-legend-line" style="background: #eab308;"></span>
+                Monthly
+              </span>
+              <span class="terminal-legend-item">
+                <span class="terminal-legend-line" style="background: #f97316;"></span>
+                Cumulative
+              </span>
+            </div>
+          </div>
+          {DividendsomaticWeb.Components.PortfolioChart.render_dividend_chart(@dividend_by_month)}
         </div>
       <% end %>
       
@@ -659,6 +682,54 @@
         <% end %>
       </div>
       
+<!-- Investment Summary -->
+      <%= if @investment_summary do %>
+        <div
+          class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-5"
+          data-testid="investment-summary"
+        >
+          <div class="terminal-section-label">Investment Summary</div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)] mt-[var(--space-sm)]">
+            <div class="text-center">
+              <div class="terminal-stat-label">Net Invested</div>
+              <div class="terminal-stat-value" style="font-size: 0.8125rem;">
+                {format_euro_decimal(@investment_summary.net_invested)}
+              </div>
+            </div>
+            <div class="text-center">
+              <div class="terminal-stat-label">Realized P&amp;L</div>
+              <div class={"terminal-stat-value #{if pnl_positive?(@investment_summary.realized_pnl), do: "gain", else: "loss"}"} style="font-size: 0.8125rem;">
+                {format_euro_signed(@investment_summary.realized_pnl)}
+              </div>
+            </div>
+            <div class="text-center">
+              <div class="terminal-stat-label">Unrealized P&amp;L</div>
+              <div class={"terminal-stat-value #{if pnl_positive?(@investment_summary.unrealized_pnl), do: "gain", else: "loss"}"} style="font-size: 0.8125rem;">
+                {format_euro_signed(@investment_summary.unrealized_pnl)}
+              </div>
+            </div>
+            <div class="text-center">
+              <div class="terminal-stat-label">Total Dividends</div>
+              <div class="terminal-stat-value gain" style="font-size: 0.8125rem;">
+                {format_euro_decimal(@investment_summary.total_dividends)}
+              </div>
+            </div>
+            <div class="text-center">
+              <div class="terminal-stat-label">Total Costs</div>
+              <div class="terminal-stat-value loss" style="font-size: 0.8125rem;">
+                {format_euro_decimal(@investment_summary.total_costs)}
+              </div>
+            </div>
+            <div class="text-center">
+              <div class="terminal-stat-label" style="font-weight: 600;">Total Return</div>
+              <div class={"terminal-stat-value #{if pnl_positive?(@investment_summary.total_return), do: "gain", else: "loss"}"} style="font-size: 0.875rem; font-weight: 700;">
+                {format_euro_signed(@investment_summary.total_return)}
+              </div>
+            </div>
+          </div>
+        </div>
+      <% end %>
+
 <!-- Dividend Cash Flow -->
       <%= if length(@cash_flow) > 0 do %>
         <div

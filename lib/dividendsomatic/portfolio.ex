@@ -967,6 +967,90 @@ defmodule Dividendsomatic.Portfolio do
     Repo.all(query)
   end
 
+  ## Dividend Diagnostics
+
+  @doc """
+  Diagnostic function for verifying dividend totals.
+  Run in IEx: `Dividendsomatic.Portfolio.diagnose_dividends()`
+
+  Returns:
+  - ISIN-based duplicates (same ISIN + ex_date, different symbols)
+  - Zero-income dividends (no matching position found)
+  - Top 20 income records by value
+  - Yearly totals
+  """
+  def diagnose_dividends do
+    all_dividends = Dividend |> order_by([d], asc: d.ex_date) |> Repo.all()
+
+    first_date =
+      case all_dividends do
+        [first | _] -> first.ex_date
+        [] -> Date.utc_today()
+      end
+
+    last_date =
+      case all_dividends do
+        [] -> Date.utc_today()
+        divs -> List.last(divs).ex_date
+      end
+
+    positions_map = build_positions_map(first_date, last_date)
+
+    # ISIN-based duplicates: same ISIN + same ex_date, different symbols
+    isin_dupes =
+      all_dividends
+      |> Enum.filter(& &1.isin)
+      |> Enum.group_by(fn d -> {d.isin, d.ex_date} end)
+      |> Enum.filter(fn {_key, divs} -> length(divs) > 1 end)
+      |> Enum.map(fn {{isin, date}, divs} ->
+        symbols = Enum.map(divs, & &1.symbol) |> Enum.uniq()
+        %{isin: isin, ex_date: date, symbols: symbols, count: length(divs)}
+      end)
+
+    # Zero-income dividends
+    zero_income =
+      all_dividends
+      |> Enum.map(fn div ->
+        income = compute_dividend_income(div, positions_map)
+        %{symbol: div.symbol, isin: div.isin, ex_date: div.ex_date, amount: div.amount, income: income}
+      end)
+      |> Enum.filter(fn entry -> Decimal.compare(entry.income, Decimal.new("0")) == :eq end)
+
+    # Top 20 income records
+    top_20 =
+      all_dividends
+      |> Enum.map(fn div ->
+        income = compute_dividend_income(div, positions_map)
+        %{symbol: div.symbol, isin: div.isin, ex_date: div.ex_date, amount: div.amount, income: income}
+      end)
+      |> Enum.sort_by(fn e -> Decimal.to_float(e.income) end, :desc)
+      |> Enum.take(20)
+
+    # Yearly totals
+    years = dividend_years()
+
+    yearly_totals =
+      Enum.map(years, fn year ->
+        total = total_dividends_for_year(year)
+        %{year: year, total: total}
+      end)
+
+    grand_total =
+      Enum.reduce(yearly_totals, Decimal.new("0"), fn %{year: _y, total: t}, acc ->
+        Decimal.add(acc, t)
+      end)
+
+    %{
+      total_dividends: length(all_dividends),
+      isin_duplicates: isin_dupes,
+      zero_income_count: length(zero_income),
+      zero_income: Enum.take(zero_income, 20),
+      top_20_income: top_20,
+      yearly_totals: yearly_totals,
+      grand_total: grand_total
+    }
+  end
+
   ## Costs
 
   def create_cost(attrs) do
@@ -1012,6 +1096,76 @@ defmodule Dividendsomatic.Portfolio do
       |> Enum.reduce(Decimal.new("0"), &Decimal.add/2)
 
     %{by_type: by_type, total: total, count: Repo.aggregate(Cost, :count)}
+  end
+
+  ## Investment Summary
+
+  @doc """
+  Returns total deposits and withdrawals from broker transactions.
+  Amounts are converted to EUR using exchange_rate when available.
+  """
+  def total_deposits_withdrawals do
+    zero = Decimal.new("0")
+
+    results =
+      BrokerTransaction
+      |> where([t], t.transaction_type in ["deposit", "withdrawal"])
+      |> select([t], %{
+        transaction_type: t.transaction_type,
+        amount: t.amount,
+        exchange_rate: t.exchange_rate
+      })
+      |> Repo.all()
+
+    {deposits, withdrawals} =
+      Enum.reduce(results, {zero, zero}, fn txn, {dep_acc, wd_acc} ->
+        amt = txn.amount || zero
+        fx = txn.exchange_rate || Decimal.new("1")
+        eur_amt = Decimal.mult(Decimal.abs(amt), fx)
+
+        case txn.transaction_type do
+          "deposit" -> {Decimal.add(dep_acc, eur_amt), wd_acc}
+          "withdrawal" -> {dep_acc, Decimal.add(wd_acc, eur_amt)}
+          _ -> {dep_acc, wd_acc}
+        end
+      end)
+
+    %{
+      deposits: deposits,
+      withdrawals: withdrawals,
+      net_invested: Decimal.sub(deposits, withdrawals)
+    }
+  end
+
+  @doc """
+  Returns a comprehensive investment summary combining deposits, costs, P&L, and dividends.
+  """
+  def investment_summary do
+    zero = Decimal.new("0")
+    dw = total_deposits_withdrawals()
+    costs = costs_summary()
+    realized_pnl = total_realized_pnl()
+
+    total_dividends =
+      dividend_years()
+      |> Enum.reduce(zero, fn year, acc ->
+        Decimal.add(acc, total_dividends_for_year(year))
+      end)
+
+    net_profit =
+      realized_pnl
+      |> Decimal.add(total_dividends)
+      |> Decimal.sub(costs.total)
+
+    %{
+      total_deposits: dw.deposits,
+      total_withdrawals: dw.withdrawals,
+      net_invested: dw.net_invested,
+      total_costs: costs.total,
+      realized_pnl: realized_pnl,
+      total_dividends: total_dividends,
+      net_profit: net_profit
+    }
   end
 
   ## Data Gaps Analysis
