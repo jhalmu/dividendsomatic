@@ -34,7 +34,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
 
   defp get_fear_greed_for_snapshot(socket, snapshot) do
     # Try historical DB data for this date
-    case MarketSentiment.get_fear_greed_for_date(snapshot.report_date) do
+    case MarketSentiment.get_fear_greed_for_date(snapshot.date) do
       nil -> socket.assigns[:live_fear_greed]
       data -> data
     end
@@ -46,7 +46,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
       {:ok, date} ->
         # Skip reload if already on this date (from push_patch after navigate event)
         if socket.assigns.current_snapshot &&
-             socket.assigns.current_snapshot.report_date == date do
+             socket.assigns.current_snapshot.date == date do
           {:noreply, socket}
         else
           snapshot = Portfolio.get_snapshot_by_date(date)
@@ -65,7 +65,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
   @impl true
   def handle_event("navigate", %{"direction" => "prev"}, socket) do
     if socket.assigns.current_snapshot do
-      date = socket.assigns.current_snapshot.report_date
+      date = socket.assigns.current_snapshot.date
       prev_snapshot = Portfolio.get_previous_snapshot(date)
       {:noreply, navigate_to_snapshot(socket, prev_snapshot)}
     else
@@ -75,7 +75,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
 
   def handle_event("navigate", %{"direction" => "next"}, socket) do
     if socket.assigns.current_snapshot do
-      date = socket.assigns.current_snapshot.report_date
+      date = socket.assigns.current_snapshot.date
       next_snapshot = Portfolio.get_next_snapshot(date)
       {:noreply, navigate_to_snapshot(socket, next_snapshot)}
     else
@@ -85,7 +85,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
 
   def handle_event("navigate", %{"direction" => "back3"}, socket) do
     if socket.assigns.current_snapshot do
-      date = socket.assigns.current_snapshot.report_date
+      date = socket.assigns.current_snapshot.date
       snapshot = Portfolio.get_snapshot_back(date, 3) || Portfolio.get_first_snapshot()
       {:noreply, navigate_to_snapshot(socket, snapshot)}
     else
@@ -95,7 +95,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
 
   def handle_event("navigate", %{"direction" => "forward3"}, socket) do
     if socket.assigns.current_snapshot do
-      date = socket.assigns.current_snapshot.report_date
+      date = socket.assigns.current_snapshot.date
       snapshot = Portfolio.get_snapshot_forward(date, 3) || Portfolio.get_latest_snapshot()
       {:noreply, navigate_to_snapshot(socket, snapshot)}
     else
@@ -230,10 +230,10 @@ defmodule DividendsomaticWeb.PortfolioLive do
       <%!-- Date --%>
       <div class={if @compact, do: "terminal-nav-date-compact", else: "terminal-nav-date"}>
         <div class={if @compact, do: "terminal-nav-date-main-compact", else: "terminal-nav-date-main"}>
-          {Calendar.strftime(@current_snapshot.report_date, "%Y-%m-%d")}
+          {Calendar.strftime(@current_snapshot.date, "%Y-%m-%d")}
         </div>
         <div class="terminal-nav-date-sub">
-          {Calendar.strftime(@current_snapshot.report_date, "%A")}
+          {Calendar.strftime(@current_snapshot.date, "%A")}
           <span class="mx-1.5 opacity-30">|</span>
           {@snapshot_position}/{@total_snapshots}
         </div>
@@ -302,7 +302,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
   defp navigate_to_snapshot(socket, nil), do: socket
 
   defp navigate_to_snapshot(socket, snapshot) do
-    date = Date.to_string(snapshot.report_date)
+    date = Date.to_string(snapshot.date)
 
     socket
     |> assign_snapshot(snapshot)
@@ -312,7 +312,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
   defp assign_snapshot(socket, nil) do
     socket
     |> assign(:current_snapshot, nil)
-    |> assign(:holdings, [])
+    |> assign(:positions, [])
     |> assign(:has_prev, false)
     |> assign(:has_next, false)
     |> assign(:total_value, Decimal.new("0"))
@@ -332,8 +332,6 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:cash_flow, [])
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
-    |> assign(:data_age_days, nil)
-    |> assign(:latest_data_date, nil)
     |> assign(:is_reconstructed, false)
     |> assign(:missing_price_count, 0)
     |> assign(:pnl, %{
@@ -353,28 +351,27 @@ defmodule DividendsomaticWeb.PortfolioLive do
   end
 
   defp assign_snapshot(socket, snapshot) do
-    holdings = snapshot.holdings || []
+    positions = snapshot.positions || []
 
     total_value =
-      Enum.reduce(holdings, Decimal.new("0"), fn h, acc ->
-        fx = h.fx_rate_to_base || Decimal.new("1")
-        Decimal.add(acc, Decimal.mult(h.position_value || Decimal.new("0"), fx))
+      Enum.reduce(positions, Decimal.new("0"), fn p, acc ->
+        fx = p.fx_rate || Decimal.new("1")
+        Decimal.add(acc, Decimal.mult(p.value || Decimal.new("0"), fx))
       end)
 
     total_pnl =
-      Enum.reduce(holdings, Decimal.new("0"), fn h, acc ->
-        fx = h.fx_rate_to_base || Decimal.new("1")
-        Decimal.add(acc, Decimal.mult(h.fifo_pnl_unrealized || Decimal.new("0"), fx))
+      Enum.reduce(positions, Decimal.new("0"), fn p, acc ->
+        fx = p.fx_rate || Decimal.new("1")
+        Decimal.add(acc, Decimal.mult(p.unrealized_pnl || Decimal.new("0"), fx))
       end)
 
     total_snapshots = Portfolio.count_snapshots()
-    snapshot_position = Portfolio.get_snapshot_position(snapshot.report_date)
+    snapshot_position = Portfolio.get_snapshot_position(snapshot.date)
 
     chart_data = Portfolio.get_all_chart_data()
     sparkline_values = Enum.map(chart_data, & &1.value_float)
 
-    # Compute all dividend data in one pass
-    year = snapshot.report_date.year
+    year = snapshot.date.year
 
     chart_date_range =
       case chart_data do
@@ -386,9 +383,9 @@ defmodule DividendsomaticWeb.PortfolioLive do
 
     socket
     |> assign(:current_snapshot, snapshot)
-    |> assign(:holdings, holdings)
-    |> assign(:has_prev, Portfolio.has_previous_snapshot?(snapshot.report_date))
-    |> assign(:has_next, Portfolio.has_next_snapshot?(snapshot.report_date))
+    |> assign(:positions, positions)
+    |> assign(:has_prev, Portfolio.has_previous_snapshot?(snapshot.date))
+    |> assign(:has_next, Portfolio.has_next_snapshot?(snapshot.date))
     |> assign(:total_value, total_value)
     |> assign(:total_pnl, total_pnl)
     |> assign(:snapshot_position, snapshot_position)
@@ -402,23 +399,19 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:dividend_by_month, dividend_dashboard.by_month_full_range)
     |> assign(:sparkline_values, sparkline_values)
     |> assign(:fear_greed, get_fear_greed_for_snapshot(socket, snapshot))
-    |> assign(:fx_exposure, Portfolio.compute_fx_exposure(holdings))
+    |> assign(:fx_exposure, Portfolio.compute_fx_exposure(positions))
     |> assign(:cash_flow, dividend_dashboard.cash_flow_summary)
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
-    |> assign_freshness_and_source(snapshot, holdings)
+    |> assign_freshness_and_source(snapshot, positions)
     |> assign_pnl_summary()
   end
 
-  defp assign_freshness_and_source(socket, snapshot, holdings) do
-    latest_date = Portfolio.get_latest_snapshot_date()
-    data_age_days = if latest_date, do: Date.diff(Date.utc_today(), latest_date), else: nil
-    is_reconstructed = snapshot.source == "nordnet_reconstructed"
-    missing = if is_reconstructed, do: Enum.count(holdings, &is_nil(&1.mark_price)), else: 0
+  defp assign_freshness_and_source(socket, snapshot, positions) do
+    is_reconstructed = snapshot.data_quality == "reconstructed"
+    missing = if is_reconstructed, do: Enum.count(positions, &is_nil(&1.price)), else: 0
 
     socket
-    |> assign(:data_age_days, data_age_days)
-    |> assign(:latest_data_date, latest_date)
     |> assign(:is_reconstructed, is_reconstructed)
     |> assign(:missing_price_count, missing)
   end

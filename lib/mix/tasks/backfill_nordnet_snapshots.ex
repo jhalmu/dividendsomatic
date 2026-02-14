@@ -2,7 +2,7 @@ defmodule Mix.Tasks.Backfill.NordnetSnapshots do
   @moduledoc """
   Generates navigable portfolio snapshots from Nordnet position reconstruction.
 
-  Walks the PositionReconstructor output and creates PortfolioSnapshot + Holding
+  Walks the PositionReconstructor output and creates PortfolioSnapshot + Position
   records for each weekly data point. This makes the entire 2017-2025 Nordnet era
   navigable via the existing snapshot navigation UI.
 
@@ -15,8 +15,8 @@ defmodule Mix.Tasks.Backfill.NordnetSnapshots do
 
   import Ecto.Query
 
-  alias Dividendsomatic.{Portfolio, Repo, Stocks}
-  alias Dividendsomatic.Portfolio.{Holding, PortfolioSnapshot, PositionReconstructor}
+  alias Dividendsomatic.Portfolio.{PortfolioSnapshot, Position, PositionReconstructor}
+  alias Dividendsomatic.{Repo, Stocks}
 
   @shortdoc "Generate navigable Nordnet-era snapshots"
 
@@ -36,18 +36,18 @@ defmodule Mix.Tasks.Backfill.NordnetSnapshots do
     {snap_count, snapshot_ids} = get_reconstructed_snapshot_ids()
 
     if snap_count > 0 do
-      # Delete holdings first (FK constraint)
-      {h_deleted, _} =
-        Holding
-        |> where([h], h.portfolio_snapshot_id in ^snapshot_ids)
+      # Delete positions first (FK constraint)
+      {p_deleted, _} =
+        Position
+        |> where([p], p.portfolio_snapshot_id in ^snapshot_ids)
         |> Repo.delete_all()
 
       {s_deleted, _} =
         PortfolioSnapshot
-        |> where([s], s.source == "nordnet_reconstructed")
+        |> where([s], s.source == "nordnet")
         |> Repo.delete_all()
 
-      IO.puts("  Deleted #{s_deleted} snapshots and #{h_deleted} holdings\n")
+      IO.puts("  Deleted #{s_deleted} snapshots and #{p_deleted} positions\n")
     else
       IO.puts("  No reconstructed snapshots to purge\n")
     end
@@ -115,8 +115,6 @@ defmodule Mix.Tasks.Backfill.NordnetSnapshots do
         process_point(point, mappings, price_map, acc)
       end)
 
-    Portfolio.invalidate_chart_cache()
-
     IO.puts("\n--- Done ---")
     IO.puts("  Created: #{created}")
     IO.puts("  Skipped: #{skipped} (already existed)")
@@ -137,62 +135,84 @@ defmodule Mix.Tasks.Backfill.NordnetSnapshots do
 
   defp create_snapshot(%{date: date, positions: positions}, mappings, price_map) do
     Repo.transaction(fn ->
+      # Create position records first to compute totals
+      position_data =
+        Enum.map(positions, fn pos ->
+          build_position_attrs(pos, date, mappings, price_map)
+        end)
+
+      {total_value, total_cost} = compute_totals(position_data)
+
       # Create the snapshot
       {:ok, snapshot} =
         %PortfolioSnapshot{}
         |> PortfolioSnapshot.changeset(%{
-          report_date: date,
-          source: "nordnet_reconstructed"
+          date: date,
+          source: "nordnet",
+          data_quality: "reconstructed",
+          total_value: total_value,
+          total_cost: total_cost,
+          positions_count: length(positions)
         })
         |> Repo.insert()
 
-      # Create holdings for each position
-      Enum.each(positions, fn pos ->
-        create_holding(snapshot, pos, date, mappings, price_map)
+      # Create positions
+      Enum.each(position_data, fn attrs ->
+        %Position{}
+        |> Position.changeset(Map.put(attrs, :portfolio_snapshot_id, snapshot.id))
+        |> Repo.insert!()
       end)
 
       snapshot
     end)
   end
 
-  defp create_holding(snapshot, position, date, mappings, price_map) do
-    {mark_price, fx_rate} = lookup_price_and_fx(position, date, mappings, price_map)
+  defp compute_totals(position_data) do
+    Enum.reduce(position_data, {Decimal.new("0"), Decimal.new("0")}, fn attrs,
+                                                                        {val_acc, cost_acc} ->
+      fx = attrs[:fx_rate] || Decimal.new("1")
+      val = attrs[:value] || Decimal.new("0")
+      cost = attrs[:cost_basis] || Decimal.new("0")
 
-    position_value =
-      if mark_price do
-        Decimal.mult(position.quantity, mark_price)
+      {
+        Decimal.add(val_acc, Decimal.mult(val, fx)),
+        Decimal.add(cost_acc, Decimal.mult(cost, fx))
+      }
+    end)
+  end
+
+  defp build_position_attrs(position, date, mappings, price_map) do
+    {price, fx_rate} = lookup_price_and_fx(position, date, mappings, price_map)
+
+    value =
+      if price do
+        Decimal.mult(position.quantity, price)
       else
         nil
       end
 
-    # Cost basis per share
-    cost_basis_price =
+    cost_price =
       if Decimal.compare(position.quantity, Decimal.new("0")) == :gt do
         Decimal.div(position.cost_basis, position.quantity)
       else
         nil
       end
 
-    attrs = %{
-      portfolio_snapshot_id: snapshot.id,
-      report_date: date,
-      currency_primary: position.currency,
+    %{
+      date: date,
+      currency: position.currency,
       symbol: extract_symbol(position, mappings),
-      description: position.security_name,
+      name: position.security_name,
       quantity: position.quantity,
-      mark_price: mark_price,
-      position_value: position_value,
-      cost_basis_price: cost_basis_price,
-      cost_basis_money: position.cost_basis,
-      fx_rate_to_base: fx_rate,
+      price: price,
+      value: value,
+      cost_price: cost_price,
+      cost_basis: position.cost_basis,
+      fx_rate: fx_rate,
       isin: position.isin,
       asset_class: "STK",
-      identifier_key: position.isin
+      data_source: "nordnet"
     }
-
-    %Holding{}
-    |> Holding.changeset(attrs)
-    |> Repo.insert!()
   end
 
   defp lookup_price_and_fx(position, date, mappings, price_map) do
@@ -260,7 +280,7 @@ defmodule Mix.Tasks.Backfill.NordnetSnapshots do
 
   defp existing_snapshot_dates do
     PortfolioSnapshot
-    |> select([s], s.report_date)
+    |> select([s], s.date)
     |> Repo.all()
     |> MapSet.new()
   end
@@ -268,7 +288,7 @@ defmodule Mix.Tasks.Backfill.NordnetSnapshots do
   defp get_reconstructed_snapshot_ids do
     ids =
       PortfolioSnapshot
-      |> where([s], s.source == "nordnet_reconstructed")
+      |> where([s], s.source == "nordnet")
       |> select([s], s.id)
       |> Repo.all()
 

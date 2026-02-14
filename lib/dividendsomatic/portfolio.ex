@@ -1,6 +1,6 @@
 defmodule Dividendsomatic.Portfolio do
   @moduledoc """
-  Portfolio context for managing snapshots and holdings.
+  Portfolio context for managing snapshots and positions.
   """
 
   import Ecto.Query
@@ -11,14 +11,12 @@ defmodule Dividendsomatic.Portfolio do
     Cost,
     CsvParser,
     Dividend,
-    Holding,
     PortfolioSnapshot,
-    PositionReconstructor,
+    Position,
     SoldPosition
   }
 
   alias Dividendsomatic.Repo
-  alias Dividendsomatic.Stocks
 
   ## Portfolio Snapshots
 
@@ -27,9 +25,9 @@ defmodule Dividendsomatic.Portfolio do
   """
   def get_latest_snapshot do
     PortfolioSnapshot
-    |> order_by([s], desc: s.report_date)
+    |> order_by([s], desc: s.date)
     |> limit(1)
-    |> preload(:holdings)
+    |> preload(:positions)
     |> Repo.one()
   end
 
@@ -37,8 +35,8 @@ defmodule Dividendsomatic.Portfolio do
   Returns snapshot for a specific date.
   """
   def get_snapshot_by_date(date) do
-    Repo.get_by(PortfolioSnapshot, report_date: date)
-    |> Repo.preload(:holdings)
+    Repo.get_by(PortfolioSnapshot, date: date)
+    |> Repo.preload(:positions)
   end
 
   @doc """
@@ -46,10 +44,10 @@ defmodule Dividendsomatic.Portfolio do
   """
   def get_previous_snapshot(date) do
     PortfolioSnapshot
-    |> where([s], s.report_date < ^date)
-    |> order_by([s], desc: s.report_date)
+    |> where([s], s.date < ^date)
+    |> order_by([s], desc: s.date)
     |> limit(1)
-    |> preload(:holdings)
+    |> preload(:positions)
     |> Repo.one()
   end
 
@@ -58,10 +56,10 @@ defmodule Dividendsomatic.Portfolio do
   """
   def get_next_snapshot(date) do
     PortfolioSnapshot
-    |> where([s], s.report_date > ^date)
-    |> order_by([s], asc: s.report_date)
+    |> where([s], s.date > ^date)
+    |> order_by([s], asc: s.date)
     |> limit(1)
-    |> preload(:holdings)
+    |> preload(:positions)
     |> Repo.one()
   end
 
@@ -70,11 +68,11 @@ defmodule Dividendsomatic.Portfolio do
   """
   def get_snapshot_back(date, n) do
     PortfolioSnapshot
-    |> where([s], s.report_date < ^date)
-    |> order_by([s], desc: s.report_date)
+    |> where([s], s.date < ^date)
+    |> order_by([s], desc: s.date)
     |> offset(^(n - 1))
     |> limit(1)
-    |> preload(:holdings)
+    |> preload(:positions)
     |> Repo.one()
   end
 
@@ -83,11 +81,11 @@ defmodule Dividendsomatic.Portfolio do
   """
   def get_snapshot_forward(date, n) do
     PortfolioSnapshot
-    |> where([s], s.report_date > ^date)
-    |> order_by([s], asc: s.report_date)
+    |> where([s], s.date > ^date)
+    |> order_by([s], asc: s.date)
     |> offset(^(n - 1))
     |> limit(1)
-    |> preload(:holdings)
+    |> preload(:positions)
     |> Repo.one()
   end
 
@@ -96,27 +94,25 @@ defmodule Dividendsomatic.Portfolio do
   """
   def list_snapshots do
     PortfolioSnapshot
-    |> order_by([s], desc: s.report_date)
+    |> order_by([s], desc: s.date)
     |> Repo.all()
   end
 
   @doc """
   Checks if a snapshot exists before the given date.
-  More efficient than get_previous_snapshot when you only need to know existence.
   """
   def has_previous_snapshot?(date) do
     PortfolioSnapshot
-    |> where([s], s.report_date < ^date)
+    |> where([s], s.date < ^date)
     |> Repo.exists?()
   end
 
   @doc """
   Checks if a snapshot exists after the given date.
-  More efficient than get_next_snapshot when you only need to know existence.
   """
   def has_next_snapshot?(date) do
     PortfolioSnapshot
-    |> where([s], s.report_date > ^date)
+    |> where([s], s.date > ^date)
     |> Repo.exists?()
   end
 
@@ -125,220 +121,40 @@ defmodule Dividendsomatic.Portfolio do
   """
   def get_chart_data(limit \\ 30) do
     PortfolioSnapshot
-    |> order_by([s], desc: s.report_date)
+    |> order_by([s], desc: s.date)
     |> limit(^limit)
-    |> preload(:holdings)
+    |> select([s], %{
+      date: s.date,
+      date_string: fragment("to_char(?, 'YYYY-MM-DD')", s.date),
+      value: s.total_value,
+      value_float: type(s.total_value, :float),
+      cost_basis_float: type(s.total_cost, :float),
+      source: s.source,
+      data_quality: s.data_quality
+    })
     |> Repo.all()
     |> Enum.reverse()
-    |> Enum.map(&snapshot_to_chart_point/1)
   end
 
   @doc """
-  Returns ALL chart data: reconstructed Nordnet data + IBKR snapshot data.
+  Returns ALL chart data from the unified portfolio_snapshots table.
 
-  Merges two data sources:
-  - Nordnet era (2017-2022): Reconstructed from broker_transactions + historical prices
-  - IBKR era (2025+): Direct from portfolio_snapshots
-
-  Gap between eras is preserved as-is (honest representation).
-  Uses `:persistent_term` cache for reconstructed data (only changes on import).
+  Simple query — no runtime reconstruction needed. All data sources
+  (IBKR Flex, Nordnet, 9A) write precomputed totals at import time.
   """
   def get_all_chart_data do
-    reconstructed = get_reconstructed_chart_data_cached()
-    ibkr = get_ibkr_chart_data()
-    reconstructed ++ ibkr
-  end
-
-  @chart_cache_key :dividendsomatic_reconstructed_chart
-
-  @doc """
-  Returns cached reconstructed chart data. Uses `:persistent_term` since this
-  data only changes when transactions or prices are imported.
-  """
-  def get_reconstructed_chart_data_cached do
-    case safe_persistent_term_get(@chart_cache_key) do
-      nil ->
-        data = get_reconstructed_chart_data()
-        :persistent_term.put(@chart_cache_key, data)
-        data
-
-      data ->
-        data
-    end
-  end
-
-  @doc """
-  Invalidates the reconstructed chart data cache.
-  Call after importing transactions or fetching historical prices.
-  """
-  def invalidate_chart_cache do
-    _ = safe_persistent_term_get(@chart_cache_key) && :persistent_term.erase(@chart_cache_key)
-    :ok
-  end
-
-  defp safe_persistent_term_get(key) do
-    :persistent_term.get(key, nil)
-  end
-
-  @doc """
-  Returns IBKR snapshot data for charting (original behavior).
-  """
-  def get_ibkr_chart_data do
     PortfolioSnapshot
-    |> where([s], is_nil(s.source) or s.source != "nordnet_reconstructed")
-    |> order_by([s], asc: s.report_date)
-    |> preload(:holdings)
+    |> order_by([s], asc: s.date)
+    |> select([s], %{
+      date: s.date,
+      date_string: fragment("to_char(?, 'YYYY-MM-DD')", s.date),
+      value: s.total_value,
+      value_float: type(s.total_value, :float),
+      cost_basis_float: type(s.total_cost, :float),
+      source: s.source,
+      data_quality: s.data_quality
+    })
     |> Repo.all()
-    |> Enum.map(&snapshot_to_chart_point/1)
-  end
-
-  @doc """
-  Returns reconstructed chart data from Nordnet broker transactions.
-
-  Uses PositionReconstructor to rebuild positions, then batch-loads all
-  symbol mappings and historical prices to avoid N+1 queries.
-  Total: 3 queries (reconstruct + mappings + prices) instead of ~3,700+.
-  """
-  def get_reconstructed_chart_data do
-    positions_over_time = PositionReconstructor.reconstruct()
-
-    case positions_over_time do
-      [] ->
-        []
-
-      points ->
-        # Collect all unique ISINs across all date points
-        all_isins =
-          points
-          |> Enum.flat_map(fn %{positions: positions} -> Enum.map(positions, & &1.isin) end)
-          |> Enum.uniq()
-
-        # 1 query: load all symbol mappings
-        mappings = Stocks.batch_symbol_mappings(all_isins)
-
-        # Derive all symbols we need prices for (stock symbols + FX pairs)
-        {stock_symbols, fx_pairs} = collect_needed_symbols(points, mappings)
-        all_symbols = stock_symbols ++ fx_pairs
-
-        # Calculate date range with 5-day lookback buffer
-        all_dates = Enum.map(points, & &1.date)
-        min_date = Date.add(Enum.min(all_dates, Date), -5)
-        max_date = Enum.max(all_dates, Date)
-
-        # 1 query: load all historical prices
-        price_map = Stocks.batch_historical_prices(all_symbols, min_date, max_date)
-
-        # Pure in-memory map — no more DB queries
-        points
-        |> Enum.map(&price_reconstructed_point_batched(&1, mappings, price_map))
-        |> Enum.reject(&is_nil/1)
-    end
-  end
-
-  # Collect stock symbols and FX pairs needed for pricing
-  defp collect_needed_symbols(points, mappings) do
-    all_positions = Enum.flat_map(points, & &1.positions)
-
-    {symbols, currencies} =
-      Enum.reduce(all_positions, {MapSet.new(), MapSet.new()}, fn pos, {syms, curs} ->
-        collect_position_symbols(pos, mappings, syms, curs)
-      end)
-
-    fx_pairs = Enum.map(currencies, fn cur -> "OANDA:EUR_#{cur}" end)
-    {MapSet.to_list(symbols), fx_pairs}
-  end
-
-  defp collect_position_symbols(pos, mappings, syms, curs) do
-    case Map.get(mappings, pos.isin) do
-      %{finnhub_symbol: sym} when is_binary(sym) ->
-        curs = if pos.currency != "EUR", do: MapSet.put(curs, pos.currency), else: curs
-        {MapSet.put(syms, sym), curs}
-
-      _ ->
-        {syms, curs}
-    end
-  end
-
-  defp price_reconstructed_point_batched(%{date: date, positions: positions}, mappings, price_map) do
-    {total_value, total_cost_basis} =
-      Enum.reduce(positions, {Decimal.new("0"), Decimal.new("0")}, fn pos, {val_acc, cost_acc} ->
-        case get_position_value_batched(pos, date, mappings, price_map) do
-          {:ok, value} ->
-            {Decimal.add(val_acc, value), Decimal.add(cost_acc, pos.cost_basis)}
-
-          :skip ->
-            {val_acc, Decimal.add(cost_acc, pos.cost_basis)}
-        end
-      end)
-
-    if Decimal.compare(total_value, Decimal.new("0")) == :gt do
-      %{
-        date: date,
-        date_string: Date.to_string(date),
-        value: total_value,
-        value_float: Decimal.to_float(total_value),
-        cost_basis_float: Decimal.to_float(total_cost_basis),
-        source: :nordnet
-      }
-    else
-      nil
-    end
-  end
-
-  defp get_position_value_batched(position, date, mappings, price_map) do
-    case Map.get(mappings, position.isin) do
-      %{finnhub_symbol: symbol} when is_binary(symbol) ->
-        case Stocks.batch_get_close_price(price_map, symbol, date) do
-          {:ok, close_price} ->
-            value = Decimal.mult(position.quantity, close_price)
-            eur_value = apply_fx_conversion_batched(value, position.currency, date, price_map)
-            {:ok, eur_value}
-
-          {:error, _} ->
-            :skip
-        end
-
-      _ ->
-        :skip
-    end
-  end
-
-  defp apply_fx_conversion_batched(value, "EUR", _date, _price_map), do: value
-
-  defp apply_fx_conversion_batched(value, currency, date, price_map) do
-    pair = "OANDA:EUR_#{currency}"
-
-    case Stocks.batch_get_close_price(price_map, pair, date) do
-      {:ok, rate} ->
-        if Decimal.compare(rate, Decimal.new("0")) == :gt do
-          Decimal.div(value, rate)
-        else
-          value
-        end
-
-      {:error, _} ->
-        value
-    end
-  end
-
-  defp snapshot_to_chart_point(snapshot) do
-    total_value =
-      Enum.reduce(snapshot.holdings, Decimal.new("0"), fn holding, acc ->
-        Decimal.add(acc, to_base_currency(holding.position_value, holding.fx_rate_to_base))
-      end)
-
-    total_cost_basis =
-      Enum.reduce(snapshot.holdings, Decimal.new("0"), fn holding, acc ->
-        Decimal.add(acc, to_base_currency(holding.cost_basis_money, holding.fx_rate_to_base))
-      end)
-
-    %{
-      date: snapshot.report_date,
-      date_string: Date.to_string(snapshot.report_date),
-      value: total_value,
-      value_float: Decimal.to_float(total_value),
-      cost_basis_float: Decimal.to_float(total_cost_basis)
-    }
   end
 
   @doc """
@@ -357,8 +173,8 @@ defmodule Dividendsomatic.Portfolio do
         nil
 
       {first_snap, current_snap} ->
-        first_value = calculate_total_value(first_snap.holdings)
-        current_value = calculate_total_value(current_snap.holdings)
+        first_value = first_snap.total_value || calculate_total_value(first_snap.positions)
+        current_value = current_snap.total_value || calculate_total_value(current_snap.positions)
         absolute_change = Decimal.sub(current_value, first_value)
 
         percent_change =
@@ -372,8 +188,8 @@ defmodule Dividendsomatic.Portfolio do
           end
 
         %{
-          first_date: first_snap.report_date,
-          latest_date: current_snap.report_date,
+          first_date: first_snap.date,
+          latest_date: current_snap.date,
           first_value: first_value,
           latest_value: current_value,
           absolute_change: absolute_change,
@@ -382,9 +198,9 @@ defmodule Dividendsomatic.Portfolio do
     end
   end
 
-  defp calculate_total_value(holdings) do
-    Enum.reduce(holdings || [], Decimal.new("0"), fn holding, acc ->
-      Decimal.add(acc, to_base_currency(holding.position_value, holding.fx_rate_to_base))
+  defp calculate_total_value(positions) do
+    Enum.reduce(positions || [], Decimal.new("0"), fn pos, acc ->
+      Decimal.add(acc, to_base_currency(pos.value, pos.fx_rate))
     end)
   end
 
@@ -400,19 +216,19 @@ defmodule Dividendsomatic.Portfolio do
   """
   def get_first_snapshot do
     PortfolioSnapshot
-    |> order_by([s], asc: s.report_date)
+    |> order_by([s], asc: s.date)
     |> limit(1)
-    |> preload(:holdings)
+    |> preload(:positions)
     |> Repo.one()
   end
 
   @doc """
-  Returns the report_date of the latest IBKR snapshot (excludes reconstructed).
+  Returns the date of the latest actual (non-reconstructed) snapshot.
   """
   def get_latest_snapshot_date do
     PortfolioSnapshot
-    |> where([s], is_nil(s.source) or s.source != "nordnet_reconstructed")
-    |> select([s], max(s.report_date))
+    |> where([s], s.data_quality == "actual")
+    |> select([s], max(s.date))
     |> Repo.one()
   end
 
@@ -428,12 +244,12 @@ defmodule Dividendsomatic.Portfolio do
   """
   def get_snapshot_position(date) do
     PortfolioSnapshot
-    |> where([s], s.report_date <= ^date)
+    |> where([s], s.date <= ^date)
     |> Repo.aggregate(:count)
   end
 
   @doc """
-  Creates a portfolio snapshot with holdings from CSV data.
+  Creates a portfolio snapshot with positions from CSV data.
 
   Returns `{:ok, snapshot}` on success, `{:error, reason}` on failure.
   """
@@ -441,7 +257,18 @@ defmodule Dividendsomatic.Portfolio do
     Repo.transaction(fn ->
       case create_snapshot(report_date, csv_data) do
         {:ok, snapshot} ->
-          parse_csv_holdings(csv_data, snapshot.id)
+          positions = parse_csv_positions(csv_data, snapshot.id, report_date)
+          {total_value, total_cost} = compute_snapshot_totals(positions)
+
+          {:ok, snapshot} =
+            snapshot
+            |> PortfolioSnapshot.changeset(%{
+              total_value: total_value,
+              total_cost: total_cost,
+              positions_count: length(positions)
+            })
+            |> Repo.update()
+
           snapshot
 
         {:error, changeset} ->
@@ -451,38 +278,58 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   defp create_snapshot(report_date, csv_data) do
+    metadata =
+      if is_binary(csv_data) and csv_data != "",
+        do: %{"raw_csv" => String.length(csv_data)},
+        else: nil
+
     %PortfolioSnapshot{}
     |> PortfolioSnapshot.changeset(%{
-      report_date: report_date,
-      raw_csv_data: csv_data
+      date: report_date,
+      source: "ibkr_flex",
+      data_quality: "actual",
+      metadata: metadata
     })
     |> Repo.insert()
   end
 
-  ## Private Functions
-
-  defp parse_csv_holdings(csv_data, snapshot_id) do
+  defp parse_csv_positions(csv_data, snapshot_id, report_date) do
     csv_data
-    |> CsvParser.parse(snapshot_id)
+    |> CsvParser.parse(snapshot_id, report_date)
     |> Enum.map(fn attrs ->
-      %Holding{}
-      |> Holding.changeset(attrs)
+      %Position{}
+      |> Position.changeset(attrs)
       |> Repo.insert!()
+    end)
+  end
+
+  defp compute_snapshot_totals(positions) do
+    Enum.reduce(positions, {Decimal.new("0"), Decimal.new("0")}, fn pos, {val_acc, cost_acc} ->
+      fx = pos.fx_rate || Decimal.new("1")
+      pos_val = pos.value || Decimal.new("0")
+      cost_val = pos.cost_basis || Decimal.new("0")
+
+      {
+        Decimal.add(val_acc, Decimal.mult(pos_val, fx)),
+        Decimal.add(cost_acc, Decimal.mult(cost_val, fx))
+      }
     end)
   end
 
   ## Dividends
 
   @doc """
-  Lists all holdings for a specific symbol (from most recent snapshots).
-  Returns the latest holding record per snapshot for the given symbol.
+  Lists all positions for a specific symbol (from most recent snapshots).
   """
-  def list_holdings_by_symbol(symbol) do
-    Holding
-    |> where([h], h.symbol == ^symbol)
-    |> order_by([h], desc: h.report_date)
+  def list_positions_by_symbol(symbol) do
+    Position
+    |> where([p], p.symbol == ^symbol)
+    |> order_by([p], desc: p.date)
     |> Repo.all()
   end
+
+  # Keep old name as alias for backward compatibility during transition
+  defdelegate list_holdings_by_symbol(symbol), to: __MODULE__, as: :list_positions_by_symbol
 
   @doc """
   Lists all dividends ordered by ex_date descending.
@@ -517,7 +364,6 @@ defmodule Dividendsomatic.Portfolio do
 
   @doc """
   Lists dividends for the current year with computed income (per-share * qty * fx).
-  Returns list of `%{dividend: %Dividend{}, income: Decimal}`.
   """
   def list_dividends_with_income do
     year_start = Date.new!(Date.utc_today().year, 1, 1)
@@ -529,11 +375,11 @@ defmodule Dividendsomatic.Portfolio do
       |> order_by([d], desc: d.ex_date)
       |> Repo.all()
 
-    holdings_data = build_holdings_map(year_start, today)
+    positions_data = build_positions_map(year_start, today)
 
     dividends
     |> Enum.map(fn div ->
-      income = compute_dividend_income(div, holdings_data)
+      income = compute_dividend_income(div, positions_data)
       %{dividend: div, income: income}
     end)
     |> Enum.filter(fn entry ->
@@ -582,24 +428,20 @@ defmodule Dividendsomatic.Portfolio do
 
   @doc """
   Gets dividend income grouped by month for a date range.
-  Multiplies per-share amounts by shares held and converts to base currency.
   """
   def dividends_by_month(from_date, to_date) do
-    # Get dividends in range
     dividends =
       Dividend
       |> where([d], d.ex_date >= ^from_date and d.ex_date <= ^to_date)
       |> order_by([d], asc: d.ex_date)
       |> Repo.all()
 
-    # Get holdings snapshots in range to know shares held
-    holdings_map = build_holdings_map(from_date, to_date)
+    positions_map = build_positions_map(from_date, to_date)
 
-    # Calculate actual income per dividend
     dividends
     |> Enum.map(fn div ->
       month = Calendar.strftime(div.ex_date, "%Y-%m")
-      income = compute_dividend_income(div, holdings_map)
+      income = compute_dividend_income(div, positions_map)
       {month, income}
     end)
     |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
@@ -609,37 +451,33 @@ defmodule Dividendsomatic.Portfolio do
     |> Enum.sort_by(& &1.month)
   end
 
-  # Build a list of {date, symbol, quantity, fx_rate} tuples for dividend income lookup.
-  # Includes the most recent snapshot before from_date so early dividends can find holdings.
-  defp build_holdings_map(from_date, to_date) do
-    # Include the last snapshot before the range for lookback
+  defp build_positions_map(from_date, to_date) do
     lookback_snapshot =
       PortfolioSnapshot
-      |> where([s], s.report_date < ^from_date)
-      |> order_by([s], desc: s.report_date)
+      |> where([s], s.date < ^from_date)
+      |> order_by([s], desc: s.date)
       |> limit(1)
-      |> preload(:holdings)
+      |> preload(:positions)
       |> Repo.all()
 
     range_snapshots =
       PortfolioSnapshot
-      |> where([s], s.report_date >= ^from_date and s.report_date <= ^to_date)
-      |> preload(:holdings)
-      |> order_by([s], asc: s.report_date)
+      |> where([s], s.date >= ^from_date and s.date <= ^to_date)
+      |> preload(:positions)
+      |> order_by([s], asc: s.date)
       |> Repo.all()
 
     (lookback_snapshot ++ range_snapshots)
     |> Enum.flat_map(fn snapshot ->
-      Enum.map(snapshot.holdings, fn h ->
-        {snapshot.report_date, h.symbol, h.quantity, h.fx_rate_to_base}
+      Enum.map(snapshot.positions, fn p ->
+        {snapshot.date, p.symbol, p.quantity, p.fx_rate}
       end)
     end)
   end
 
-  defp compute_dividend_income(dividend, holdings_data) do
-    # Find the nearest holding with matching symbol, closest to ex_date
+  defp compute_dividend_income(dividend, positions_data) do
     matching =
-      holdings_data
+      positions_data
       |> Enum.filter(fn {_date, symbol, _qty, _fx} -> symbol == dividend.symbol end)
       |> Enum.min_by(
         fn {date, _, _, _} -> abs(Date.diff(date, dividend.ex_date)) end,
@@ -651,11 +489,9 @@ defmodule Dividendsomatic.Portfolio do
         qty = quantity || Decimal.new("0")
         fx = fx_rate || Decimal.new("1")
         amount = dividend.amount || Decimal.new("0")
-        # income = per_share_amount * shares * fx_rate_to_base
         Decimal.mult(Decimal.mult(amount, qty), fx)
 
       nil ->
-        # No matching holding found - return 0 (user didn't hold this stock)
         Decimal.new("0")
     end
   end
@@ -712,22 +548,7 @@ defmodule Dividendsomatic.Portfolio do
   ## Dividend Dashboard (batch computation)
 
   @doc """
-  Computes all dividend-related data in one pass, avoiding redundant queries.
-
-  Builds the holdings map ONCE with the widest date range needed, loads dividends
-  ONCE, and computes all values from that shared data. Reduces ~25 queries to ~5.
-
-  ## Parameters
-    - `year` — The dividend year to report on
-    - `chart_date_range` — `{first_date, last_date}` from chart data, or `nil`
-
-  ## Returns
-  A map with:
-    - `total_for_year` — Total dividend income for the given year
-    - `projected_annual` — Projected annual dividends (nil if not current year)
-    - `recent_with_income` — Last 5 dividend income entries (current year)
-    - `cash_flow_summary` — Monthly cash flow with cumulative totals (current year)
-    - `by_month_full_range` — Monthly dividends across the full chart range
+  Computes all dividend-related data in one pass.
   """
   def compute_dividend_dashboard(year, chart_date_range) do
     today = Date.utc_today()
@@ -735,20 +556,20 @@ defmodule Dividendsomatic.Portfolio do
     year_end = if year == today.year, do: today, else: Date.new!(year, 12, 31)
 
     {widest_from, widest_to} = dashboard_date_range(year_start, year_end, chart_date_range)
-    holdings_map = build_holdings_map(widest_from, widest_to)
+    positions_map = build_positions_map(widest_from, widest_to)
     all_dividends = load_dividends_in_range(widest_from, widest_to)
 
     year_dividends = filter_date_range(all_dividends, year_start, year_end)
-    year_by_month = compute_by_month(year_dividends, holdings_map)
+    year_by_month = compute_by_month(year_dividends, positions_map)
     total_for_year = sum_monthly_totals(year_by_month)
 
     %{
       total_for_year: total_for_year,
       projected_annual: compute_projected_annual(year, today, year_start, total_for_year),
-      recent_with_income: compute_recent_with_income(year_dividends, holdings_map),
+      recent_with_income: compute_recent_with_income(year_dividends, positions_map),
       cash_flow_summary: compute_cash_flow(year, today.year, year_by_month),
       by_month_full_range:
-        compute_chart_range_months(chart_date_range, all_dividends, holdings_map, year_by_month)
+        compute_chart_range_months(chart_date_range, all_dividends, positions_map, year_by_month)
     }
   end
 
@@ -791,11 +612,11 @@ defmodule Dividendsomatic.Portfolio do
     end
   end
 
-  defp compute_recent_with_income(year_dividends, holdings_map) do
+  defp compute_recent_with_income(year_dividends, positions_map) do
     year_dividends
     |> Enum.reverse()
     |> Enum.map(fn div ->
-      %{dividend: div, income: compute_dividend_income(div, holdings_map)}
+      %{dividend: div, income: compute_dividend_income(div, positions_map)}
     end)
     |> Enum.filter(fn entry -> Decimal.compare(entry.income, Decimal.new("0")) == :gt end)
     |> Enum.take(5)
@@ -817,21 +638,20 @@ defmodule Dividendsomatic.Portfolio do
     entries
   end
 
-  defp compute_chart_range_months(nil, _all_dividends, _holdings_map, year_by_month),
+  defp compute_chart_range_months(nil, _all_dividends, _positions_map, year_by_month),
     do: year_by_month
 
-  defp compute_chart_range_months({chart_start, chart_end}, all_dividends, holdings_map, _) do
+  defp compute_chart_range_months({chart_start, chart_end}, all_dividends, positions_map, _) do
     all_dividends
     |> filter_date_range(chart_start, chart_end)
-    |> compute_by_month(holdings_map)
+    |> compute_by_month(positions_map)
   end
 
-  # Compute dividends grouped by month from pre-loaded data (no DB calls)
-  defp compute_by_month(dividends, holdings_map) do
+  defp compute_by_month(dividends, positions_map) do
     dividends
     |> Enum.map(fn div ->
       month = Calendar.strftime(div.ex_date, "%Y-%m")
-      income = compute_dividend_income(div, holdings_map)
+      income = compute_dividend_income(div, positions_map)
       {month, income}
     end)
     |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
@@ -844,33 +664,31 @@ defmodule Dividendsomatic.Portfolio do
   ## FX Exposure
 
   @doc """
-  Computes FX exposure breakdown from holdings.
-  Groups by currency, calculates EUR value, FX rate, and % of portfolio.
-  Returns list sorted by EUR value descending.
+  Computes FX exposure breakdown from positions.
   """
-  def compute_fx_exposure(holdings) do
+  def compute_fx_exposure(positions) do
     total_eur =
-      Enum.reduce(holdings, Decimal.new("0"), fn h, acc ->
-        fx = h.fx_rate_to_base || Decimal.new("1")
-        Decimal.add(acc, Decimal.mult(h.position_value || Decimal.new("0"), fx))
+      Enum.reduce(positions, Decimal.new("0"), fn p, acc ->
+        fx = p.fx_rate || Decimal.new("1")
+        Decimal.add(acc, Decimal.mult(p.value || Decimal.new("0"), fx))
       end)
 
-    holdings
-    |> Enum.group_by(& &1.currency_primary)
+    positions
+    |> Enum.group_by(& &1.currency)
     |> Enum.map(fn {currency, group} -> build_currency_group(currency, group, total_eur) end)
     |> Enum.sort_by(fn e -> Decimal.to_float(e.eur_value) end, :desc)
   end
 
   defp build_currency_group(currency, group, total_eur) do
     local_value =
-      Enum.reduce(group, Decimal.new("0"), fn h, acc ->
-        Decimal.add(acc, h.position_value || Decimal.new("0"))
+      Enum.reduce(group, Decimal.new("0"), fn p, acc ->
+        Decimal.add(acc, p.value || Decimal.new("0"))
       end)
 
     eur_value =
-      Enum.reduce(group, Decimal.new("0"), fn h, acc ->
-        fx = h.fx_rate_to_base || Decimal.new("1")
-        Decimal.add(acc, Decimal.mult(h.position_value || Decimal.new("0"), fx))
+      Enum.reduce(group, Decimal.new("0"), fn p, acc ->
+        fx = p.fx_rate || Decimal.new("1")
+        Decimal.add(acc, Decimal.mult(p.value || Decimal.new("0"), fx))
       end)
 
     %{
@@ -883,10 +701,10 @@ defmodule Dividendsomatic.Portfolio do
     }
   end
 
-  defp weighted_fx_rate(local_value, eur_value, fallback_holding) do
+  defp weighted_fx_rate(local_value, eur_value, fallback_position) do
     if Decimal.compare(local_value, Decimal.new("0")) != :eq,
       do: eur_value |> Decimal.div(local_value) |> Decimal.round(4),
-      else: fallback_holding.fx_rate_to_base || Decimal.new("1")
+      else: fallback_position.fx_rate || Decimal.new("1")
   end
 
   defp decimal_pct(value, total) do
@@ -917,21 +735,12 @@ defmodule Dividendsomatic.Portfolio do
 
   ## Sold Positions (What-If Analysis)
 
-  @doc """
-  Lists all sold positions.
-  """
   def list_sold_positions do
     SoldPosition
     |> order_by([s], desc: s.sale_date)
     |> Repo.all()
   end
 
-  @doc """
-  Returns sold positions grouped by symbol with aggregated stats.
-
-  Each entry: `%{symbol, trades, total_quantity, total_pnl, first_date, last_date, avg_held_days}`
-  Sorted by total_pnl descending (biggest winners first).
-  """
   def list_sold_positions_grouped do
     SoldPosition
     |> group_by([s], s.symbol)
@@ -947,16 +756,10 @@ defmodule Dividendsomatic.Portfolio do
     |> Repo.all()
   end
 
-  @doc """
-  Returns count of sold positions.
-  """
   def count_sold_positions do
     Repo.aggregate(SoldPosition, :count)
   end
 
-  @doc """
-  Lists sold positions for a specific symbol.
-  """
   def list_sold_positions_by_symbol(symbol) do
     SoldPosition
     |> where([s], s.symbol == ^symbol)
@@ -964,60 +767,32 @@ defmodule Dividendsomatic.Portfolio do
     |> Repo.all()
   end
 
-  @doc """
-  Creates a sold position record.
-  """
   def create_sold_position(attrs) do
     %SoldPosition{}
     |> SoldPosition.changeset(attrs)
     |> Repo.insert()
   end
 
-  @doc """
-  Updates a sold position record.
-  """
   def update_sold_position(%SoldPosition{} = sold_position, attrs) do
     sold_position
     |> SoldPosition.changeset(attrs)
     |> Repo.update()
   end
 
-  @doc """
-  Deletes a sold position record.
-  """
   def delete_sold_position(%SoldPosition{} = sold_position) do
     Repo.delete(sold_position)
   end
 
-  @doc """
-  Gets a sold position by ID.
-  """
   def get_sold_position(id) do
     Repo.get(SoldPosition, id)
   end
 
-  @doc """
-  Calculates total realized P&L from all sold positions.
-  """
   def total_realized_pnl do
     SoldPosition
     |> select([s], sum(fragment("COALESCE(?, ?)", s.realized_pnl_eur, s.realized_pnl)))
     |> Repo.one() || Decimal.new("0")
   end
 
-  @doc """
-  Returns a comprehensive realized P&L summary, optionally filtered by sale year.
-
-  Replaces separate calls to `total_realized_pnl/0`, `list_sold_positions_grouped/0`,
-  and `count_sold_positions/0` with one consolidated function.
-
-  ## Options
-    - `:year` — Filter to positions sold in the given year
-
-  ## Returns
-  A map with: total_pnl, total_trades, symbol_count, total_gains, total_losses,
-  win_count, loss_count, top_winners, top_losers, all_grouped, available_years.
-  """
   def realized_pnl_summary(opts \\ []) do
     year = Keyword.get(opts, :year)
 
@@ -1087,9 +862,6 @@ defmodule Dividendsomatic.Portfolio do
     }
   end
 
-  @doc """
-  Returns distinct sale years from sold positions, most recent first.
-  """
   def list_sale_years do
     SoldPosition
     |> select([s], fragment("DISTINCT EXTRACT(YEAR FROM ?)::integer", s.sale_date))
@@ -1097,12 +869,6 @@ defmodule Dividendsomatic.Portfolio do
     |> Repo.all()
   end
 
-  @doc """
-  Calculates hypothetical value of sold positions at current prices.
-
-  Requires a map of symbol => current_price to calculate.
-  Returns the total value if positions were never sold.
-  """
   def what_if_value(current_prices) when is_map(current_prices) do
     list_sold_positions()
     |> Enum.reduce(Decimal.new("0"), fn sold, acc ->
@@ -1117,23 +883,14 @@ defmodule Dividendsomatic.Portfolio do
     end)
   end
 
-  @doc """
-  Calculates the opportunity cost (or gain) from selling positions.
-
-  Returns negative if selling was a mistake (would be worth more now).
-  Returns positive if selling was a good decision (would be worth less now).
-  """
   def what_if_opportunity_cost(current_prices) when is_map(current_prices) do
     list_sold_positions()
     |> Enum.reduce(Decimal.new("0"), fn sold, acc ->
       current_price = Map.get(current_prices, sold.symbol)
 
       if current_price do
-        # What we got from selling
         sale_proceeds = Decimal.mult(sold.quantity, sold.sale_price)
-        # What it would be worth now
         hypothetical_value = Decimal.mult(sold.quantity, current_price)
-        # Positive = good decision to sell, negative = bad decision
         opportunity = Decimal.sub(sale_proceeds, hypothetical_value)
         Decimal.add(acc, opportunity)
       else
@@ -1142,15 +899,6 @@ defmodule Dividendsomatic.Portfolio do
     end)
   end
 
-  @doc """
-  Gets What-If analysis summary.
-
-  Returns a map with:
-  - `sold_positions_count` - Number of sold positions
-  - `total_realized_pnl` - Total P&L from sales
-  - `hypothetical_value` - What sold positions would be worth now
-  - `opportunity_cost` - Difference between sale proceeds and current value
-  """
   def get_what_if_summary(current_prices \\ %{}) do
     sold_positions = list_sold_positions()
 
@@ -1164,27 +912,18 @@ defmodule Dividendsomatic.Portfolio do
 
   ## Broker Transactions
 
-  @doc """
-  Creates a broker transaction.
-  """
   def create_broker_transaction(attrs) do
     %BrokerTransaction{}
     |> BrokerTransaction.changeset(attrs)
     |> Repo.insert()
   end
 
-  @doc """
-  Upserts a broker transaction (idempotent by broker + external_id).
-  """
   def upsert_broker_transaction(attrs) do
     %BrokerTransaction{}
     |> BrokerTransaction.changeset(attrs)
     |> Repo.insert(on_conflict: :nothing, conflict_target: [:broker, :external_id])
   end
 
-  @doc """
-  Lists broker transactions with optional filters.
-  """
   def list_broker_transactions(opts \\ []) do
     query = BrokerTransaction |> order_by([t], desc: t.trade_date)
 
@@ -1211,27 +950,18 @@ defmodule Dividendsomatic.Portfolio do
 
   ## Costs
 
-  @doc """
-  Creates a cost record.
-  """
   def create_cost(attrs) do
     %Cost{}
     |> Cost.changeset(attrs)
     |> Repo.insert()
   end
 
-  @doc """
-  Lists all costs.
-  """
   def list_costs do
     Cost
     |> order_by([c], desc: c.date)
     |> Repo.all()
   end
 
-  @doc """
-  Lists costs by type.
-  """
   def list_costs_by_type(cost_type) do
     Cost
     |> where([c], c.cost_type == ^cost_type)
@@ -1239,9 +969,6 @@ defmodule Dividendsomatic.Portfolio do
     |> Repo.all()
   end
 
-  @doc """
-  Lists costs by symbol.
-  """
   def list_costs_by_symbol(symbol) do
     Cost
     |> where([c], c.symbol == ^symbol)
@@ -1249,9 +976,6 @@ defmodule Dividendsomatic.Portfolio do
     |> Repo.all()
   end
 
-  @doc """
-  Returns total costs grouped by type.
-  """
   def total_costs_by_type do
     Cost
     |> group_by([c], c.cost_type)
@@ -1260,9 +984,6 @@ defmodule Dividendsomatic.Portfolio do
     |> Map.new()
   end
 
-  @doc """
-  Returns a cost summary with totals.
-  """
   def costs_summary do
     by_type = total_costs_by_type()
 
@@ -1276,9 +997,6 @@ defmodule Dividendsomatic.Portfolio do
 
   ## Data Gaps Analysis
 
-  @doc """
-  Returns broker coverage data for gap analysis.
-  """
   def broker_coverage do
     nordnet_range =
       BrokerTransaction
@@ -1289,8 +1007,8 @@ defmodule Dividendsomatic.Portfolio do
     ibkr_snapshot_range =
       PortfolioSnapshot
       |> select([s], %{
-        min_date: min(s.report_date),
-        max_date: max(s.report_date),
+        min_date: min(s.date),
+        max_date: max(s.date),
         count: count()
       })
       |> Repo.one()
@@ -1304,16 +1022,12 @@ defmodule Dividendsomatic.Portfolio do
     %{nordnet: nordnet_range, ibkr: ibkr_snapshot_range, ibkr_txns: ibkr_txn_range}
   end
 
-  @doc """
-  Returns per-stock gap analysis.
-  Shows first/last dates per broker, and gap periods.
-  """
   def stock_gaps(opts \\ []) do
     current_only = Keyword.get(opts, :current_only, false)
 
     nordnet_stocks = fetch_nordnet_stock_ranges()
     ibkr_stocks = fetch_ibkr_stock_ranges()
-    current_isins = if current_only, do: current_holding_isins(), else: nil
+    current_isins = if current_only, do: current_position_isins(), else: nil
 
     gaps = merge_stock_gaps(nordnet_stocks, ibkr_stocks)
 
@@ -1340,28 +1054,28 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   defp fetch_ibkr_stock_ranges do
-    Holding
-    |> where([h], not is_nil(h.isin))
-    |> where([h], fragment("length(?) >= 12", h.isin))
-    |> group_by([h], [h.isin, h.symbol, h.description])
-    |> select([h], %{
-      isin: h.isin,
-      symbol: h.symbol,
-      name: h.description,
-      first_date: min(h.report_date),
-      last_date: max(h.report_date),
+    Position
+    |> where([p], not is_nil(p.isin))
+    |> where([p], fragment("length(?) >= 12", p.isin))
+    |> group_by([p], [p.isin, p.symbol, p.name])
+    |> select([p], %{
+      isin: p.isin,
+      symbol: p.symbol,
+      name: p.name,
+      first_date: min(p.date),
+      last_date: max(p.date),
       broker: "ibkr"
     })
     |> Repo.all()
   end
 
-  defp current_holding_isins do
+  defp current_position_isins do
     case get_latest_snapshot() do
       nil ->
         MapSet.new()
 
       snapshot ->
-        snapshot.holdings
+        snapshot.positions
         |> Enum.map(& &1.isin)
         |> Enum.reject(&is_nil/1)
         |> MapSet.new()
@@ -1402,7 +1116,6 @@ defmodule Dividendsomatic.Portfolio do
   defp compute_gap_days(_nordnet, nil), do: 0
 
   defp compute_gap_days(nordnet, ibkr) do
-    # Gap = time between Nordnet last date and IBKR first date
     gap = Date.diff(ibkr.first_date, nordnet.last_date)
     max(gap, 0)
   end
@@ -1413,9 +1126,6 @@ defmodule Dividendsomatic.Portfolio do
     |> then(fn l -> if ibkr, do: ["ibkr" | l], else: l end)
   end
 
-  @doc """
-  Returns dividend coverage gaps for stocks.
-  """
   def dividend_gaps do
     dividends =
       Dividend

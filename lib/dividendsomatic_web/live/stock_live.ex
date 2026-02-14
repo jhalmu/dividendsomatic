@@ -350,8 +350,8 @@ defmodule DividendsomaticWeb.StockLive do
 
   defp filter_holdings_to_period(holdings, period) do
     Enum.filter(holdings, fn h ->
-      Date.compare(h.report_date, period.start_date) != :lt &&
-        Date.compare(h.report_date, period.end_date) != :gt
+      Date.compare(h.date, period.start_date) != :lt &&
+        Date.compare(h.date, period.end_date) != :gt
     end)
   end
 
@@ -367,8 +367,8 @@ defmodule DividendsomaticWeb.StockLive do
   defp compute_period_cost_basis(holdings) do
     # Use the latest holding in the period for cost basis
     latest = hd(holdings)
-    cost = latest.cost_basis_money || Decimal.new("0")
-    fx = latest.fx_rate_to_base || Decimal.new("1")
+    cost = latest.cost_basis || Decimal.new("0")
+    fx = latest.fx_rate || Decimal.new("1")
     Decimal.mult(cost, fx)
   end
 
@@ -567,7 +567,7 @@ defmodule DividendsomaticWeb.StockLive do
   defp filter_dividends_to_ownership(dividends, []), do: dividends
 
   defp filter_dividends_to_ownership(dividends, holdings) do
-    first_date = List.last(holdings).report_date
+    first_date = List.last(holdings).date
 
     Enum.filter(dividends, fn div ->
       Date.compare(div.ex_date, first_date) != :lt
@@ -580,12 +580,12 @@ defmodule DividendsomaticWeb.StockLive do
     latest = hd(holdings)
     first = List.last(holdings)
 
-    fx = latest.fx_rate_to_base || Decimal.new("1")
+    fx = latest.fx_rate || Decimal.new("1")
     qty = latest.quantity || Decimal.new("0")
-    cost_basis = latest.cost_basis_money || Decimal.new("0")
-    position_value = latest.position_value || Decimal.new("0")
-    unrealized_pnl = latest.fifo_pnl_unrealized || Decimal.new("0")
-    nav_pct = latest.percent_of_nav || Decimal.new("0")
+    cost_basis = latest.cost_basis || Decimal.new("0")
+    position_value = latest.value || Decimal.new("0")
+    unrealized_pnl = latest.unrealized_pnl || Decimal.new("0")
+    nav_pct = latest.weight || Decimal.new("0")
 
     periods = detect_ownership_periods(holdings)
     total_owned_days = Enum.reduce(periods, 0, fn p, acc -> acc + p.days end)
@@ -594,15 +594,15 @@ defmodule DividendsomaticWeb.StockLive do
 
     %{
       quantity: qty,
-      avg_cost: latest.cost_basis_price || Decimal.new("0"),
+      avg_cost: latest.cost_price || Decimal.new("0"),
       total_invested: Decimal.mult(cost_basis, fx),
       current_value: Decimal.mult(position_value, fx),
       unrealized_pnl: Decimal.mult(unrealized_pnl, fx),
       percent_of_nav: nav_pct,
-      currency: latest.currency_primary || "EUR",
+      currency: latest.currency || "EUR",
       fx_rate: fx,
-      first_date: first.report_date,
-      latest_date: latest.report_date,
+      first_date: first.date,
+      latest_date: latest.date,
       ownership_periods: periods,
       total_owned_days: total_owned_days,
       snapshots_count: length(holdings)
@@ -617,7 +617,7 @@ defmodule DividendsomaticWeb.StockLive do
     %{
       return_pct: return_pct,
       pnl_per_share: pnl_per_share,
-      break_even: latest.cost_basis_price || Decimal.new("0"),
+      break_even: latest.cost_price || Decimal.new("0"),
       is_short: Decimal.compare(qty, Decimal.new("0")) == :lt
     }
   end
@@ -653,9 +653,9 @@ defmodule DividendsomaticWeb.StockLive do
       last = List.last(period)
 
       %{
-        start_date: first.report_date,
-        end_date: last.report_date,
-        days: Date.diff(last.report_date, first.report_date) + 1
+        start_date: first.date,
+        end_date: last.date,
+        days: Date.diff(last.date, first.date) + 1
       }
     end)
   end
@@ -663,7 +663,7 @@ defmodule DividendsomaticWeb.StockLive do
   defp chunk_by_gap(h, []), do: {:cont, [h]}
 
   defp chunk_by_gap(h, [prev | _] = acc) do
-    if Date.diff(h.report_date, prev.report_date) > 14 do
+    if Date.diff(h.date, prev.date) > 14 do
       {:cont, Enum.reverse(acc), [h]}
     else
       {:cont, [h | acc]}
@@ -678,10 +678,10 @@ defmodule DividendsomaticWeb.StockLive do
     |> Enum.reverse()
     |> Enum.map(fn h ->
       %{
-        date: h.report_date,
-        price: Decimal.to_float(h.mark_price || Decimal.new("0")),
+        date: h.date,
+        price: Decimal.to_float(h.price || Decimal.new("0")),
         quantity: Decimal.to_float(h.quantity || Decimal.new("0")),
-        cost_basis: Decimal.to_float(h.cost_basis_price || Decimal.new("0"))
+        cost_basis: Decimal.to_float(h.cost_price || Decimal.new("0"))
       }
     end)
   end
@@ -689,7 +689,7 @@ defmodule DividendsomaticWeb.StockLive do
   defp compute_dividends_with_income(dividends, holdings) do
     holdings_data =
       Enum.map(holdings, fn h ->
-        {h.report_date, h.symbol, h.quantity, h.fx_rate_to_base}
+        {h.date, h.symbol, h.quantity, h.fx_rate}
       end)
 
     Enum.map(dividends, fn div ->
@@ -1121,7 +1121,7 @@ defmodule DividendsomaticWeb.StockLive do
   defp get_exchange(holdings, company_profile) do
     cond do
       company_profile && company_profile.exchange -> company_profile.exchange
-      holdings != [] -> hd(holdings).listing_exchange
+      holdings != [] -> hd(holdings).exchange
       true -> nil
     end
   end

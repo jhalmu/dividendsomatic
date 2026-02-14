@@ -270,7 +270,7 @@ defmodule Dividendsomatic.DataIngestionTest do
 
       snapshot = Portfolio.get_snapshot_by_date(~D[2026-01-28])
       assert snapshot != nil
-      assert snapshot.report_date == ~D[2026-01-28]
+      assert snapshot.date == ~D[2026-01-28]
     end
 
     test "should import multiple CSV files from a directory" do
@@ -345,10 +345,10 @@ defmodule Dividendsomatic.DataIngestionTest do
       snapshot = Portfolio.get_snapshot_by_date(~D[2026-01-30])
       assert snapshot != nil
 
-      holdings = Repo.preload(snapshot, :holdings).holdings
-      assert length(holdings) == 2
+      positions = Repo.preload(snapshot, :positions).positions
+      assert length(positions) == 2
 
-      symbols = Enum.map(holdings, & &1.symbol) |> Enum.sort()
+      symbols = Enum.map(positions, & &1.symbol) |> Enum.sort()
       assert symbols == ["KESKOB", "TELIA1"]
     end
   end

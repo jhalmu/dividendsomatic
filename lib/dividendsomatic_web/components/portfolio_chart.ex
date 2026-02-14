@@ -455,7 +455,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     label_y = r(mt + main_h - 8)
 
     {first_point, _} = hd(segment)
-    era_label = if Map.get(first_point, :source) == :nordnet, do: "NORDNET", else: "IBKR"
+    era_label = if Map.get(first_point, :source) == "nordnet", do: "NORDNET", else: "IBKR"
     seg_px = x_fn.(last_idx) - x_fn.(first_idx)
 
     if seg_px > 60 or seg_idx == 0 do

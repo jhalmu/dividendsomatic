@@ -12,7 +12,7 @@ defmodule Dividendsomatic.Stocks.SymbolMapper do
   import Ecto.Query
   require Logger
 
-  alias Dividendsomatic.Portfolio.Holding
+  alias Dividendsomatic.Portfolio.Position
   alias Dividendsomatic.Repo
   alias Dividendsomatic.Stocks
   alias Dividendsomatic.Stocks.SymbolMapping
@@ -242,17 +242,17 @@ defmodule Dividendsomatic.Stocks.SymbolMapper do
     end
   end
 
-  # Step 2: Check holdings table for IBKR data (has isin + symbol + listing_exchange)
+  # Step 2: Check positions table for IBKR data (has isin + symbol + exchange)
   defp check_holdings(isin) do
-    holding =
-      Holding
-      |> where([h], h.isin == ^isin and not is_nil(h.listing_exchange))
-      |> order_by([h], desc: h.report_date)
+    position =
+      Position
+      |> where([p], p.isin == ^isin and not is_nil(p.exchange))
+      |> order_by([p], desc: p.date)
       |> limit(1)
       |> Repo.one()
 
-    case holding do
-      %Holding{symbol: symbol, listing_exchange: exchange} when is_binary(symbol) ->
+    case position do
+      %Position{symbol: symbol, exchange: exchange} when is_binary(symbol) ->
         finnhub_symbol = apply_exchange_suffix(symbol, exchange)
         {:ok, finnhub_symbol}
 

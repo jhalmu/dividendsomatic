@@ -9,7 +9,7 @@ defmodule Dividendsomatic.Portfolio.Processors.SoldPositionProcessor do
   import Ecto.Query
   require Logger
 
-  alias Dividendsomatic.Portfolio.{BrokerTransaction, Holding, IsinMap, SoldPosition}
+  alias Dividendsomatic.Portfolio.{BrokerTransaction, IsinMap, Position, SoldPosition}
   alias Dividendsomatic.Repo
   alias Dividendsomatic.Stocks
 
@@ -106,10 +106,10 @@ defmodule Dividendsomatic.Portfolio.Processors.SoldPositionProcessor do
   defp resolve_isin(_), do: nil
 
   defp resolve_isin_from_holdings(symbol) do
-    Holding
-    |> where([h], h.symbol == ^symbol and not is_nil(h.isin) and h.isin > "")
+    Position
+    |> where([p], p.symbol == ^symbol and not is_nil(p.isin) and p.isin > "")
     |> limit(1)
-    |> select([h], h.isin)
+    |> select([p], p.isin)
     |> Repo.one()
   end
 

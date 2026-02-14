@@ -41,14 +41,13 @@ defmodule Mix.Tasks.Import.Csv do
       {:ok, snapshot} ->
         count =
           Dividendsomatic.Repo.aggregate(
-            from(h in Dividendsomatic.Portfolio.Holding,
-              where: h.portfolio_snapshot_id == ^snapshot.id
+            from(p in Dividendsomatic.Portfolio.Position,
+              where: p.portfolio_snapshot_id == ^snapshot.id
             ),
             :count
           )
 
-        Portfolio.invalidate_chart_cache()
-        IO.puts("✓ Successfully imported #{count} holdings")
+        IO.puts("✓ Successfully imported #{count} positions")
 
       {:error, changeset} ->
         IO.puts("✗ Error: #{inspect(changeset.errors)}")

@@ -3,7 +3,7 @@ defmodule DividendsomaticWeb.DataGapsLiveTest do
 
   import Phoenix.LiveViewTest
 
-  alias Dividendsomatic.Portfolio.{BrokerTransaction, Dividend, Holding, PortfolioSnapshot}
+  alias Dividendsomatic.Portfolio.{BrokerTransaction, Dividend, PortfolioSnapshot, Position}
 
   describe "Data Gaps page" do
     test "should render the page with broker coverage", %{conn: conn} do
@@ -40,28 +40,27 @@ defmodule DividendsomaticWeb.DataGapsLiveTest do
       })
       |> Dividendsomatic.Repo.insert!()
 
-      # Insert an IBKR snapshot with holding
+      # Insert an IBKR snapshot with position
       {:ok, snapshot} =
         %PortfolioSnapshot{}
-        |> PortfolioSnapshot.changeset(%{report_date: ~D[2026-01-28]})
+        |> PortfolioSnapshot.changeset(%{date: ~D[2026-01-28], source: "ibkr_flex"})
         |> Dividendsomatic.Repo.insert()
 
-      %Holding{}
-      |> Holding.changeset(%{
+      %Position{}
+      |> Position.changeset(%{
         portfolio_snapshot_id: snapshot.id,
-        report_date: ~D[2026-01-28],
+        date: ~D[2026-01-28],
         symbol: "KESKOB",
-        currency_primary: "EUR",
+        currency: "EUR",
         quantity: Decimal.new("100"),
-        mark_price: Decimal.new("21"),
-        position_value: Decimal.new("2100"),
-        cost_basis_price: Decimal.new("18"),
-        cost_basis_money: Decimal.new("1800"),
-        open_price: Decimal.new("18"),
-        percent_of_nav: Decimal.new("10"),
-        fx_rate_to_base: Decimal.new("1"),
+        price: Decimal.new("21"),
+        value: Decimal.new("2100"),
+        cost_price: Decimal.new("18"),
+        cost_basis: Decimal.new("1800"),
+        weight: Decimal.new("10"),
+        fx_rate: Decimal.new("1"),
         isin: "FI0009000202",
-        listing_exchange: "HEX",
+        exchange: "HEX",
         asset_class: "STK"
       })
       |> Dividendsomatic.Repo.insert!()
@@ -90,25 +89,24 @@ defmodule DividendsomaticWeb.DataGapsLiveTest do
       # IBKR snapshot (recent)
       {:ok, snapshot} =
         %PortfolioSnapshot{}
-        |> PortfolioSnapshot.changeset(%{report_date: ~D[2026-01-28]})
+        |> PortfolioSnapshot.changeset(%{date: ~D[2026-01-28], source: "ibkr_flex"})
         |> Dividendsomatic.Repo.insert()
 
-      %Holding{}
-      |> Holding.changeset(%{
+      %Position{}
+      |> Position.changeset(%{
         portfolio_snapshot_id: snapshot.id,
-        report_date: ~D[2026-01-28],
+        date: ~D[2026-01-28],
         symbol: "GAP",
-        currency_primary: "EUR",
+        currency: "EUR",
         quantity: Decimal.new("50"),
-        mark_price: Decimal.new("10"),
-        position_value: Decimal.new("500"),
-        cost_basis_price: Decimal.new("8"),
-        cost_basis_money: Decimal.new("400"),
-        open_price: Decimal.new("8"),
-        percent_of_nav: Decimal.new("5"),
-        fx_rate_to_base: Decimal.new("1"),
+        price: Decimal.new("10"),
+        value: Decimal.new("500"),
+        cost_price: Decimal.new("8"),
+        cost_basis: Decimal.new("400"),
+        weight: Decimal.new("5"),
+        fx_rate: Decimal.new("1"),
         isin: "FI_GAP_TEST0",
-        listing_exchange: "HEX",
+        exchange: "HEX",
         asset_class: "STK"
       })
       |> Dividendsomatic.Repo.insert!()

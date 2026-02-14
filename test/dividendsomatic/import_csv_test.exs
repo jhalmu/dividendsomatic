@@ -26,11 +26,11 @@ defmodule Mix.Tasks.Import.CsvTest do
 
       snapshot = Portfolio.get_snapshot_by_date(~D[2026-01-28])
       assert snapshot != nil
-      assert snapshot.report_date == ~D[2026-01-28]
+      assert snapshot.date == ~D[2026-01-28]
 
-      holdings = Repo.preload(snapshot, :holdings).holdings
-      assert length(holdings) == 1
-      assert hd(holdings).symbol == "KESKOB"
+      positions = Repo.preload(snapshot, :positions).positions
+      assert length(positions) == 1
+      assert hd(positions).symbol == "KESKOB"
     end
 
     test "should print error message when file does not exist" do

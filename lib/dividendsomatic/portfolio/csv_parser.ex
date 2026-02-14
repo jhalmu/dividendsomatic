@@ -13,46 +13,50 @@ defmodule Dividendsomatic.Portfolio.CsvParser do
 
   NimbleCSV.define(IBParser, separator: ",", escape: "\"")
 
+  # Maps CSV headers to Position schema field names
   @header_map %{
-    "ReportDate" => :report_date,
-    "CurrencyPrimary" => :currency_primary,
+    "ReportDate" => :_report_date,
+    "CurrencyPrimary" => :currency,
     "Symbol" => :symbol,
-    "Description" => :description,
-    "SubCategory" => :sub_category,
+    "Description" => :name,
+    "SubCategory" => :_sub_category,
     "Quantity" => :quantity,
-    "MarkPrice" => :mark_price,
-    "PositionValue" => :position_value,
-    "CostBasisPrice" => :cost_basis_price,
-    "CostBasisMoney" => :cost_basis_money,
-    "OpenPrice" => :open_price,
-    "PercentOfNAV" => :percent_of_nav,
-    "FifoPnlUnrealized" => :fifo_pnl_unrealized,
-    "ListingExchange" => :listing_exchange,
+    "MarkPrice" => :price,
+    "PositionValue" => :value,
+    "CostBasisPrice" => :cost_price,
+    "CostBasisMoney" => :cost_basis,
+    "OpenPrice" => :_open_price,
+    "PercentOfNAV" => :weight,
+    "FifoPnlUnrealized" => :unrealized_pnl,
+    "ListingExchange" => :exchange,
     "AssetClass" => :asset_class,
-    "FXRateToBase" => :fx_rate_to_base,
+    "FXRateToBase" => :fx_rate,
     "ISIN" => :isin,
     "FIGI" => :figi,
-    "HoldingPeriodDateTime" => :holding_period_date_time
+    "HoldingPeriodDateTime" => :_holding_period
   }
+
+  # Fields prefixed with _ are parsed but dropped from output
+  @dropped_fields [:_report_date, :_sub_category, :_open_price, :_holding_period]
 
   @decimal_fields [
     :quantity,
-    :mark_price,
-    :position_value,
-    :cost_basis_price,
-    :cost_basis_money,
-    :open_price,
-    :percent_of_nav,
-    :fifo_pnl_unrealized,
-    :fx_rate_to_base
+    :price,
+    :value,
+    :cost_price,
+    :cost_basis,
+    :_open_price,
+    :weight,
+    :unrealized_pnl,
+    :fx_rate
   ]
 
   @doc """
-  Parses CSV string and returns a list of attribute maps ready for Holding changeset.
+  Parses CSV string and returns a list of attribute maps ready for Position changeset.
 
-  Each map contains the snapshot_id and all parsed fields from the CSV row.
+  Each map contains the snapshot_id, date, and all parsed fields from the CSV row.
   """
-  def parse(csv_data, snapshot_id) do
+  def parse(csv_data, snapshot_id, report_date) do
     rows = IBParser.parse_string(csv_data, skip_headers: false)
 
     case rows do
@@ -61,7 +65,7 @@ defmodule Dividendsomatic.Portfolio.CsvParser do
 
       [header_row | data_rows] ->
         column_index = build_column_index(header_row)
-        Enum.map(data_rows, &row_to_attrs(&1, column_index, snapshot_id))
+        Enum.map(data_rows, &row_to_attrs(&1, column_index, snapshot_id, report_date))
     end
   end
 
@@ -83,7 +87,7 @@ defmodule Dividendsomatic.Portfolio.CsvParser do
       [header_row | [first_data_row | _]] ->
         column_index = build_column_index(header_row)
 
-        case Map.get(column_index, :report_date) do
+        case Map.get(column_index, :_report_date) do
           nil ->
             {:error, "no ReportDate column"}
 
@@ -137,39 +141,24 @@ defmodule Dividendsomatic.Portfolio.CsvParser do
     end)
   end
 
-  defp row_to_attrs(row, column_index, snapshot_id) do
+  defp row_to_attrs(row, column_index, snapshot_id, report_date) do
     attrs =
       Enum.reduce(column_index, %{portfolio_snapshot_id: snapshot_id}, fn {field, idx}, acc ->
         value = Enum.at(row, idx)
         Map.put(acc, field, convert_value(field, value))
       end)
 
-    # Compute identifier_key
-    Map.put(attrs, :identifier_key, compute_identifier_key(attrs))
+    attrs
+    |> Map.put(:date, report_date)
+    |> Map.put(:data_source, "ibkr_flex")
+    |> Map.drop(@dropped_fields)
   end
 
-  defp convert_value(:report_date, value), do: parse_date(value)
+  defp convert_value(:_report_date, value), do: parse_date(value)
 
   defp convert_value(field, value) when field in @decimal_fields, do: parse_decimal(value)
 
   defp convert_value(_field, value), do: value
-
-  defp compute_identifier_key(attrs) do
-    cond do
-      is_binary(attrs[:isin]) and attrs[:isin] != "" ->
-        attrs[:isin]
-
-      is_binary(attrs[:figi]) and attrs[:figi] != "" ->
-        attrs[:figi]
-
-      is_binary(attrs[:symbol]) and attrs[:symbol] != "" ->
-        exchange = attrs[:listing_exchange] || "UNKNOWN"
-        "#{attrs[:symbol]}:#{exchange}"
-
-      true ->
-        nil
-    end
-  end
 
   defp parse_date(nil), do: nil
   defp parse_date(""), do: nil

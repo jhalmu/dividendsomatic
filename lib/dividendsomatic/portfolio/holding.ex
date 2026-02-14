@@ -1,9 +1,9 @@
 defmodule Dividendsomatic.Portfolio.Holding do
   @moduledoc """
-  Schema representing an individual stock holding within a portfolio snapshot.
+  Legacy schema for the old holdings table (now legacy_holdings).
 
-  Contains all fields from the Interactive Brokers Activity Flex CSV export,
-  including position details, cost basis, and unrealized P&L.
+  Retained for data migration and backward compatibility during transition.
+  New code should use `Dividendsomatic.Portfolio.Position` instead.
   """
   use Ecto.Schema
   import Ecto.Changeset
@@ -11,9 +11,8 @@ defmodule Dividendsomatic.Portfolio.Holding do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  schema "holdings" do
-    belongs_to :portfolio_snapshot, Dividendsomatic.Portfolio.PortfolioSnapshot,
-      foreign_key: :portfolio_snapshot_id
+  schema "legacy_holdings" do
+    field :portfolio_snapshot_id, :binary_id
 
     field :report_date, :date
     field :currency_primary, :string
@@ -65,11 +64,5 @@ defmodule Dividendsomatic.Portfolio.Holding do
       :identifier_key
     ])
     |> validate_required([:portfolio_snapshot_id, :report_date, :symbol])
-    |> unique_constraint([:portfolio_snapshot_id, :isin, :report_date],
-      name: :holdings_snapshot_isin_date_index
-    )
-    |> unique_constraint([:portfolio_snapshot_id, :symbol, :report_date],
-      name: :holdings_snapshot_symbol_date_index
-    )
   end
 end

@@ -17,7 +17,7 @@ defmodule Mix.Tasks.Import.Reimport do
   import Ecto.Query
 
   alias Dividendsomatic.Portfolio
-  alias Dividendsomatic.Portfolio.{CsvParser, Holding, PortfolioSnapshot}
+  alias Dividendsomatic.Portfolio.{CsvParser, PortfolioSnapshot, Position}
   alias Dividendsomatic.Repo
 
   @shortdoc "Re-import all CSV data with header-based parser"
@@ -47,9 +47,9 @@ defmodule Mix.Tasks.Import.Reimport do
   end
 
   defp delete_all_data do
-    {holdings_count, _} = Repo.delete_all(Holding)
+    {positions_count, _} = Repo.delete_all(Position)
     {snapshots_count, _} = Repo.delete_all(PortfolioSnapshot)
-    IO.puts("Deleted #{snapshots_count} snapshots and #{holdings_count} holdings.")
+    IO.puts("Deleted #{snapshots_count} snapshots and #{positions_count} positions.")
     IO.puts("")
   end
 
@@ -90,11 +90,11 @@ defmodule Mix.Tasks.Import.Reimport do
       {:ok, snapshot} ->
         count =
           Repo.aggregate(
-            from(h in Holding, where: h.portfolio_snapshot_id == ^snapshot.id),
+            from(p in Position, where: p.portfolio_snapshot_id == ^snapshot.id),
             :count
           )
 
-        IO.puts("  ok   #{filename} (#{report_date}, #{count} holdings)")
+        IO.puts("  ok   #{filename} (#{report_date}, #{count} positions)")
         :ok
 
       {:error, _} ->

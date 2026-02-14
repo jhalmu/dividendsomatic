@@ -12,10 +12,10 @@ defmodule Dividendsomatic.PortfolioTest do
 
     @valid_date ~D[2026-01-28]
 
-    test "create_snapshot_from_csv/2 creates snapshot with holdings" do
+    test "create_snapshot_from_csv/2 creates snapshot with positions" do
       assert {:ok, snapshot} = Portfolio.create_snapshot_from_csv(@valid_csv, @valid_date)
-      assert snapshot.report_date == @valid_date
-      assert length(Repo.preload(snapshot, :holdings).holdings) == 2
+      assert snapshot.date == @valid_date
+      assert length(Repo.preload(snapshot, :positions).positions) == 2
     end
 
     test "get_latest_snapshot/0 returns most recent snapshot" do
@@ -23,7 +23,7 @@ defmodule Dividendsomatic.PortfolioTest do
       {:ok, latest} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-28])
 
       result = Portfolio.get_latest_snapshot()
-      assert result.report_date == latest.report_date
+      assert result.date == latest.date
     end
 
     test "get_snapshot_by_date/1 finds specific snapshot" do
@@ -64,30 +64,30 @@ defmodule Dividendsomatic.PortfolioTest do
     end
   end
 
-  describe "holdings" do
+  describe "positions" do
     @valid_csv """
     "ReportDate","CurrencyPrimary","Symbol","Description","SubCategory","Quantity","MarkPrice","PositionValue","CostBasisPrice","CostBasisMoney","OpenPrice","PercentOfNAV","FifoPnlUnrealized","ListingExchange","AssetClass","FXRateToBase","ISIN","FIGI"
     "2026-01-28","EUR","KESKOB","KESKO OYJ-B SHS","COMMON","1000","21","21000","18.26459","18264.59","18.26459","8.90","2735.41","HEX","STK","1","FI0009000202","BBG000BNP2B2"
     """
 
-    test "holdings have correct decimal values" do
+    test "positions have correct decimal values" do
       {:ok, snapshot} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-28])
-      [holding] = Repo.preload(snapshot, :holdings).holdings
+      [position] = Repo.preload(snapshot, :positions).positions
 
-      assert Decimal.equal?(holding.quantity, Decimal.new("1000"))
-      assert Decimal.equal?(holding.mark_price, Decimal.new("21"))
-      assert Decimal.equal?(holding.position_value, Decimal.new("21000"))
-      assert Decimal.equal?(holding.fifo_pnl_unrealized, Decimal.new("2735.41"))
+      assert Decimal.equal?(position.quantity, Decimal.new("1000"))
+      assert Decimal.equal?(position.price, Decimal.new("21"))
+      assert Decimal.equal?(position.value, Decimal.new("21000"))
+      assert Decimal.equal?(position.unrealized_pnl, Decimal.new("2735.41"))
     end
 
-    test "holdings have correct string values" do
+    test "positions have correct string values" do
       {:ok, snapshot} = Portfolio.create_snapshot_from_csv(@valid_csv, ~D[2026-01-28])
-      [holding] = Repo.preload(snapshot, :holdings).holdings
+      [position] = Repo.preload(snapshot, :positions).positions
 
-      assert holding.symbol == "KESKOB"
-      assert holding.description == "KESKO OYJ-B SHS"
-      assert holding.currency_primary == "EUR"
-      assert holding.asset_class == "STK"
+      assert position.symbol == "KESKOB"
+      assert position.name == "KESKO OYJ-B SHS"
+      assert position.currency == "EUR"
+      assert position.asset_class == "STK"
     end
   end
 
@@ -183,7 +183,10 @@ defmodule Dividendsomatic.PortfolioTest do
       # Create a snapshot with holdings so income can be calculated
       {:ok, snapshot} =
         %Portfolio.PortfolioSnapshot{}
-        |> Portfolio.PortfolioSnapshot.changeset(%{report_date: Date.new!(today.year, 1, 10)})
+        |> Portfolio.PortfolioSnapshot.changeset(%{
+          date: Date.new!(today.year, 1, 10),
+          source: "test"
+        })
         |> Dividendsomatic.Repo.insert()
 
       # KESKOB: 100 shares, fx 1.0 (EUR)
@@ -219,7 +222,10 @@ defmodule Dividendsomatic.PortfolioTest do
 
       {:ok, snapshot} =
         %Portfolio.PortfolioSnapshot{}
-        |> Portfolio.PortfolioSnapshot.changeset(%{report_date: Date.new!(today.year, 1, 10)})
+        |> Portfolio.PortfolioSnapshot.changeset(%{
+          date: Date.new!(today.year, 1, 10),
+          source: "test"
+        })
         |> Dividendsomatic.Repo.insert()
 
       insert_test_holding(snapshot.id, Date.new!(today.year, 1, 10), "KESKOB", 100, "1")
@@ -257,7 +263,10 @@ defmodule Dividendsomatic.PortfolioTest do
 
       {:ok, snapshot} =
         %Portfolio.PortfolioSnapshot{}
-        |> Portfolio.PortfolioSnapshot.changeset(%{report_date: Date.new!(today.year, 1, 10)})
+        |> Portfolio.PortfolioSnapshot.changeset(%{
+          date: Date.new!(today.year, 1, 10),
+          source: "test"
+        })
         |> Dividendsomatic.Repo.insert()
 
       # USD stock with fx_rate 0.92
@@ -530,23 +539,23 @@ defmodule Dividendsomatic.PortfolioTest do
 
   describe "FX exposure (Feature 3)" do
     test "compute_fx_exposure/1 groups by currency with correct percentages" do
-      # Build mock holdings
-      holdings = [
-        %Portfolio.Holding{
-          currency_primary: "EUR",
-          position_value: Decimal.new("21000"),
-          fx_rate_to_base: Decimal.new("1"),
+      # Build mock positions
+      positions = [
+        %Portfolio.Position{
+          currency: "EUR",
+          value: Decimal.new("21000"),
+          fx_rate: Decimal.new("1"),
           symbol: "KESKOB"
         },
-        %Portfolio.Holding{
-          currency_primary: "USD",
-          position_value: Decimal.new("15000"),
-          fx_rate_to_base: Decimal.new("0.92"),
+        %Portfolio.Position{
+          currency: "USD",
+          value: Decimal.new("15000"),
+          fx_rate: Decimal.new("0.92"),
           symbol: "AAPL"
         }
       ]
 
-      result = Portfolio.compute_fx_exposure(holdings)
+      result = Portfolio.compute_fx_exposure(positions)
 
       assert length(result) == 2
       eur_entry = Enum.find(result, &(&1.currency == "EUR"))
@@ -574,7 +583,10 @@ defmodule Dividendsomatic.PortfolioTest do
 
       {:ok, snapshot} =
         %Portfolio.PortfolioSnapshot{}
-        |> Portfolio.PortfolioSnapshot.changeset(%{report_date: Date.new!(today.year, 1, 5)})
+        |> Portfolio.PortfolioSnapshot.changeset(%{
+          date: Date.new!(today.year, 1, 5),
+          source: "test"
+        })
         |> Repo.insert()
 
       insert_test_holding(snapshot.id, Date.new!(today.year, 1, 5), "KESKOB", 100, "1")
@@ -611,7 +623,10 @@ defmodule Dividendsomatic.PortfolioTest do
 
       {:ok, snapshot} =
         %Portfolio.PortfolioSnapshot{}
-        |> Portfolio.PortfolioSnapshot.changeset(%{report_date: Date.new!(today.year, 1, 5)})
+        |> Portfolio.PortfolioSnapshot.changeset(%{
+          date: Date.new!(today.year, 1, 5),
+          source: "test"
+        })
         |> Repo.insert()
 
       insert_test_holding(snapshot.id, Date.new!(today.year, 1, 5), "KESKOB", 100, "1")
@@ -658,7 +673,10 @@ defmodule Dividendsomatic.PortfolioTest do
 
       {:ok, snapshot} =
         %Portfolio.PortfolioSnapshot{}
-        |> Portfolio.PortfolioSnapshot.changeset(%{report_date: Date.new!(today.year, 1, 5)})
+        |> Portfolio.PortfolioSnapshot.changeset(%{
+          date: Date.new!(today.year, 1, 5),
+          source: "test"
+        })
         |> Repo.insert()
 
       insert_test_holding(snapshot.id, Date.new!(today.year, 1, 5), "KESKOB", 100, "1")
@@ -679,39 +697,22 @@ defmodule Dividendsomatic.PortfolioTest do
     end
   end
 
-  describe "invalidate_chart_cache/0" do
-    test "should not raise when cache is empty" do
-      assert :ok = Portfolio.invalidate_chart_cache()
-    end
-
-    test "should clear cached data" do
-      # Populate cache
-      _ = Portfolio.get_reconstructed_chart_data_cached()
-
-      # Invalidate
-      assert :ok = Portfolio.invalidate_chart_cache()
-
-      # Verify cache is cleared (next call rebuilds)
-      assert :ok = Portfolio.invalidate_chart_cache()
-    end
-  end
-
-  defp insert_test_holding(snapshot_id, report_date, symbol, qty, fx_rate) do
-    %Portfolio.Holding{}
-    |> Portfolio.Holding.changeset(%{
+  defp insert_test_holding(snapshot_id, date, symbol, qty, fx_rate) do
+    %Portfolio.Position{}
+    |> Portfolio.Position.changeset(%{
       portfolio_snapshot_id: snapshot_id,
-      report_date: report_date,
+      date: date,
       symbol: symbol,
-      currency_primary: "EUR",
+      currency: "EUR",
       quantity: qty,
-      mark_price: "10",
-      position_value: "1000",
-      cost_basis_price: "10",
-      cost_basis_money: "1000",
-      percent_of_nav: "50",
-      listing_exchange: "HEX",
+      price: "10",
+      value: "1000",
+      cost_price: "10",
+      cost_basis: "1000",
+      weight: "50",
+      exchange: "HEX",
       asset_class: "STK",
-      fx_rate_to_base: fx_rate
+      fx_rate: fx_rate
     })
     |> Dividendsomatic.Repo.insert!()
   end

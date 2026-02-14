@@ -19,7 +19,7 @@ defmodule Mix.Tasks.Backfill.Isin do
 
   import Ecto.Query
 
-  alias Dividendsomatic.Portfolio.{BrokerTransaction, Holding, SoldPosition}
+  alias Dividendsomatic.Portfolio.{BrokerTransaction, Position, SoldPosition}
   alias Dividendsomatic.Repo
 
   @shortdoc "Backfill ISIN on broker_transactions and sold_positions"
@@ -89,12 +89,12 @@ defmodule Mix.Tasks.Backfill.Isin do
   defp phase_2_build_mapping do
     IO.puts("--- Phase 2: Build ticker→ISIN mapping ---\n")
 
-    # Source 1: Holdings table (Flex reports)
+    # Source 1: Positions table (Flex reports)
     holdings_map =
-      Holding
-      |> where([h], not is_nil(h.isin) and h.isin > "")
-      |> distinct([h], [h.symbol])
-      |> select([h], {h.symbol, h.isin})
+      Position
+      |> where([p], not is_nil(p.isin) and p.isin > "")
+      |> distinct([p], [p.symbol])
+      |> select([p], {p.symbol, p.isin})
       |> Repo.all()
       |> Map.new()
 

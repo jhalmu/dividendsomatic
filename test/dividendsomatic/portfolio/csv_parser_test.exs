@@ -23,91 +23,68 @@ defmodule Dividendsomatic.Portfolio.CsvParserTest do
 
   @snapshot_id "test-snapshot-id"
 
-  describe "parse/2" do
+  describe "parse/3" do
     test "should parse Format B CSV with all fields correctly" do
-      [holding] = CsvParser.parse(@format_b_csv, @snapshot_id)
+      [position] = CsvParser.parse(@format_b_csv, @snapshot_id, ~D[2026-02-10])
 
-      assert holding.portfolio_snapshot_id == @snapshot_id
-      assert holding.report_date == ~D[2026-02-10]
-      assert holding.currency_primary == "EUR"
-      assert holding.symbol == "KESKOB"
-      assert holding.description == "KESKO OYJ-B SHS"
-      assert holding.sub_category == "COMMON"
-      assert Decimal.equal?(holding.quantity, Decimal.new("2000"))
-      assert Decimal.equal?(holding.mark_price, Decimal.new("20.88"))
-      assert Decimal.equal?(holding.position_value, Decimal.new("41760"))
-      assert Decimal.equal?(holding.cost_basis_price, Decimal.new("19.5300875"))
-      assert Decimal.equal?(holding.cost_basis_money, Decimal.new("39060.175"))
-      assert Decimal.equal?(holding.open_price, Decimal.new("19.5300875"))
-      assert Decimal.equal?(holding.percent_of_nav, Decimal.new("12.87"))
-      assert Decimal.equal?(holding.fifo_pnl_unrealized, Decimal.new("2699.825"))
-      assert holding.listing_exchange == "HEX"
-      assert holding.asset_class == "STK"
-      assert Decimal.equal?(holding.fx_rate_to_base, Decimal.new("1"))
-      assert holding.isin == "FI0009000202"
-      assert holding.figi == "BBG000BNP2B2"
+      assert position.portfolio_snapshot_id == @snapshot_id
+      assert position.date == ~D[2026-02-10]
+      assert position.currency == "EUR"
+      assert position.symbol == "KESKOB"
+      assert position.name == "KESKO OYJ-B SHS"
+      assert Decimal.equal?(position.quantity, Decimal.new("2000"))
+      assert Decimal.equal?(position.price, Decimal.new("20.88"))
+      assert Decimal.equal?(position.value, Decimal.new("41760"))
+      assert Decimal.equal?(position.cost_price, Decimal.new("19.5300875"))
+      assert Decimal.equal?(position.cost_basis, Decimal.new("39060.175"))
+      assert Decimal.equal?(position.weight, Decimal.new("12.87"))
+      assert Decimal.equal?(position.unrealized_pnl, Decimal.new("2699.825"))
+      assert position.exchange == "HEX"
+      assert position.asset_class == "STK"
+      assert Decimal.equal?(position.fx_rate, Decimal.new("1"))
+      assert position.isin == "FI0009000202"
+      assert position.figi == "BBG000BNP2B2"
+      assert position.data_source == "ibkr_flex"
     end
 
     test "should parse Format A CSV with HoldingPeriodDateTime" do
-      [holding] = CsvParser.parse(@format_a_csv, @snapshot_id)
+      [position] = CsvParser.parse(@format_a_csv, @snapshot_id, ~D[2025-07-04])
 
-      assert holding.portfolio_snapshot_id == @snapshot_id
-      assert holding.report_date == ~D[2025-07-04]
-      assert holding.symbol == "ENGI"
-      assert holding.sub_category == "COMMON"
-      assert Decimal.equal?(holding.quantity, Decimal.new("1000"))
-      assert holding.listing_exchange == "SBF"
-      assert holding.isin == "FR0010208488"
-      assert holding.figi == "BBG000BJNPL1"
-      assert holding.holding_period_date_time == ""
+      assert position.portfolio_snapshot_id == @snapshot_id
+      assert position.date == ~D[2025-07-04]
+      assert position.symbol == "ENGI"
+      assert Decimal.equal?(position.quantity, Decimal.new("1000"))
+      assert position.exchange == "SBF"
+      assert position.isin == "FR0010208488"
+      assert position.figi == "BBG000BJNPL1"
+      # Dropped fields should not be present
+      refute Map.has_key?(position, :_report_date)
+      refute Map.has_key?(position, :_sub_category)
+      refute Map.has_key?(position, :_open_price)
+      refute Map.has_key?(position, :_holding_period)
       # Format A has no Description column
-      assert holding[:description] == nil
+      assert position[:name] == nil
       # Format A has no FifoPnlUnrealized column
-      assert holding[:fifo_pnl_unrealized] == nil
+      assert position[:unrealized_pnl] == nil
     end
 
     test "should parse multiple rows" do
-      holdings = CsvParser.parse(@format_b_multi, @snapshot_id)
+      positions = CsvParser.parse(@format_b_multi, @snapshot_id, ~D[2026-02-10])
 
-      assert length(holdings) == 2
-      assert Enum.at(holdings, 0).symbol == "KESKOB"
-      assert Enum.at(holdings, 1).symbol == "ABR"
+      assert length(positions) == 2
+      assert Enum.at(positions, 0).symbol == "KESKOB"
+      assert Enum.at(positions, 1).symbol == "ABR"
     end
 
     test "should return empty list for empty CSV" do
-      assert [] == CsvParser.parse("", @snapshot_id)
+      assert [] == CsvParser.parse("", @snapshot_id, ~D[2026-01-01])
     end
 
     test "should return empty list for header-only CSV" do
       header_only =
         ~s("ReportDate","CurrencyPrimary","Symbol","Description","SubCategory","Quantity","MarkPrice","PositionValue","CostBasisPrice","CostBasisMoney","OpenPrice","PercentOfNAV","FifoPnlUnrealized","ListingExchange","AssetClass","FXRateToBase","ISIN","FIGI"\n)
 
-      assert [] == CsvParser.parse(header_only, @snapshot_id)
-    end
-
-    test "should compute identifier_key from ISIN when present" do
-      [holding] = CsvParser.parse(@format_b_csv, @snapshot_id)
-      assert holding.identifier_key == "FI0009000202"
-    end
-
-    test "should compute identifier_key from FIGI when ISIN is missing" do
-      csv = """
-      "ReportDate","CurrencyPrimary","Symbol","SubCategory","Quantity","MarkPrice","PositionValue","CostBasisPrice","CostBasisMoney","OpenPrice","PercentOfNAV","ListingExchange","AssetClass","FXRateToBase","ISIN","FIGI"
-      "2026-01-01","EUR","TEST","COMMON","100","10","1000","9","900","9","5","HEX","STK","1","","BBG000TEST01"
-      """
-
-      [holding] = CsvParser.parse(csv, @snapshot_id)
-      assert holding.identifier_key == "BBG000TEST01"
-    end
-
-    test "should compute identifier_key from symbol:exchange when ISIN and FIGI missing" do
-      csv = """
-      "ReportDate","CurrencyPrimary","Symbol","SubCategory","Quantity","MarkPrice","PositionValue","CostBasisPrice","CostBasisMoney","OpenPrice","PercentOfNAV","ListingExchange","AssetClass","FXRateToBase","ISIN","FIGI"
-      "2026-01-01","EUR","TEST","COMMON","100","10","1000","9","900","9","5","HEX","STK","1","",""
-      """
-
-      [holding] = CsvParser.parse(csv, @snapshot_id)
-      assert holding.identifier_key == "TEST:HEX"
+      assert [] == CsvParser.parse(header_only, @snapshot_id, ~D[2026-01-01])
     end
 
     test "should handle decimal parsing for negative values" do
@@ -116,8 +93,8 @@ defmodule Dividendsomatic.Portfolio.CsvParserTest do
       "2026-02-10","EUR","NESTE","NESTE OYJ","COMMON","2000","20.41","40820","20.46182029","40923.64058","20.46182029","12.58","-103.64058","HEX","STK","1","FI0009013296","BBG000C4DP34"
       """
 
-      [holding] = CsvParser.parse(csv, @snapshot_id)
-      assert Decimal.negative?(holding.fifo_pnl_unrealized)
+      [position] = CsvParser.parse(csv, @snapshot_id, ~D[2026-02-10])
+      assert Decimal.negative?(position.unrealized_pnl)
     end
 
     test "should handle unquoted CSV fields" do
@@ -126,9 +103,9 @@ defmodule Dividendsomatic.Portfolio.CsvParserTest do
       2026-01-01,EUR,TEST,COMMON,100,10,1000,9,900,9,5,HEX,STK,1,FI0000000001,BBG000000001
       """
 
-      [holding] = CsvParser.parse(csv, @snapshot_id)
-      assert holding.symbol == "TEST"
-      assert holding.isin == "FI0000000001"
+      [position] = CsvParser.parse(csv, @snapshot_id, ~D[2026-01-01])
+      assert position.symbol == "TEST"
+      assert position.isin == "FI0000000001"
     end
   end
 

@@ -1,25 +1,26 @@
 defmodule Dividendsomatic.SchemaTest do
   use Dividendsomatic.DataCase
 
-  alias Dividendsomatic.Portfolio.{Dividend, Holding, PortfolioSnapshot, SoldPosition}
+  alias Dividendsomatic.Portfolio.{Dividend, PortfolioSnapshot, Position, SoldPosition}
 
   describe "PortfolioSnapshot changeset" do
-    test "should require report_date" do
+    test "should require date and source" do
       changeset = PortfolioSnapshot.changeset(%PortfolioSnapshot{}, %{})
 
       refute changeset.valid?
-      assert "can't be blank" in errors_on(changeset).report_date
+      assert "can't be blank" in errors_on(changeset).date
+      assert "can't be blank" in errors_on(changeset).source
     end
 
     test "should accept valid snapshot" do
-      attrs = %{report_date: ~D[2026-01-28], raw_csv_data: "some,csv,data"}
+      attrs = %{date: ~D[2026-01-28], source: "ibkr_flex"}
       changeset = PortfolioSnapshot.changeset(%PortfolioSnapshot{}, attrs)
 
       assert changeset.valid?
     end
 
-    test "should accept snapshot without raw_csv_data" do
-      attrs = %{report_date: ~D[2026-01-28]}
+    test "should accept snapshot with metadata" do
+      attrs = %{date: ~D[2026-01-28], source: "ibkr_flex", metadata: %{"raw_csv" => 1234}}
       changeset = PortfolioSnapshot.changeset(%PortfolioSnapshot{}, attrs)
 
       assert changeset.valid?
@@ -28,82 +29,90 @@ defmodule Dividendsomatic.SchemaTest do
     test "should persist snapshot" do
       {:ok, snapshot} =
         %PortfolioSnapshot{}
-        |> PortfolioSnapshot.changeset(%{report_date: ~D[2026-01-28]})
+        |> PortfolioSnapshot.changeset(%{date: ~D[2026-01-28], source: "ibkr_flex"})
         |> Repo.insert()
 
-      assert snapshot.report_date == ~D[2026-01-28]
+      assert snapshot.date == ~D[2026-01-28]
     end
 
-    test "should enforce unique report_date" do
+    test "should enforce unique date" do
       {:ok, _} =
         %PortfolioSnapshot{}
-        |> PortfolioSnapshot.changeset(%{report_date: ~D[2026-01-28]})
+        |> PortfolioSnapshot.changeset(%{date: ~D[2026-01-28], source: "ibkr_flex"})
         |> Repo.insert()
 
       assert {:error, changeset} =
                %PortfolioSnapshot{}
-               |> PortfolioSnapshot.changeset(%{report_date: ~D[2026-01-28]})
+               |> PortfolioSnapshot.changeset(%{date: ~D[2026-01-28], source: "ibkr_flex"})
                |> Repo.insert()
 
-      assert "has already been taken" in errors_on(changeset).report_date
+      assert "has already been taken" in errors_on(changeset).date
+    end
+
+    test "should validate data_quality inclusion" do
+      attrs = %{date: ~D[2026-01-28], source: "ibkr_flex", data_quality: "invalid"}
+      changeset = PortfolioSnapshot.changeset(%PortfolioSnapshot{}, attrs)
+
+      refute changeset.valid?
+      assert "is invalid" in errors_on(changeset).data_quality
     end
   end
 
-  describe "Holding changeset" do
-    test "should require portfolio_snapshot_id, report_date, and symbol" do
-      changeset = Holding.changeset(%Holding{}, %{})
+  describe "Position changeset" do
+    test "should require portfolio_snapshot_id, date, symbol, and quantity" do
+      changeset = Position.changeset(%Position{}, %{})
 
       refute changeset.valid?
       assert "can't be blank" in errors_on(changeset).portfolio_snapshot_id
-      assert "can't be blank" in errors_on(changeset).report_date
+      assert "can't be blank" in errors_on(changeset).date
       assert "can't be blank" in errors_on(changeset).symbol
+      assert "can't be blank" in errors_on(changeset).quantity
     end
 
-    test "should accept valid holding" do
+    test "should accept valid position" do
       {:ok, snapshot} =
         %PortfolioSnapshot{}
-        |> PortfolioSnapshot.changeset(%{report_date: ~D[2026-01-28]})
+        |> PortfolioSnapshot.changeset(%{date: ~D[2026-01-28], source: "ibkr_flex"})
         |> Repo.insert()
 
       attrs = %{
         portfolio_snapshot_id: snapshot.id,
-        report_date: ~D[2026-01-28],
+        date: ~D[2026-01-28],
         symbol: "KESKOB",
-        currency_primary: "EUR",
+        currency: "EUR",
         quantity: Decimal.new("1000"),
-        mark_price: Decimal.new("21.00"),
-        position_value: Decimal.new("21000.00")
+        price: Decimal.new("21.00"),
+        value: Decimal.new("21000.00")
       }
 
-      changeset = Holding.changeset(%Holding{}, attrs)
+      changeset = Position.changeset(%Position{}, attrs)
       assert changeset.valid?
     end
 
     test "should accept all optional decimal fields" do
       {:ok, snapshot} =
         %PortfolioSnapshot{}
-        |> PortfolioSnapshot.changeset(%{report_date: ~D[2026-01-28]})
+        |> PortfolioSnapshot.changeset(%{date: ~D[2026-01-28], source: "ibkr_flex"})
         |> Repo.insert()
 
       attrs = %{
         portfolio_snapshot_id: snapshot.id,
-        report_date: ~D[2026-01-28],
+        date: ~D[2026-01-28],
         symbol: "AAPL",
-        description: "Apple Inc.",
-        sub_category: "COMMON",
-        cost_basis_price: Decimal.new("150.00"),
-        cost_basis_money: Decimal.new("15000.00"),
-        open_price: Decimal.new("149.00"),
-        percent_of_nav: Decimal.new("10.50"),
-        fifo_pnl_unrealized: Decimal.new("500.00"),
-        listing_exchange: "NASDAQ",
+        name: "Apple Inc.",
+        quantity: Decimal.new("100"),
+        cost_price: Decimal.new("150.00"),
+        cost_basis: Decimal.new("15000.00"),
+        weight: Decimal.new("10.50"),
+        unrealized_pnl: Decimal.new("500.00"),
+        exchange: "NASDAQ",
         asset_class: "STK",
-        fx_rate_to_base: Decimal.new("1.0"),
+        fx_rate: Decimal.new("1.0"),
         isin: "US0378331005",
         figi: "BBG000B9XRY4"
       }
 
-      changeset = Holding.changeset(%Holding{}, attrs)
+      changeset = Position.changeset(%Position{}, attrs)
       assert changeset.valid?
     end
   end

@@ -152,7 +152,6 @@ defmodule Mix.Tasks.Fetch.HistoricalPrices do
       IO.puts("  No date range found, skipping forex")
     end
 
-    Dividendsomatic.Portfolio.invalidate_chart_cache()
     IO.puts("\n--- Done ---")
   end
 

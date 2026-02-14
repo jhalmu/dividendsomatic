@@ -10,7 +10,7 @@
 # 5. Skip files that already exist (idempotent)
 #
 # Usage: bin/fetch_flex_email.sh
-# Scheduled via launchd: Mon-Fri 09:30 UTC (11:30 EET)
+# Scheduled via launchd: Mon-Sat 12:00 local (Helsinki)
 
 set -euo pipefail
 
@@ -29,7 +29,10 @@ log() {
 log "=== Starting fetch_flex_email ==="
 
 # Run AppleScript to fetch CSV attachments from Mail.app
-RESULT=$(/usr/bin/osascript - "$CSV_DIR" <<'APPLESCRIPT'
+# Write AppleScript to temp file (bash 3.2 heredoc-in-$() bug workaround)
+APPLESCRIPT_TMP=$(mktemp /tmp/fetch_flex.XXXXXX)
+trap 'rm -f "$APPLESCRIPT_TMP"' EXIT
+cat > "$APPLESCRIPT_TMP" <<'APPLESCRIPT'
 on run argv
 set csvDir to item 1 of argv
 set savedCount to 0
@@ -135,7 +138,8 @@ end if
 return resultStr
 end run
 APPLESCRIPT
-)
+
+RESULT=$(/usr/bin/osascript "$APPLESCRIPT_TMP" "$CSV_DIR")
 
 log "Result: $RESULT"
 

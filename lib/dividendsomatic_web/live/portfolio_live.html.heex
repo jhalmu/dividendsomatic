@@ -54,7 +54,7 @@
             </div>
           <% else %>
             <div class="terminal-stat-label">Holdings</div>
-            <div class="terminal-stat-value">{length(@holdings)}</div>
+            <div class="terminal-stat-value">{length(@positions)}</div>
           <% end %>
         </div>
       </div>
@@ -106,7 +106,7 @@
             module={DividendsomaticWeb.Components.PortfolioChart}
             id="portfolio-chart"
             chart_data={@chart_data}
-            current_date={@current_snapshot.report_date}
+            current_date={@current_snapshot.date}
             dividend_data={@dividend_by_month}
             fear_greed={@fear_greed}
           />
@@ -130,43 +130,14 @@
       
 <!-- Compact Nav (before holdings) -->
       <div class="mb-[var(--space-xs)] animate-fade-in animate-delay-3">
-        <div class="flex items-center justify-between mb-[var(--space-inline)]">
-          <.nav_bar
-            current_snapshot={@current_snapshot}
-            has_prev={@has_prev}
-            has_next={@has_next}
-            snapshot_position={@snapshot_position}
-            total_snapshots={@total_snapshots}
-            compact
-          />
-          <div
-            class="flex items-center gap-1"
-            style="font-family: var(--font-mono); font-size: 0.5625rem;"
-          >
-            <%= if @is_reconstructed do %>
-              <span
-                class="badge badge-sm"
-                style="background: #1e293b; color: #94a3b8; border: 1px solid #334155; font-size: 0.5rem;"
-              >
-                Weekly snapshot
-              </span>
-            <% end %>
-            <%= if @latest_data_date do %>
-              <span
-                class={"badge badge-sm #{if @data_age_days && @data_age_days > 3, do: "badge-warning", else: "badge-ghost"}"}
-                style="font-size: 0.5rem;"
-                title={"Latest IBKR data: #{@latest_data_date}"}
-              >
-                Data as of {Calendar.strftime(@latest_data_date, "%b %d")}
-                <%= if @data_age_days && @data_age_days > 0 do %>
-                  <span style="opacity: 0.7; margin-left: 2px;">
-                    ({@data_age_days}d ago)
-                  </span>
-                <% end %>
-              </span>
-            <% end %>
-          </div>
-        </div>
+        <.nav_bar
+          current_snapshot={@current_snapshot}
+          has_prev={@has_prev}
+          has_next={@has_next}
+          snapshot_position={@snapshot_position}
+          total_snapshots={@total_snapshots}
+          compact
+        />
       </div>
       
 <!-- Reconstruction Banner -->
@@ -207,7 +178,7 @@
               Positions
             </div>
             <span class="terminal-holdings-count">
-              {length(@holdings)} holdings
+              {length(@positions)} holdings
             </span>
           </div>
         </div>
@@ -228,16 +199,16 @@
                 </tr>
               </thead>
               <tbody>
-                <%= for holding <- @holdings do %>
+                <%= for pos <- @positions do %>
                   <tr>
                     <td>
                       <.link
-                        navigate={~p"/stocks/#{holding.symbol}"}
+                        navigate={~p"/stocks/#{pos.symbol}"}
                         class="terminal-symbol hover:underline"
                       >
-                        {holding.symbol}
+                        {pos.symbol}
                       </.link>
-                      <%= if Decimal.compare(holding.quantity, Decimal.new("0")) == :lt do %>
+                      <%= if Decimal.compare(pos.quantity, Decimal.new("0")) == :lt do %>
                         <span
                           style="display: inline-block; background: #ef4444; color: #fff; font-size: 0.45rem; font-weight: 700; padding: 0px 4px; border-radius: 2px; margin-left: 4px; vertical-align: middle; letter-spacing: 0.05em;"
                           data-testid="short-badge"
@@ -247,52 +218,52 @@
                       <% end %>
                     </td>
                     <td>
-                      <span class="terminal-description">{holding.description}</span>
+                      <span class="terminal-description">{pos.name}</span>
                     </td>
                     <td class="terminal-number">
-                      <span style="flex-align: left;">{format_integer(holding.quantity)}</span>
+                      <span style="flex-align: left;">{format_integer(pos.quantity)}</span>
                     </td>
                     <td class="terminal-number" style="text-align: right;">
-                      <%= if is_nil(holding.mark_price) do %>
+                      <%= if is_nil(pos.price) do %>
                         <span style="color: #ef4444; opacity: 0.6; font-size: 0.625rem;">
                           N/A
                         </span>
                       <% else %>
-                        {format_decimal(holding.mark_price)}
+                        {format_decimal(pos.price)}
                         <span style="color: var(--terminal-dim); font-size: 0.625rem; position: absolute; margin-left: 0.35rem;">
-                          {holding.currency_primary}
+                          {pos.currency}
                         </span>
                       <% end %>
                     </td>
                     <td class="terminal-number" style="font-weight: 500;text-align: right;">
-                      <%= if is_nil(holding.position_value) do %>
+                      <%= if is_nil(pos.value) do %>
                         <span style="color: #ef4444; opacity: 0.6; font-size: 0.625rem;">
                           N/A
                         </span>
                       <% else %>
-                        {format_decimal(holding.position_value)}
+                        {format_decimal(pos.value)}
                       <% end %>
                     </td>
                     <td
                       class="terminal-number"
                       style="color: var(--terminal-dim);text-align: right;"
                     >
-                      {format_decimal(holding.cost_basis_money)}
+                      {format_decimal(pos.cost_basis)}
                     </td>
                     <td class="terminal-number">
                       <span
-                        class={pnl_badge_class(holding.fifo_pnl_unrealized)}
-                        aria-label={"#{if pnl_positive?(holding.fifo_pnl_unrealized), do: "Gain", else: "Loss"}: #{format_decimal(holding.fifo_pnl_unrealized)}"}
+                        class={pnl_badge_class(pos.unrealized_pnl)}
+                        aria-label={"#{if pnl_positive?(pos.unrealized_pnl), do: "Gain", else: "Loss"}: #{format_decimal(pos.unrealized_pnl)}"}
                       >
-                        <%= if pnl_positive?(holding.fifo_pnl_unrealized) do %>
+                        <%= if pnl_positive?(pos.unrealized_pnl) do %>
                           +
                         <% end %>
-                        {format_decimal(holding.fifo_pnl_unrealized)}
+                        {format_decimal(pos.unrealized_pnl)}
                       </span>
                     </td>
                     <td class="terminal-number">
                       <span style="color: var(--terminal-muted);">
-                        {format_decimal(holding.percent_of_nav)}%
+                        {format_decimal(pos.weight)}%
                       </span>
                     </td>
                   </tr>

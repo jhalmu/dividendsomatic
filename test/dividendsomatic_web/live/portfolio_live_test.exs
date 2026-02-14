@@ -377,24 +377,27 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
 
       {:ok, snapshot} =
         %Portfolio.PortfolioSnapshot{}
-        |> Portfolio.PortfolioSnapshot.changeset(%{report_date: Date.new!(today.year, 1, 10)})
+        |> Portfolio.PortfolioSnapshot.changeset(%{
+          date: Date.new!(today.year, 1, 10),
+          source: "ibkr_flex"
+        })
         |> Dividendsomatic.Repo.insert()
 
-      %Portfolio.Holding{}
-      |> Portfolio.Holding.changeset(%{
+      %Portfolio.Position{}
+      |> Portfolio.Position.changeset(%{
         portfolio_snapshot_id: snapshot.id,
-        report_date: Date.new!(today.year, 1, 10),
+        date: Date.new!(today.year, 1, 10),
         symbol: "KESKOB",
-        currency_primary: "EUR",
+        currency: "EUR",
         quantity: "1000",
-        mark_price: "21",
-        position_value: "21000",
-        cost_basis_price: "18",
-        cost_basis_money: "18000",
-        percent_of_nav: "100",
-        listing_exchange: "HEX",
+        price: "21",
+        value: "21000",
+        cost_price: "18",
+        cost_basis: "18000",
+        weight: "100",
+        exchange: "HEX",
         asset_class: "STK",
-        fx_rate_to_base: "1"
+        fx_rate: "1"
       })
       |> Dividendsomatic.Repo.insert!()
 

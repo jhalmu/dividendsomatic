@@ -1,9 +1,9 @@
 defmodule Dividendsomatic.Portfolio.PortfolioSnapshot do
   @moduledoc """
-  Schema representing a daily portfolio snapshot from Interactive Brokers.
+  Schema representing a daily portfolio snapshot.
 
-  Each snapshot captures the state of all holdings on a specific report date,
-  with the original CSV data stored for reference.
+  One row per date. The single source of truth for portfolio history.
+  Precomputed total_value/total_cost for efficient chart queries.
   """
   use Ecto.Schema
   import Ecto.Changeset
@@ -12,19 +12,34 @@ defmodule Dividendsomatic.Portfolio.PortfolioSnapshot do
   @foreign_key_type :binary_id
 
   schema "portfolio_snapshots" do
-    field :report_date, :date
-    field :raw_csv_data, :string
+    field :date, :date
+    field :total_value, :decimal
+    field :total_cost, :decimal
+    field :base_currency, :string, default: "EUR"
     field :source, :string
+    field :data_quality, :string, default: "actual"
+    field :positions_count, :integer, default: 0
+    field :metadata, :map
 
-    has_many :holdings, Dividendsomatic.Portfolio.Holding
+    has_many :positions, Dividendsomatic.Portfolio.Position
 
     timestamps()
   end
 
   def changeset(snapshot, attrs) do
     snapshot
-    |> cast(attrs, [:report_date, :raw_csv_data, :source])
-    |> validate_required([:report_date])
-    |> unique_constraint(:report_date)
+    |> cast(attrs, [
+      :date,
+      :total_value,
+      :total_cost,
+      :base_currency,
+      :source,
+      :data_quality,
+      :positions_count,
+      :metadata
+    ])
+    |> validate_required([:date, :source])
+    |> validate_inclusion(:data_quality, ~w(actual reconstructed estimated))
+    |> unique_constraint(:date)
   end
 end
