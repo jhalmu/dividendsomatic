@@ -490,13 +490,13 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   defp compute_dividend_income(dividend, positions_data) do
+    # Only consider positions matching symbol and within -7..+45 days of ex_date
     matching =
-      positions_data
-      |> Enum.filter(fn {_date, symbol, _qty, _fx} -> symbol == dividend.symbol end)
-      |> Enum.filter(fn {date, _, _, _} ->
-        diff = Date.diff(dividend.ex_date, date)
-        # Only consider positions from ≤45 days before or ≤7 days after ex_date
-        diff >= -7 and diff <= 45
+      Enum.filter(positions_data, fn {date, symbol, _qty, _fx} ->
+        if symbol == dividend.symbol do
+          diff = Date.diff(dividend.ex_date, date)
+          diff >= -7 and diff <= 45
+        end
       end)
       |> Enum.min_by(
         fn {date, _, _, _} -> abs(Date.diff(date, dividend.ex_date)) end,
@@ -1012,7 +1012,14 @@ defmodule Dividendsomatic.Portfolio do
       all_dividends
       |> Enum.map(fn div ->
         income = compute_dividend_income(div, positions_map)
-        %{symbol: div.symbol, isin: div.isin, ex_date: div.ex_date, amount: div.amount, income: income}
+
+        %{
+          symbol: div.symbol,
+          isin: div.isin,
+          ex_date: div.ex_date,
+          amount: div.amount,
+          income: income
+        }
       end)
       |> Enum.filter(fn entry -> Decimal.compare(entry.income, Decimal.new("0")) == :eq end)
 
@@ -1021,7 +1028,14 @@ defmodule Dividendsomatic.Portfolio do
       all_dividends
       |> Enum.map(fn div ->
         income = compute_dividend_income(div, positions_map)
-        %{symbol: div.symbol, isin: div.isin, ex_date: div.ex_date, amount: div.amount, income: income}
+
+        %{
+          symbol: div.symbol,
+          isin: div.isin,
+          ex_date: div.ex_date,
+          amount: div.amount,
+          income: income
+        }
       end)
       |> Enum.sort_by(fn e -> Decimal.to_float(e.income) end, :desc)
       |> Enum.take(20)

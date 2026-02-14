@@ -186,10 +186,9 @@ defmodule Mix.Tasks.Backfill.NordnetSnapshots do
 
     # Fallback: use cost_basis as value when market price is unavailable
     value =
-      cond do
-        price -> Decimal.mult(position.quantity, price)
-        true -> position.cost_basis
-      end
+      if price,
+        do: Decimal.mult(position.quantity, price),
+        else: position.cost_basis
 
     cost_price =
       if Decimal.compare(position.quantity, Decimal.new("0")) == :gt do

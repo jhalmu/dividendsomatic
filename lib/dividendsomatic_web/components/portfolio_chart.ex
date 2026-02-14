@@ -352,7 +352,9 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     if total_months <= 24 do
       "#{@month_abbrs[month_num]} #{year_2d}"
     else
-      if month_num == 1, do: "'#{year_2d}", else: "#{String.first(@month_abbrs[month_num])}#{year_2d}"
+      if month_num == 1,
+        do: "'#{year_2d}",
+        else: "#{String.first(@month_abbrs[month_num])}#{year_2d}"
     end
   end
 
@@ -382,7 +384,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
   Renders a standalone dividend chart SVG with monthly bars and cumulative line.
   Expects a list of `%{month: "YYYY-MM", total: Decimal}` maps.
   """
-  def render_dividend_chart(dividend_data) when is_list(dividend_data) and length(dividend_data) > 0 do
+  def render_dividend_chart([_ | _] = dividend_data) do
     mt = 20
     bar_h = 120
     chart_bottom = mt + bar_h
@@ -433,13 +435,16 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
         if i == 0, do: "M#{cx} #{cy}", else: "L#{cx} #{cy}"
       end)
 
-    cum_svg = ~s[<path d="#{cum_line}" fill="none" stroke="#f97316" stroke-width="1.5" stroke-linejoin="round"/>]
+    cum_svg =
+      ~s[<path d="#{cum_line}" fill="none" stroke="#f97316" stroke-width="1.5" stroke-linejoin="round"/>]
 
     # Cumulative end label
     last_cum = List.last(cumulative)
     last_cx = r(@ml + (n - 1) * (bar_w + bar_gap) + bar_w / 2)
     last_cy = r(mt + bar_h * 0.85 - last_cum / max_cum * bar_h * 0.75)
-    {label_x, anchor} = if last_cx > @w - 80, do: {last_cx - 8, "end"}, else: {last_cx + 8, "start"}
+
+    {label_x, anchor} =
+      if last_cx > @w - 80, do: {last_cx - 8, "end"}, else: {last_cx + 8, "start"}
 
     cum_label =
       ~s[<text x="#{label_x}" y="#{r(last_cy - 4)}" fill="#f97316" font-size="7" font-weight="600" text-anchor="#{anchor}">#{format_compact(last_cum)}</text>]
@@ -475,6 +480,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     grid =
       for i <- 0..4 do
         gy = r(mt + bar_h - i / 4 * bar_h * 0.85)
+
         ~s[<line x1="#{@ml}" y1="#{gy}" x2="#{@ml + @pw}" y2="#{gy}" stroke="#1e293b" stroke-width="1"/>]
       end
       |> Enum.join("\n")
