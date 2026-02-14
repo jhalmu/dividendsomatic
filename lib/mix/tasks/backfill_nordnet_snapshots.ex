@@ -184,11 +184,11 @@ defmodule Mix.Tasks.Backfill.NordnetSnapshots do
   defp build_position_attrs(position, date, mappings, price_map) do
     {price, fx_rate} = lookup_price_and_fx(position, date, mappings, price_map)
 
+    # Fallback: use cost_basis as value when market price is unavailable
     value =
-      if price do
-        Decimal.mult(position.quantity, price)
-      else
-        nil
+      cond do
+        price -> Decimal.mult(position.quantity, price)
+        true -> position.cost_basis
       end
 
     cost_price =
@@ -198,13 +198,16 @@ defmodule Mix.Tasks.Backfill.NordnetSnapshots do
         nil
       end
 
+    # When no FX rate found, default to 1 (most Nordnet positions are EUR)
+    fx_rate = fx_rate || Decimal.new("1")
+
     %{
       date: date,
       currency: position.currency,
       symbol: extract_symbol(position, mappings),
       name: position.security_name,
       quantity: position.quantity,
-      price: price,
+      price: price || cost_price,
       value: value,
       cost_price: cost_price,
       cost_basis: position.cost_basis,
