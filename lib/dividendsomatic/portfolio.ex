@@ -249,6 +249,20 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   @doc """
+  Returns the snapshot at a given 1-based position (ordered by date ASC).
+  """
+  def get_snapshot_at_position(position) when is_integer(position) and position >= 1 do
+    PortfolioSnapshot
+    |> order_by([s], asc: s.date)
+    |> offset(^(position - 1))
+    |> limit(1)
+    |> preload(:positions)
+    |> Repo.one()
+  end
+
+  def get_snapshot_at_position(_), do: nil
+
+  @doc """
   Creates a portfolio snapshot with positions from CSV data.
 
   Returns `{:ok, snapshot}` on success, `{:error, reason}` on failure.
@@ -479,6 +493,11 @@ defmodule Dividendsomatic.Portfolio do
     matching =
       positions_data
       |> Enum.filter(fn {_date, symbol, _qty, _fx} -> symbol == dividend.symbol end)
+      |> Enum.filter(fn {date, _, _, _} ->
+        diff = Date.diff(dividend.ex_date, date)
+        # Only consider positions from ≤45 days before or ≤7 days after ex_date
+        diff >= -7 and diff <= 45
+      end)
       |> Enum.min_by(
         fn {date, _, _, _} -> abs(Date.diff(date, dividend.ex_date)) end,
         fn -> nil end

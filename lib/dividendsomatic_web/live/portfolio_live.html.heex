@@ -128,6 +128,24 @@
         </div>
       <% end %>
       
+<!-- Date Slider -->
+      <%= if @total_snapshots > 1 do %>
+        <div class="mb-[var(--space-xs)] animate-fade-in animate-delay-3 px-1">
+          <input
+            type="range"
+            min="1"
+            max={@total_snapshots}
+            value={@snapshot_position}
+            name="position"
+            phx-change="slider_navigate"
+            phx-debounce="100"
+            class="w-full"
+            style="accent-color: #10b981; height: 4px;"
+            aria-label="Navigate snapshots by date"
+          />
+        </div>
+      <% end %>
+      
 <!-- Compact Nav (before holdings) -->
       <div class="mb-[var(--space-xs)] animate-fade-in animate-delay-3">
         <.nav_bar

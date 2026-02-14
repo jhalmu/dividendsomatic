@@ -113,6 +113,17 @@ defmodule DividendsomaticWeb.PortfolioLive do
     {:noreply, navigate_to_snapshot(socket, latest_snapshot)}
   end
 
+  def handle_event("slider_navigate", %{"position" => pos_str}, socket) do
+    case Integer.parse(pos_str) do
+      {pos, _} ->
+        snapshot = Portfolio.get_snapshot_at_position(pos)
+        {:noreply, navigate_to_snapshot(socket, snapshot)}
+
+      :error ->
+        {:noreply, socket}
+    end
+  end
+
   def handle_event("pnl_year", %{"year" => "all"}, socket) do
     {:noreply, socket |> assign(:pnl_year, nil) |> assign_pnl_summary()}
   end

@@ -129,8 +129,8 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     """
     <defs>
       <linearGradient id="val-area" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#10b981" stop-opacity="0.25"/>
-        <stop offset="100%" stop-color="#10b981" stop-opacity="0.05"/>
+        <stop offset="0%" stop-color="#10b981" stop-opacity="0.40"/>
+        <stop offset="100%" stop-color="#10b981" stop-opacity="0.10"/>
       </linearGradient>
       #{fg_grad}
     </defs>
