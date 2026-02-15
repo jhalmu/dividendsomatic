@@ -59,6 +59,49 @@
         </div>
       </div>
       
+<!-- Dividend Chart (above portfolio chart) -->
+      <%= if length(@dividend_by_month) > 0 do %>
+        <div class="terminal-chart mb-[var(--space-xs)] animate-fade-in animate-delay-3">
+          <div class="terminal-chart-header">
+            <div class="terminal-chart-title">Dividend History</div>
+            <div
+              class="terminal-chart-legend"
+              aria-label="Dividend chart legend"
+              style="justify-content: flex-end;"
+            >
+              <span class="terminal-legend-item">
+                <span class="terminal-legend-line" style="background: #eab308;"></span> Monthly
+              </span>
+              <span class="terminal-legend-item">
+                <span class="terminal-legend-line" style="background: #f97316;"></span> Cumulative
+              </span>
+            </div>
+          </div>
+          {DividendsomaticWeb.Components.PortfolioChart.render_dividend_chart(@dividend_by_month)}
+          <%= if length(@recent_dividends) > 0 do %>
+            <div
+              class="flex items-center gap-[var(--space-xs)] flex-wrap p-[var(--space-xs)]"
+              style="font-family: var(--font-mono); font-size: 0.625rem;"
+            >
+              <span style="color: var(--terminal-dim); font-size: 0.5625rem; text-transform: uppercase; letter-spacing: 0.05em;">
+                Recent
+              </span>
+              <%= for entry <- @recent_dividends do %>
+                <span class="inline-flex items-center gap-1" style="color: var(--terminal-muted);">
+                  <span style="color: var(--terminal-text); font-weight: 500;">
+                    {entry.dividend.symbol}
+                  </span>
+                  <span style="color: var(--terminal-dim);">
+                    {Calendar.strftime(entry.dividend.ex_date, "%b %d")}
+                  </span>
+                  <span class="gain">+{format_euro_decimal(entry.income)}</span>
+                </span>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+      
 <!-- Chart Year Filter + Portfolio Chart -->
       <%= if length(@all_chart_data) > 1 do %>
         <div class="terminal-chart mb-[var(--space-xs)] animate-fade-in animate-delay-3">
@@ -96,9 +139,19 @@
               </div>
             </div>
           </div>
-
-          <!-- Year Filter Buttons -->
+          
+<!-- Chart Range Presets + Year Filter Buttons -->
           <div class="flex items-center gap-1 flex-wrap mb-[var(--space-xs)]">
+            <%= for preset <- ["1M", "3M", "6M", "YTD", "1Y", "ALL"] do %>
+              <button
+                phx-click="chart_range_preset"
+                phx-value-preset={preset}
+                class="btn btn-xs btn-outline"
+              >
+                {preset}
+              </button>
+            <% end %>
+            <span style="color: var(--terminal-border-bright); margin: 0 0.125rem;">|</span>
             <button
               phx-click="chart_year"
               phx-value-year="all"
@@ -116,8 +169,8 @@
               </button>
             <% end %>
           </div>
-
-          <!-- Portfolio Value + Cost Basis Lines -->
+          
+<!-- Portfolio Value + Cost Basis Lines -->
           <%= if length(@chart_data) > 1 do %>
             <.live_component
               module={DividendsomaticWeb.Components.PortfolioChart}
@@ -127,8 +180,8 @@
               fear_greed={@fear_greed}
             />
           <% end %>
-
-          <!-- Chart Footer -->
+          
+<!-- Chart Footer -->
           <%= if @growth_stats do %>
             <div
               class="mt-[var(--space-xs)] flex items-center justify-between"
@@ -144,30 +197,53 @@
           <% end %>
         </div>
       <% end %>
-
-      <!-- Dividend Chart (separate section) -->
-      <%= if length(@dividend_by_month) > 0 do %>
-        <div class="terminal-chart mb-[var(--space-xs)] animate-fade-in animate-delay-3">
-          <div class="terminal-chart-header">
-            <div class="terminal-chart-title">Dividend History</div>
-            <div
-              class="terminal-chart-legend"
-              aria-label="Dividend chart legend"
-              style="justify-content: flex-end;"
-            >
-              <span class="terminal-legend-item">
-                <span class="terminal-legend-line" style="background: #eab308;"></span>
-                Monthly
-              </span>
-              <span class="terminal-legend-item">
-                <span class="terminal-legend-line" style="background: #f97316;"></span>
-                Cumulative
-              </span>
+      
+<!-- P&L Waterfall Chart (lazy-loaded) -->
+      <div class="mb-[var(--space-xs)] animate-fade-in animate-delay-3">
+        <button phx-click="toggle_waterfall" class="btn btn-xs btn-outline w-full">
+          <%= if @show_waterfall do %>
+            Hide P&amp;L Waterfall
+          <% else %>
+            Show P&amp;L Waterfall
+          <% end %>
+        </button>
+        <%= if @show_waterfall and length(@waterfall_data) > 0 do %>
+          <div class="terminal-chart mt-[var(--space-xs)]">
+            <div class="terminal-chart-header">
+              <div class="terminal-chart-title">P&amp;L Waterfall</div>
+              <div
+                class="terminal-chart-legend"
+                aria-label="Waterfall chart legend"
+                style="justify-content: flex-end;"
+              >
+                <span class="terminal-legend-item">
+                  <span class="terminal-legend-line" style="background: #10b981;"></span> Deposits
+                </span>
+                <span class="terminal-legend-item">
+                  <span class="terminal-legend-line" style="background: #eab308;"></span>
+                  Dividends
+                </span>
+                <span class="terminal-legend-item">
+                  <span class="terminal-legend-line" style="background: #3b82f6;"></span>
+                  Realized P&amp;L
+                </span>
+                <span class="terminal-legend-item">
+                  <span class="terminal-legend-line" style="background: #ef4444;"></span> Costs
+                </span>
+                <span class="terminal-legend-item">
+                  <span class="terminal-legend-line" style="background: #f97316;"></span>
+                  Withdrawals
+                </span>
+                <span class="terminal-legend-item">
+                  <span class="terminal-legend-line" style="background: #e2e8f0;"></span>
+                  Cumulative
+                </span>
+              </div>
             </div>
+            {DividendsomaticWeb.Components.PortfolioChart.render_waterfall_chart(@waterfall_data)}
           </div>
-          {DividendsomaticWeb.Components.PortfolioChart.render_dividend_chart(@dividend_by_month)}
-        </div>
-      <% end %>
+        <% end %>
+      </div>
       
 <!-- Compact Nav (before holdings) -->
       <div class="mb-[var(--space-xs)] animate-fade-in animate-delay-3">
@@ -179,6 +255,69 @@
           total_snapshots={@total_snapshots}
           compact
         />
+        <!-- Extended navigation: week/month/year jumps + date picker -->
+        <div
+          class="flex items-center justify-center gap-1 flex-wrap mt-1 mb-1"
+          style="font-family: var(--font-mono); font-size: 0.625rem;"
+        >
+          <button
+            phx-click="navigate"
+            phx-value-direction="back_year"
+            class="btn btn-xs btn-outline"
+            disabled={!@has_prev}
+          >
+            -1Y
+          </button>
+          <button
+            phx-click="navigate"
+            phx-value-direction="back_month"
+            class="btn btn-xs btn-outline"
+            disabled={!@has_prev}
+          >
+            -1M
+          </button>
+          <button
+            phx-click="navigate"
+            phx-value-direction="back_week"
+            class="btn btn-xs btn-outline"
+            disabled={!@has_prev}
+          >
+            -1W
+          </button>
+          <form phx-submit="goto_date" class="inline-flex items-center">
+            <input
+              type="date"
+              name="date"
+              value={Date.to_iso8601(@current_snapshot.date)}
+              class="input input-xs input-bordered text-center"
+              style="font-family: var(--font-mono); font-size: 0.625rem; max-width: 130px; background: var(--terminal-elevated); border-color: var(--terminal-border); color: var(--terminal-text);"
+            />
+          </form>
+          <button
+            phx-click="navigate"
+            phx-value-direction="forward_week"
+            class="btn btn-xs btn-outline"
+            disabled={!@has_next}
+          >
+            +1W
+          </button>
+          <button
+            phx-click="navigate"
+            phx-value-direction="forward_month"
+            class="btn btn-xs btn-outline"
+            disabled={!@has_next}
+          >
+            +1M
+          </button>
+          <button
+            phx-click="navigate"
+            phx-value-direction="forward_year"
+            class="btn btn-xs btn-outline"
+            disabled={!@has_next}
+          >
+            +1Y
+          </button>
+        </div>
       </div>
       
 <!-- Reconstruction Banner -->
@@ -373,22 +512,6 @@
           </div>
         </div>
       <% end %>
-      
-<!-- Recent Dividends -->
-      <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-4">
-        <div class="terminal-section-label">Recent Dividends</div>
-        <%= for entry <- @recent_dividends do %>
-          <div class="terminal-dividend-row">
-            <span class="terminal-dividend-symbol">{entry.dividend.symbol}</span>
-            <span class="terminal-dividend-date">
-              {Calendar.strftime(entry.dividend.ex_date, "%b %d")}
-            </span>
-            <span class="terminal-dividend-amount">
-              +{format_euro_decimal(entry.income)}
-            </span>
-          </div>
-        <% end %>
-      </div>
       
 <!-- Realized P&L -->
       <div
@@ -698,13 +821,19 @@
             </div>
             <div class="text-center">
               <div class="terminal-stat-label">Realized P&amp;L</div>
-              <div class={"terminal-stat-value #{if pnl_positive?(@investment_summary.realized_pnl), do: "gain", else: "loss"}"} style="font-size: 0.8125rem;">
+              <div
+                class={"terminal-stat-value #{if pnl_positive?(@investment_summary.realized_pnl), do: "gain", else: "loss"}"}
+                style="font-size: 0.8125rem;"
+              >
                 {format_euro_signed(@investment_summary.realized_pnl)}
               </div>
             </div>
             <div class="text-center">
               <div class="terminal-stat-label">Unrealized P&amp;L</div>
-              <div class={"terminal-stat-value #{if pnl_positive?(@investment_summary.unrealized_pnl), do: "gain", else: "loss"}"} style="font-size: 0.8125rem;">
+              <div
+                class={"terminal-stat-value #{if pnl_positive?(@investment_summary.unrealized_pnl), do: "gain", else: "loss"}"}
+                style="font-size: 0.8125rem;"
+              >
                 {format_euro_signed(@investment_summary.unrealized_pnl)}
               </div>
             </div>
@@ -722,14 +851,17 @@
             </div>
             <div class="text-center">
               <div class="terminal-stat-label" style="font-weight: 600;">Total Return</div>
-              <div class={"terminal-stat-value #{if pnl_positive?(@investment_summary.total_return), do: "gain", else: "loss"}"} style="font-size: 0.875rem; font-weight: 700;">
+              <div
+                class={"terminal-stat-value #{if pnl_positive?(@investment_summary.total_return), do: "gain", else: "loss"}"}
+                style="font-size: 0.875rem; font-weight: 700;"
+              >
                 {format_euro_signed(@investment_summary.total_return)}
               </div>
             </div>
           </div>
         </div>
       <% end %>
-
+      
 <!-- Dividend Cash Flow -->
       <%= if length(@cash_flow) > 0 do %>
         <div
@@ -810,8 +942,13 @@
           <span class="terminal-kbd">←</span>
           <span class="terminal-kbd ml-0.5">→</span>
           <span class="ml-1.5">navigate</span>
+          <span class="ml-2 opacity-60">
+            <span class="terminal-kbd">⇧←</span>
+            <span class="terminal-kbd ml-0.5">⇧→</span>
+            <span class="ml-1">±1 week</span>
+          </span>
         </div>
-        <span class="sr-only">Use left and right arrow keys to navigate between snapshots</span>
+        <span class="sr-only">Use arrow keys to navigate, Shift+Arrow for week jumps</span>
         <div class="flex items-center gap-[var(--space-sm)]">
           <.link navigate={~p"/data/gaps"} class="hover:underline">data coverage</.link>
           <span>dividends-o-matic</span>

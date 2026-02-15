@@ -249,6 +249,43 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   @doc """
+  Returns the snapshot closest to the given date (before or after).
+  """
+  def get_snapshot_nearest_date(target_date) do
+    before =
+      PortfolioSnapshot
+      |> where([s], s.date <= ^target_date)
+      |> order_by(desc: :date)
+      |> limit(1)
+      |> preload(:positions)
+      |> Repo.one()
+
+    after_s =
+      PortfolioSnapshot
+      |> where([s], s.date >= ^target_date)
+      |> order_by(asc: :date)
+      |> limit(1)
+      |> preload(:positions)
+      |> Repo.one()
+
+    case {before, after_s} do
+      {nil, nil} ->
+        nil
+
+      {b, nil} ->
+        b
+
+      {nil, a} ->
+        a
+
+      {b, a} ->
+        if abs(Date.diff(b.date, target_date)) <= abs(Date.diff(a.date, target_date)),
+          do: b,
+          else: a
+    end
+  end
+
+  @doc """
   Returns the snapshot at a given 1-based position (ordered by date ASC).
   """
   def get_snapshot_at_position(position) when is_integer(position) and position >= 1 do
@@ -1180,6 +1217,124 @@ defmodule Dividendsomatic.Portfolio do
       total_dividends: total_dividends,
       net_profit: net_profit
     }
+  end
+
+  ## Waterfall Chart Data
+
+  @doc """
+  Returns monthly waterfall data combining deposits, withdrawals, dividends, costs, and realized P&L.
+  Each entry: `%{month: "YYYY-MM", deposits: Decimal, withdrawals: Decimal, dividends: Decimal, costs: Decimal, realized_pnl: Decimal}`
+  """
+  def waterfall_data do
+    zero = Decimal.new("0")
+
+    # Get full date range from snapshots
+    first = get_first_snapshot()
+    latest = get_latest_snapshot()
+
+    case {first, latest} do
+      {nil, _} ->
+        []
+
+      {_, nil} ->
+        []
+
+      {f, l} ->
+        from_date = f.date
+        to_date = l.date
+
+        # Dividends by month (reuse existing function)
+        div_months =
+          dividends_by_month(from_date, to_date) |> Map.new(fn d -> {d.month, d.total} end)
+
+        # Costs by month
+        cost_months = costs_by_month(from_date, to_date)
+
+        # Deposits/withdrawals by month
+        dw_months = deposits_withdrawals_by_month(from_date, to_date)
+
+        # Realized P&L by month
+        pnl_months = realized_pnl_by_month(from_date, to_date)
+
+        # Build list of all months
+        all_months =
+          [Map.keys(div_months), Map.keys(cost_months), Map.keys(dw_months), Map.keys(pnl_months)]
+          |> List.flatten()
+          |> Enum.uniq()
+          |> Enum.sort()
+
+        Enum.map(all_months, fn month ->
+          %{
+            month: month,
+            deposits: Map.get(dw_months, month, %{deposits: zero, withdrawals: zero}).deposits,
+            withdrawals:
+              Map.get(dw_months, month, %{deposits: zero, withdrawals: zero}).withdrawals,
+            dividends: Map.get(div_months, month, zero),
+            costs: Map.get(cost_months, month, zero),
+            realized_pnl: Map.get(pnl_months, month, zero)
+          }
+        end)
+    end
+  end
+
+  @doc """
+  Returns costs grouped by month for a date range.
+  """
+  def costs_by_month(from_date, to_date) do
+    Cost
+    |> where([c], c.date >= ^from_date and c.date <= ^to_date)
+    |> group_by([c], fragment("to_char(?, 'YYYY-MM')", c.date))
+    |> select([c], {fragment("to_char(?, 'YYYY-MM')", c.date), sum(c.amount)})
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  defp deposits_withdrawals_by_month(from_date, to_date) do
+    BrokerTransaction
+    |> where([t], t.transaction_type in ["deposit", "withdrawal"])
+    |> where([t], t.trade_date >= ^from_date and t.trade_date <= ^to_date)
+    |> select([t], %{
+      month: fragment("to_char(?, 'YYYY-MM')", t.trade_date),
+      transaction_type: t.transaction_type,
+      amount: t.amount,
+      exchange_rate: t.exchange_rate
+    })
+    |> Repo.all()
+    |> Enum.group_by(& &1.month)
+    |> Map.new(fn {month, txns} ->
+      {month, sum_dw_transactions(txns)}
+    end)
+  end
+
+  defp sum_dw_transactions(txns) do
+    zero = Decimal.new("0")
+
+    {deposits, withdrawals} =
+      Enum.reduce(txns, {zero, zero}, fn txn, {dep, wd} ->
+        amt = Decimal.abs(txn.amount || zero)
+        fx = txn.exchange_rate || Decimal.new("1")
+        eur_amt = Decimal.mult(amt, fx)
+
+        case txn.transaction_type do
+          "deposit" -> {Decimal.add(dep, eur_amt), wd}
+          "withdrawal" -> {dep, Decimal.add(wd, eur_amt)}
+          _ -> {dep, wd}
+        end
+      end)
+
+    %{deposits: deposits, withdrawals: withdrawals}
+  end
+
+  defp realized_pnl_by_month(from_date, to_date) do
+    SoldPosition
+    |> where([s], s.sale_date >= ^from_date and s.sale_date <= ^to_date)
+    |> group_by([s], fragment("to_char(?, 'YYYY-MM')", s.sale_date))
+    |> select([s], {
+      fragment("to_char(?, 'YYYY-MM')", s.sale_date),
+      sum(fragment("COALESCE(?, ?)", s.realized_pnl_eur, s.realized_pnl))
+    })
+    |> Repo.all()
+    |> Map.new()
   end
 
   ## Data Gaps Analysis

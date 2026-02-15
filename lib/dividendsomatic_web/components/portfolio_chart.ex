@@ -31,7 +31,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     <div
       class="combined-chart-container"
       id="chart-anim"
-      phx-hook="ChartAnimation"
+      phx-hook="ChartTransition"
       role="img"
       aria-labelledby="chart-title"
       aria-describedby="chart-legend"
@@ -73,7 +73,8 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
         svg_grid(mt, main_h, y_lo, y_range),
         svg_era_gap_indicator(chart_data, x_fn, mt, main_h),
         svg_area_fill(chart_data, x_fn, y_fn, chart_bottom),
-        svg_line(chart_data, :cost_basis_float, x_fn, y_fn, "#3b82f6", "1", "6 3"),
+        svg_line(chart_data, :value_float, x_fn, y_fn, "#10b981", "2", nil, "value-line"),
+        svg_line(chart_data, :cost_basis_float, x_fn, y_fn, "#3b82f6", "1", "6 3", "cost-line"),
         svg_current_marker(chart_data, current_date, x_fn, y_fn, mt, chart_bottom),
         svg_x_labels(chart_data, x_fn, chart_bottom + 15),
         svg_y_labels(mt, main_h, y_lo, y_range),
@@ -156,7 +157,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     last_x = r(x_fn.(last_idx))
 
     d = "M#{first_x},#{bottom_y} L#{Enum.join(points, " L")} L#{last_x},#{bottom_y} Z"
-    ~s[<path d="#{d}" fill="url(#val-area)"/>]
+    ~s[<path d="#{d}" fill="url(#val-area)" data-role="area-fill"/>]
   end
 
   # Split chart data into segments, breaking at gaps > 180 days
@@ -180,15 +181,19 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
   defp flush_chunk([]), do: {:cont, []}
   defp flush_chunk(acc), do: {:cont, Enum.reverse(acc), []}
 
-  defp svg_line(chart_data, field, x_fn, y_fn, color, width, dash) do
+  defp svg_line(chart_data, field, x_fn, y_fn, color, width, dash, role) do
     dash_attr = if dash, do: ~s[ stroke-dasharray="#{dash}" opacity="0.6"], else: ""
+    role_attr = if role, do: ~s[ data-role="#{role}"], else: ""
 
     chart_data
     |> split_at_gaps()
-    |> Enum.map_join("\n", &svg_line_segment(&1, field, x_fn, y_fn, color, width, dash_attr))
+    |> Enum.map_join(
+      "\n",
+      &svg_line_segment(&1, field, x_fn, y_fn, color, width, dash_attr, role_attr)
+    )
   end
 
-  defp svg_line_segment(segment, field, x_fn, y_fn, color, width, dash_attr) do
+  defp svg_line_segment(segment, field, x_fn, y_fn, color, width, dash_attr, role_attr) do
     d =
       segment
       |> Enum.with_index()
@@ -198,7 +203,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
         if seg_idx == 0, do: "M#{x} #{y}", else: "L#{x} #{y}"
       end)
 
-    ~s[<path d="#{d}" fill="none" stroke="#{color}" stroke-width="#{width}" stroke-linejoin="round"#{dash_attr}/>]
+    ~s[<path d="#{d}" fill="none" stroke="#{color}" stroke-width="#{width}" stroke-linejoin="round"#{dash_attr}#{role_attr}/>]
   end
 
   defp svg_current_marker(chart_data, current_date, x_fn, y_fn, mt, bottom) do
@@ -212,8 +217,8 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
         cy = r(y_fn.(point.value_float))
 
         """
-        <line x1="#{cx}" y1="#{mt}" x2="#{cx}" y2="#{bottom}" stroke="#10b981" stroke-width="1" stroke-dasharray="3 3" opacity="0.25"/>
-        <circle cx="#{cx}" cy="#{cy}" r="3.5" fill="#10b981" stroke="#0a0e17" stroke-width="2" class="chart-current-marker"/>
+        <line x1="#{cx}" y1="#{mt}" x2="#{cx}" y2="#{bottom}" stroke="#10b981" stroke-width="1" stroke-dasharray="3 3" opacity="0.25" data-role="current-line"/>
+        <circle cx="#{cx}" cy="#{cy}" r="3.5" fill="#10b981" stroke="#0a0e17" stroke-width="2" class="chart-current-marker" data-role="current-marker"/>
         """
     end
   end
@@ -485,9 +490,20 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
       end
       |> Enum.join("\n")
 
+    # Vertical month gridlines at bar centers
+    v_grid =
+      dividend_data
+      |> Enum.with_index()
+      |> Enum.map_join("\n", fn {_d, i} ->
+        gx = r(@ml + i * (bar_w + bar_gap) + bar_w / 2)
+
+        ~s[<line x1="#{gx}" y1="#{mt}" x2="#{gx}" y2="#{r(chart_bottom)}" stroke="#1e293b" stroke-width="0.5" stroke-dasharray="2 4" opacity="0.3"/>]
+      end)
+
     Phoenix.HTML.raw("""
     <svg width="#{@w}" height="#{round(total_h)}" viewBox="0 0 #{@w} #{round(total_h)}" xmlns="http://www.w3.org/2000/svg" style="font-family: 'JetBrains Mono', monospace;">
       #{grid}
+      #{v_grid}
       #{bars}
       #{cum_svg}
       #{cum_label}
@@ -498,6 +514,203 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
   end
 
   def render_dividend_chart(_), do: Phoenix.HTML.raw("")
+
+  # --- P&L Waterfall Chart (public, used in template) ---
+
+  @doc """
+  Renders a P&L waterfall chart showing deposits, dividends, costs, and realized P&L by month.
+  Expects a list of maps with :month, :deposits, :withdrawals, :dividends, :costs, :realized_pnl.
+  """
+  def render_waterfall_chart([_ | _] = data) do
+    mt = 25
+    bar_h = 200
+    chart_bottom = mt + bar_h
+    total_h = chart_bottom + 30
+
+    n = length(data)
+    bar_gap = 2
+    bar_w = max((@pw - bar_gap * (n - 1)) / n, 6)
+
+    zero = Decimal.new("0")
+
+    # Compute cumulative running total
+    {cumulative_data, _} =
+      Enum.map_reduce(data, zero, fn d, acc ->
+        net =
+          d.deposits
+          |> Decimal.add(d.dividends)
+          |> Decimal.add(d.realized_pnl)
+          |> Decimal.sub(d.withdrawals)
+          |> Decimal.sub(d.costs)
+
+        cum = Decimal.add(acc, net)
+        {Map.put(d, :cumulative, cum), cum}
+      end)
+
+    # Compute Y scale: find max positive and min negative for stacking
+    {y_max, y_min} =
+      Enum.reduce(cumulative_data, {0.0, 0.0}, fn d, {hi, lo} ->
+        pos =
+          Decimal.to_float(d.deposits) + Decimal.to_float(d.dividends) +
+            max(Decimal.to_float(d.realized_pnl), 0)
+
+        neg =
+          Decimal.to_float(d.costs) + Decimal.to_float(d.withdrawals) +
+            max(-Decimal.to_float(d.realized_pnl), 0)
+
+        cum = Decimal.to_float(d.cumulative)
+        {Enum.max([hi, pos, cum]), Enum.min([lo, -neg, cum])}
+      end)
+
+    # Add padding
+    y_range = max(y_max - y_min, 1.0) * 1.1
+    _y_hi = y_max + (y_range - (y_max - y_min)) / 2
+    y_lo = y_min - (y_range - (y_max - y_min)) / 2
+
+    y_fn = fn v -> mt + bar_h - (v - y_lo) / y_range * bar_h end
+    zero_y = r(y_fn.(0.0))
+
+    # Stacked bars
+    bars =
+      cumulative_data
+      |> Enum.with_index()
+      |> Enum.map_join("\n", fn {d, i} ->
+        bx = r(@ml + i * (bar_w + bar_gap))
+        waterfall_bar(d, bx, bar_w, zero_y, y_range, bar_h)
+      end)
+
+    # Zero baseline
+    zero_line =
+      ~s[<line x1="#{@ml}" y1="#{zero_y}" x2="#{@ml + @pw}" y2="#{zero_y}" stroke="#475569" stroke-width="1"/>]
+
+    # Cumulative line overlay
+    cum_line =
+      cumulative_data
+      |> Enum.with_index()
+      |> Enum.map_join(" ", fn {d, i} ->
+        cx = r(@ml + i * (bar_w + bar_gap) + bar_w / 2)
+        cy = r(y_fn.(Decimal.to_float(d.cumulative)))
+        if i == 0, do: "M#{cx} #{cy}", else: "L#{cx} #{cy}"
+      end)
+
+    cum_svg =
+      ~s[<path d="#{cum_line}" fill="none" stroke="#e2e8f0" stroke-width="1.5" stroke-linejoin="round" opacity="0.8"/>]
+
+    # Cumulative end label
+    last = List.last(cumulative_data)
+    last_cx = r(@ml + (n - 1) * (bar_w + bar_gap) + bar_w / 2)
+    last_cy = r(y_fn.(Decimal.to_float(last.cumulative)))
+
+    {label_x, anchor} =
+      if last_cx > @w - 80, do: {last_cx - 8, "end"}, else: {last_cx + 8, "start"}
+
+    cum_label =
+      ~s[<text x="#{label_x}" y="#{r(last_cy - 4)}" fill="#e2e8f0" font-size="7" font-weight="600" text-anchor="#{anchor}">#{format_compact(Decimal.to_float(last.cumulative))}</text>]
+
+    # X labels
+    x_labels =
+      cumulative_data
+      |> Enum.with_index()
+      |> Enum.map_join("\n", fn {d, i} ->
+        lx = r(@ml + i * (bar_w + bar_gap) + bar_w / 2)
+        show = n <= 36 or rem(i, max(div(n, 24), 1)) == 0
+        month_label = format_month_label(d.month, n)
+
+        if show do
+          ~s[<text x="#{lx}" y="#{r(chart_bottom + 12)}" fill="#475569" font-size="7" text-anchor="middle">#{month_label}</text>]
+        else
+          ""
+        end
+      end)
+
+    # Y labels
+    y_labels =
+      for i <- 0..5 do
+        gy = r(mt + bar_h - i / 5 * bar_h + 3)
+        val = y_lo + i / 5 * y_range
+
+        ~s[<text x="#{@ml - 8}" y="#{gy}" fill="#475569" font-size="7" text-anchor="end">#{format_compact(val)}</text>]
+      end
+      |> Enum.join("\n")
+
+    # Grid lines
+    grid =
+      for i <- 0..5 do
+        gy = r(mt + bar_h - i / 5 * bar_h)
+
+        ~s[<line x1="#{@ml}" y1="#{gy}" x2="#{@ml + @pw}" y2="#{gy}" stroke="#1e293b" stroke-width="1"/>]
+      end
+      |> Enum.join("\n")
+
+    Phoenix.HTML.raw("""
+    <svg width="#{@w}" height="#{round(total_h)}" viewBox="0 0 #{@w} #{round(total_h)}" xmlns="http://www.w3.org/2000/svg" style="font-family: 'JetBrains Mono', monospace;">
+      #{grid}
+      #{bars}
+      #{zero_line}
+      #{cum_svg}
+      #{cum_label}
+      #{x_labels}
+      #{y_labels}
+    </svg>
+    """)
+  end
+
+  def render_waterfall_chart(_), do: Phoenix.HTML.raw("")
+
+  defp waterfall_bar(d, bx, bar_w, zero_y, y_range, bar_h) do
+    pnl_f = Decimal.to_float(d.realized_pnl)
+
+    above = [
+      {Decimal.to_float(d.deposits), "#10b981"},
+      {Decimal.to_float(d.dividends), "#eab308"},
+      {max(pnl_f, 0), "#3b82f6"}
+    ]
+
+    below = [
+      {Decimal.to_float(d.costs), "#ef4444"},
+      {Decimal.to_float(d.withdrawals), "#f97316"},
+      {max(-pnl_f, 0), "#ef4444"}
+    ]
+
+    above_svg = stack_bars_up(above, bx, bar_w, zero_y, y_range, bar_h, 0.75)
+    below_svg = stack_bars_down(below, bx, bar_w, zero_y, y_range, bar_h, 0.6)
+    above_svg <> below_svg
+  end
+
+  defp stack_bars_up(items, bx, bar_w, zero_y, y_range, bar_h, opacity) do
+    items
+    |> Enum.reduce({zero_y, ""}, fn {val, color}, {y_offset, acc} ->
+      if val > 0 do
+        bh = r(val / y_range * bar_h)
+        by = r(y_offset - bh)
+
+        rect =
+          ~s[<rect x="#{bx}" y="#{by}" width="#{r(bar_w)}" height="#{bh}" fill="#{color}" opacity="#{opacity}" rx="1"/>]
+
+        {by, acc <> rect <> "\n"}
+      else
+        {y_offset, acc}
+      end
+    end)
+    |> elem(1)
+  end
+
+  defp stack_bars_down(items, bx, bar_w, zero_y, y_range, bar_h, opacity) do
+    items
+    |> Enum.reduce({zero_y, ""}, fn {val, color}, {y_offset, acc} ->
+      if val > 0 do
+        bh = r(val / y_range * bar_h)
+
+        rect =
+          ~s[<rect x="#{bx}" y="#{r(y_offset)}" width="#{r(bar_w)}" height="#{bh}" fill="#{color}" opacity="#{opacity}" rx="1"/>]
+
+        {y_offset + bh, acc <> rect <> "\n"}
+      else
+        {y_offset, acc}
+      end
+    end)
+    |> elem(1)
+  end
 
   # --- Sparkline (public, used in stats cards) ---
 

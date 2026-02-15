@@ -113,6 +113,75 @@ defmodule DividendsomaticWeb.PortfolioLive do
     {:noreply, navigate_to_snapshot(socket, latest_snapshot)}
   end
 
+  def handle_event("navigate", %{"direction" => "back_week"}, socket) do
+    {:noreply, navigate_by_date_offset(socket, -7)}
+  end
+
+  def handle_event("navigate", %{"direction" => "forward_week"}, socket) do
+    {:noreply, navigate_by_date_offset(socket, 7)}
+  end
+
+  def handle_event("navigate", %{"direction" => "back_month"}, socket) do
+    {:noreply, navigate_by_date_offset(socket, -30)}
+  end
+
+  def handle_event("navigate", %{"direction" => "forward_month"}, socket) do
+    {:noreply, navigate_by_date_offset(socket, 30)}
+  end
+
+  def handle_event("navigate", %{"direction" => "back_year"}, socket) do
+    {:noreply, navigate_by_date_offset(socket, -365)}
+  end
+
+  def handle_event("navigate", %{"direction" => "forward_year"}, socket) do
+    {:noreply, navigate_by_date_offset(socket, 365)}
+  end
+
+  def handle_event("goto_date", %{"date" => date_str}, socket) do
+    case Date.from_iso8601(date_str) do
+      {:ok, date} ->
+        snapshot = Portfolio.get_snapshot_nearest_date(date)
+        {:noreply, navigate_to_snapshot(socket, snapshot)}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("chart_range_preset", %{"preset" => preset}, socket) do
+    all = socket.assigns.all_chart_data
+    n = length(all)
+
+    case preset do
+      "ALL" ->
+        socket =
+          socket
+          |> assign(:chart_year, nil)
+          |> assign(:chart_start, 1)
+          |> assign(:chart_end, n)
+          |> assign_chart_range()
+
+        {:noreply, socket}
+
+      "YTD" ->
+        year_start = Date.new!(Date.utc_today().year, 1, 1)
+        {:noreply, apply_chart_date_offset(socket, all, n, year_start)}
+
+      offset_preset ->
+        days =
+          case offset_preset do
+            "1M" -> 30
+            "3M" -> 91
+            "6M" -> 182
+            "1Y" -> 365
+            _ -> n
+          end
+
+        target = Date.add(Date.utc_today(), -days)
+        {:noreply, apply_chart_date_offset(socket, all, n, target)}
+    end
+  end
+
   def handle_event("slider_navigate", %{"position" => pos_str}, socket) do
     case Integer.parse(pos_str) do
       {pos, _} ->
@@ -193,6 +262,14 @@ defmodule DividendsomaticWeb.PortfolioLive do
       {:noreply, socket}
     else
       _ -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("toggle_waterfall", _params, socket) do
+    if socket.assigns.show_waterfall do
+      {:noreply, assign(socket, show_waterfall: false, waterfall_data: [])}
+    else
+      {:noreply, assign(socket, show_waterfall: true, waterfall_data: Portfolio.waterfall_data())}
     end
   end
 
@@ -370,6 +447,33 @@ defmodule DividendsomaticWeb.PortfolioLive do
     """
   end
 
+  defp navigate_by_date_offset(socket, days) do
+    if socket.assigns.current_snapshot do
+      target = Date.add(socket.assigns.current_snapshot.date, days)
+      snapshot = Portfolio.get_snapshot_nearest_date(target)
+      navigate_to_snapshot(socket, snapshot)
+    else
+      socket
+    end
+  end
+
+  defp apply_chart_date_offset(socket, all, n, target_date) do
+    start_idx =
+      all
+      |> Enum.with_index(1)
+      |> Enum.find(fn {point, _idx} -> Date.compare(point.date, target_date) != :lt end)
+      |> case do
+        {_point, idx} -> idx
+        nil -> 1
+      end
+
+    socket
+    |> assign(:chart_year, nil)
+    |> assign(:chart_start, start_idx)
+    |> assign(:chart_end, n)
+    |> assign_chart_range()
+  end
+
   defp navigate_to_snapshot(socket, nil), do: socket
 
   defp navigate_to_snapshot(socket, snapshot) do
@@ -407,6 +511,8 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:fx_exposure, [])
     |> assign(:cash_flow, [])
     |> assign(:investment_summary, nil)
+    |> assign(:show_waterfall, false)
+    |> assign(:waterfall_data, [])
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
     |> assign(:is_reconstructed, false)
@@ -491,6 +597,8 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:fear_greed, get_fear_greed_for_snapshot(socket, snapshot))
     |> assign(:fx_exposure, Portfolio.compute_fx_exposure(positions))
     |> assign(:cash_flow, dividend_dashboard.cash_flow_summary)
+    |> assign(:show_waterfall, false)
+    |> assign(:waterfall_data, [])
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
     |> assign_freshness_and_source(snapshot, positions)

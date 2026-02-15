@@ -1085,6 +1085,15 @@
     animation: pulse-dot 2s ease-in-out infinite;
 }
 
+/* Smooth chart transitions for marker and line positions */
+[data-role="current-marker"] {
+    transition: cx 0.3s ease-out, cy 0.3s ease-out;
+}
+
+[data-role="current-line"] {
+    transition: x1 0.3s ease-out, x2 0.3s ease-out;
+}
+
 .chart-line-animated {
     stroke-dasharray: var(--path-length);
     stroke-dashoffset: var(--path-length);

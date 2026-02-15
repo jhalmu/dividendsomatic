@@ -51,17 +51,23 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.19.0 (Investment Summary & Dividend Diagnostics)
+**Version:** 0.20.0 (Portfolio UI Overhaul)
 **Status:** Unified portfolio history, 447 tests, 0 credo issues
 
-**Latest session (2026-02-15):**
-- **Dividend chart labels** — replaced month-only X-axis labels ("01", "02") with year-aware format ("Jan 23", "Jul 24" for ≤24 months; compact "'24"/"M24" for >24 months)
-- **Dividend diagnostics** — added `diagnose_dividends/0` for IEx verification (ISIN duplicates, zero-income records, top 20 by value, yearly totals)
-- **Investment summary** — new card showing Net Invested, Realized/Unrealized P&L, Total Dividends, Total Costs, Total Return
-  - `total_deposits_withdrawals/0` queries broker transactions with FX conversion
-  - `investment_summary/0` combines all financial metrics
-- **Credo cleanup** — merged chained Enum.filter, cond→if refactor, pattern match guard
-- Merged `feature/separate-dividend-chart` → `main`
+**Latest session (2026-02-15 evening):**
+- **Layout reorder** — Dividend chart moved above portfolio chart, recent dividends compact inline
+- **Enhanced navigation** — `-1Y/-1M/-1W` buttons, date picker, `+1W/+1M/+1Y`, Shift+Arrow week jumps
+- **Chart presets** — 1M/3M/6M/YTD/1Y/ALL range buttons alongside year filter
+- **P&L Waterfall chart** — lazy-loaded stacked bars (deposits/dividends/costs/P&L) with cumulative line
+- **Chart transitions** — `ChartTransition` JS hook with path morphing + CSS transitions for smooth navigation
+- **Backend** — `get_snapshot_nearest_date/1`, `waterfall_data/0`, `costs_by_month/2`
+- 447 tests, 0 failures, 0 credo issues
+
+**Previous session (2026-02-15 morning):**
+- Dividend chart labels — year-aware format
+- Dividend diagnostics — `diagnose_dividends/0` for IEx verification
+- Investment summary card
+- Credo cleanup
 - 447 tests, 0 failures, 0 credo issues
 
 **Previous session (2026-02-14):**
@@ -93,8 +99,10 @@ mix ecto.reset              # Drop + create + migrate
 - Fear & Greed Index (365 days history)
 - Costs system, FX exposure, sold positions (grouped), data gaps analysis
 - Rule of 72 calculator, dividend analytics
-- Custom SVG charts with era-aware gap rendering
+- Custom SVG charts with era-aware gap rendering + chart transitions
+- P&L Waterfall chart (deposits, dividends, costs, realized P&L by month)
 - Investment summary card (deposits, P&L, dividends, costs, total return)
+- Enhanced navigation: week/month/year jumps, date picker, chart presets
 - Dividend diagnostics for IEx verification
 - 447 tests + 13 Playwright E2E tests, 0 credo issues
 - Multi-provider market data: Finnhub + Yahoo Finance + EODHD with fallback chains
