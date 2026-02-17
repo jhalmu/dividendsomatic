@@ -61,16 +61,19 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.23.0 (Dashboard Redesign — Nordic Warmth + ApexCharts)
-**Status:** Full dividend pipeline, Gmail auto-import, redesigned dashboard, 547 tests, 0 credo issues
+**Version:** 0.24.0 (Dashboard Redesign — Deep Space)
+**Status:** Full dividend pipeline, Gmail auto-import, Deep Space dashboard, 547 tests, 0 credo issues
 
-**Latest session (2026-02-17 late night):**
-- **Dashboard redesign** — "Nordic Warmth" palette replacing terminal aesthetic
-- **ApexCharts** — interactive portfolio area chart + dividend bar+line chart
-- **Three-zone layout** — The Day (sticky nav), The Journey (charts), The Details (tabs)
-- **Lazy assigns** — Summary tab data deferred until activation
+**Latest session (2026-02-17 late night, cont.):**
+- **Deep Space design** — ultra-deep bg (#06080D), glass-morphism cards, noise grain texture
+- **Typography** — Instrument Sans + IBM Plex Mono (replacing DM Sans + JetBrains Mono)
+- **Luminous colors** — sky #5EADF7, emerald #34D399, amber #FBBF24
+- **Holdings promoted** — always visible above charts, tabs reduced to Income + Summary
+- 547 tests, 0 failures, 0 credo issues
+
+**Previous session (2026-02-17 late night):**
+- **Dashboard redesign** — ApexCharts, three-zone layout, tab navigation, lazy assigns
 - **Dark/light toggle** — theme switcher in branding bar
-- **Holdings promoted** — always visible above charts, removed from tabs
 - 547 tests, 0 failures, 0 credo issues
 
 **Previous session (2026-02-17 night):**

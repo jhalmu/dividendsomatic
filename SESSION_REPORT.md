@@ -1,6 +1,40 @@
+# Session Report — 2026-02-17 (Late Night, cont.)
+
+## Dashboard Redesign — "Deep Space" Final Polish
+
+### Context
+Continued refining the dashboard design. User disliked the warm brown/stone palette — shifted first to cool slate, then applied the frontend-design skill for a complete "Deep Space" aesthetic overhaul. Also moved Holdings section to be always visible above charts.
+
+### Changes Made
+
+#### Color Iterations
+1. **Cool slate** — Replaced warm stone (#1C1917) with dark slate (#0B0F14), cool blue-grey borders/text
+2. **Deep Space** — Ultra-deep background (#06080D), glass-morphism surfaces with backdrop-filter blur, subtle SVG noise grain texture, radial glow accent
+
+#### Typography
+- **Instrument Sans** (geometric display font) replacing DM Sans
+- **IBM Plex Mono** (authoritative data font) replacing JetBrains Mono
+
+#### Visual Effects
+- Glass-morphism cards: translucent `rgba(14, 18, 27, 0.85)` + `backdrop-filter: blur(16px)`
+- Subtle noise grain texture overlay (`opacity: 0.025`)
+- Radial glow at top center for depth
+- Luminous data colors: sky `#5EADF7`, emerald `#34D399`, amber `#FBBF24`
+- Softer P&L: emerald gains, coral losses (vs harsh green/red)
+
+#### Layout
+- Holdings section promoted above Portfolio Performance chart (always visible)
+- Tab strip reduced to Income + Summary only
+- Default active tab changed to Income
+
+### Quality
+- 547 tests, 0 failures, 0 credo issues
+
+---
+
 # Session Report — 2026-02-17 (Late Night)
 
-## Dashboard Redesign — "Nordic Warmth" + ApexCharts
+## Dashboard Redesign — Nordic Warmth + ApexCharts
 
 ### Context
 The dashboard had grown organically with a terminal/hacker aesthetic (scanlines, green-on-black). The user designed a "Photo Album" concept — warm, organic, approachable — with interactive charts and a focused layout. Full 4-phase redesign implemented.
