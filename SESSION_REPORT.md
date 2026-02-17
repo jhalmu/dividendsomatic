@@ -1,41 +1,85 @@
-# Session Report — 2026-02-17
+# Session Report — 2026-02-17 (Evening)
+
+## Multi-CSV Import Pipeline + Integrity Checking
+
+### Context
+The project previously only imported Portfolio.csv (daily holdings snapshots). IBKR Flex reports deliver 4 CSV types via email. This session implemented a complete multi-CSV import pipeline that auto-detects and routes all 4 types, plus an integrity checker that cross-references Actions.csv against the database.
+
+### Changes Made
+
+#### Step 1: FlexCsvRouter — CSV Type Detection
+- **New:** `lib/dividendsomatic/portfolio/flex_csv_router.ex`
+- Detects CSV type from headers: `:portfolio`, `:dividends`, `:trades`, `:actions`
+- Strips duplicate header rows that IBKR inserts mid-file
+- 10 tests
+
+#### Step 2: Dividend CSV Parser (11-column format)
+- **New:** `lib/dividendsomatic/portfolio/flex_dividend_csv_parser.ex`
+- Parses new 11-column format: Symbol, ISIN, FIGI, AssetClass, Currency, FXRate, ExDate, PayDate, Quantity, GrossRate, NetAmount
+- Handles negative NetAmount (withholding tax entries) via abs()
+- **Migration:** Added `figi`, `gross_rate`, `net_amount`, `quantity_at_record`, `fx_rate` fields to dividends table
+- **Schema:** Updated `dividend.ex` with new fields
+- **Mix task:** `mix import.flex_div_csv path/to/Dividends.csv`
+- **Context:** `Portfolio.import_flex_dividends_csv/1` with ISIN+ex_date dedup
+- 13 tests
+
+#### Step 3: Trade CSV Parser (14-column format)
+- **New:** `lib/dividendsomatic/portfolio/flex_trades_csv_parser.ex`
+- Parses YYYYMMDD dates, classifies BUY/SELL and FX trades (EUR.SEK, EUR.HKD)
+- Deterministic external_ids for re-import dedup
+- **Mix task:** `mix import.flex_trades path/to/Trades.csv`
+- **Context:** `Portfolio.import_flex_trades_csv/1` with broker+external_id upsert
+- 12 tests
+
+#### Step 4: Actions CSV Parser + Integrity Checker
+- **New:** `lib/dividendsomatic/portfolio/flex_actions_csv_parser.ex`
+- Parses two-section Actions.csv: BASE_SUMMARY totals + transaction detail rows
+- Header-indexed parsing (44 columns, position-independent)
+- **New:** `lib/dividendsomatic/portfolio/integrity_checker.ex`
+- 4 reconciliation checks: dividends, trades, missing ISINs, summary totals
+- Returns PASS/FAIL/WARN per check with discrepancy details
+- **Mix task:** `mix check.integrity path/to/Actions.csv`
+- 12 tests (7 parser + 5 integrity)
+
+#### Step 5: Import Orchestrator + Worker Update
+- **New:** `lib/dividendsomatic/data_ingestion/flex_import_orchestrator.ex`
+- Scans directory, classifies each CSV, routes to correct pipeline
+- Portfolio → snapshot, Dividends → dividend records, Trades → broker_transactions, Actions → integrity report
+- Optional archive to `csv_data/archive/flex/`
+- **Modified:** `workers/data_import_worker.ex` — uses `FlexImportOrchestrator` instead of `CsvDirectory`
+- **Modified:** `bin/fetch_flex_email.sh` — searches 4 mailboxes (Activity Flex, Dividend Flex, Trades Flex, Actions Flex)
+
+### Files Summary
+
+| Action | Count | Files |
+|--------|-------|-------|
+| New modules | 6 | flex_csv_router, flex_dividend_csv_parser, flex_trades_csv_parser, flex_actions_csv_parser, integrity_checker, flex_import_orchestrator |
+| New mix tasks | 3 | import_flex_div_csv, import_flex_trades, check_integrity |
+| New migration | 1 | add_flex_dividend_fields (figi, gross_rate, net_amount, quantity_at_record, fx_rate) |
+| New tests | 5 | flex_csv_router_test, flex_dividend_csv_parser_test, flex_trades_csv_parser_test, flex_actions_csv_parser_test, integrity_checker_test |
+| Modified | 4 | portfolio.ex, dividend.ex, data_import_worker.ex, fetch_flex_email.sh |
+
+### Quality
+- 547 tests, 1 pre-existing failure (StockLive UI test), 0 new failures
+- 0 credo issues (--strict)
+- 0 compilation warnings
+- Code formatted
+
+### Usage
+```bash
+mix import.flex_div_csv new_csvs/Dividends.csv    # Import dividends
+mix import.flex_trades new_csvs/Trades.csv         # Import trades
+mix check.integrity new_csvs/Actions.csv           # Run integrity checks
+```
+
+---
+
+# Previous Session — 2026-02-17 (Morning)
 
 ## Fix Missing IBKR Dividends & Data Recovery Pipeline
 
 ### Context
 426 of 650 IBKR dividend transactions were not making it into the `dividends` table. Root cause: the `DividendProcessor` regex failed on "Payment in Lieu of Dividend" (PIL) records (no per-share amount in description) and Foreign Tax entries misclassified as dividends. Additionally, valuable data sat unprocessed in `csv_data/` subfolders (81 Yahoo JSON files, 6 Flex dividend CSVs).
-
-### Changes Made
-
-#### Core Fix: DividendProcessor (Step 2)
-- **PIL fallback chain**: Regex extraction → total_net fallback using `txn.amount`
-- **Foreign Tax filter**: Skip records containing "Foreign Tax" without "Cash Dividend"
-- **ISIN→currency map**: 15 country codes (US→USD, CA→CAD, SE→SEK, FI→EUR, etc.)
-- **amount_type field**: New column distinguishes `per_share` vs `total_net` dividends
-- **Income computation**: `total_net` returns amount directly (no qty*fx multiplication)
-
-#### Schema Migration (Step 1)
-- Added `amount_type` (string, default "per_share") to `dividends` table
-
-#### Data Parsers (Step 3)
-- `IbkrFlexDividendParser` — parses Flex dividend CSVs (Symbol, PayDate, NetAmount, FXRate, ISIN)
-- `YahooDividendParser` — parses Yahoo Finance JSON files (symbol, isin, ex_date, amount, currency)
-
-#### Import Tasks (Step 4)
-- `mix import.flex_dividends` — imports Flex dividend CSV reports as total_net
-- `mix import.yahoo_dividends` — imports Yahoo dividend JSONs from archive
-- `mix process.data` — orchestrator: `--scan` | `--all` | `--archive`
-
-#### Analysis & Validation (Steps 6-7)
-- `DataGapAnalyzer` — 364-day chunk analysis, dividend gaps, snapshot gaps
-- `DividendValidator` — currency codes, ISIN-currency matches, suspicious amounts, duplicates
-- `mix report.gaps` — formatted gap report with `--format=markdown`, `--year=`, `--export`
-- `mix validate.data` — validation report with `--export`
-
-#### Data Recovery (Steps 8-9)
-- `mix check.sqlite` — SQLite DB check (12 test dividends, no unique historical data)
-- `scripts/extract_lynx_pdfs.py` — Python pdfplumber extraction (101 16B summaries, 3 cost records; dividend PDFs non-tabular)
-- `mix import.lynx_data` — imports Lynx PDF-extracted JSON
 
 ### Pipeline Results (`mix process.data --all`)
 
@@ -47,50 +91,6 @@
 | Archive flex snapshots | 0 new (160 already imported) |
 | **Total dividends** | **6,221** (up from 6,148, +73) |
 
-### Diagnostics (`diagnose_dividends()`)
-
-| Metric | Before | After |
-|--------|--------|-------|
-| Total dividends | 6,148 | 6,221 |
-| Grand total | ~124K EUR | **137,299 EUR** |
-| ISIN duplicates | 0 | 0 |
-
-**Yearly breakdown**: 2026 YTD 8,707 | 2025 58,616 | 2024 19,096 | 2023 18,118 | 2022 22,401 | 2021 7,339 | 2020 77 | 2019 39 | 2018 2,030 | 2017 876
-
-### Validation Report
-- 6,221 dividends checked, **11 info-level issues** (ISIN-currency mismatches: 9x CIBUS SE→EUR, 1x BHP AU→GBP — both correct for their listings)
-- No critical issues, no suspicious amounts, no duplicates
-
-### Gap Report (364-day chunks)
-- Best coverage: 2025-2026 at 75.2% (185/246 snapshots)
-- Lowest coverage: 2019-2020 at 21.5% (54/251 snapshots)
-- 41 stocks with dividend gaps >400 days (expected — position lifecycle gaps)
-
-### Files Changed
-
-| Category | Files |
-|----------|-------|
-| Modified (4) | `portfolio.ex`, `dividend.ex`, `dividend_processor.ex`, `.gitignore` |
-| New modules (4) | `data_gap_analyzer.ex`, `dividend_validator.ex`, `ibkr_flex_dividend_parser.ex`, `yahoo_dividend_parser.ex` |
-| New mix tasks (7) | `import_flex_dividends.ex`, `import_yahoo_dividends.ex`, `process_data.ex`, `report_gaps.ex`, `validate_data.ex`, `check_sqlite.ex`, `import_lynx_data.ex` |
-| New scripts (1) | `scripts/extract_lynx_pdfs.py` |
-| Migration (1) | `add_amount_type_to_dividends.exs` |
-| Tests (4) | `dividend_processor_test.exs` (expanded), `data_gap_analyzer_test.exs`, `dividend_validator_test.exs`, `ibkr_flex_dividend_parser_test.exs`, `yahoo_dividend_parser_test.exs` |
-
-**22 files changed, +2,374 lines**
-
 ### Quality
 - 500 tests, 0 failures (up from 447)
 - 0 credo issues (--strict)
-- Code formatted
-
-### Exported Data
-```
-data_revisited/
-  gap_report.json          16KB — full 364-day chunk analysis
-  validation_report.json   2.5KB — currency/amount/duplicate checks
-  sqlite_unique.json       2.8KB — SQLite dev DB dump (test data only)
-  lynx/
-    16b_summaries.json     101 annual tax summary lines
-    costs.json             3 cost records (2023-2024)
-```

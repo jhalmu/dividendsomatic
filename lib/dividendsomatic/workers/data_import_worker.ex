@@ -3,22 +3,21 @@ defmodule Dividendsomatic.Workers.DataImportWorker do
   Oban worker for automated data import from configured sources.
 
   Scheduled via cron: weekdays at 12:00 for CSV directory import.
-  Uses the generic DataIngestion context for source-agnostic imports.
+  Uses `FlexImportOrchestrator` for multi-CSV type support.
   """
   use Oban.Worker, queue: :data_import, max_attempts: 3
 
   require Logger
 
-  alias Dividendsomatic.DataIngestion
-  alias Dividendsomatic.DataIngestion.CsvDirectory
+  alias Dividendsomatic.DataIngestion.FlexImportOrchestrator
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"source" => "csv_directory"}}) do
-    Logger.info("DataImportWorker: starting CSV directory import")
+    Logger.info("DataImportWorker: starting multi-CSV import")
 
     dir = Application.get_env(:dividendsomatic, :csv_import_dir, "csv_data")
 
-    case DataIngestion.import_new_from_source(CsvDirectory, dir: dir) do
+    case FlexImportOrchestrator.import_all(dir: dir) do
       {:ok, summary} ->
         Logger.info("DataImportWorker: #{inspect(summary)}")
         :ok

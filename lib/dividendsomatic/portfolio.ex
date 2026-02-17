@@ -563,6 +563,52 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   @doc """
+  Imports dividends from a Flex Dividend CSV string.
+
+  Deduplicates by ISIN+ex_date first, then symbol+ex_date.
+  Returns `{:ok, %{imported: n, skipped: n}}`.
+  """
+  def import_flex_dividends_csv(csv_string) do
+    alias Dividendsomatic.Portfolio.FlexDividendCsvParser
+
+    case FlexDividendCsvParser.parse(csv_string) do
+      {:ok, records} ->
+        results = Enum.map(records, &upsert_dividend/1)
+        imported = Enum.count(results, &match?({:ok, _}, &1))
+        skipped = Enum.count(results, &match?(:skipped, &1))
+        {:ok, %{imported: imported, skipped: skipped}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp upsert_dividend(attrs) do
+    cond do
+      attrs[:isin] && attrs[:ex_date] && dividend_exists_by_isin?(attrs.isin, attrs.ex_date) ->
+        :skipped
+
+      attrs[:symbol] && attrs[:ex_date] && dividend_exists_by_symbol?(attrs.symbol, attrs.ex_date) ->
+        :skipped
+
+      true ->
+        create_dividend(attrs)
+    end
+  end
+
+  defp dividend_exists_by_isin?(isin, ex_date) do
+    Dividend
+    |> where([d], d.isin == ^isin and d.ex_date == ^ex_date)
+    |> Repo.exists?()
+  end
+
+  defp dividend_exists_by_symbol?(symbol, ex_date) do
+    Dividend
+    |> where([d], d.symbol == ^symbol and d.ex_date == ^ex_date)
+    |> Repo.exists?()
+  end
+
+  @doc """
   Creates a dividend record.
   """
   def create_dividend(attrs) do
@@ -977,6 +1023,27 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   ## Broker Transactions
+
+  @doc """
+  Imports trades from a Flex Trades CSV string.
+
+  Deduplicates by broker+external_id (upsert with on_conflict: :nothing).
+  Returns `{:ok, %{imported: n, skipped: n}}`.
+  """
+  def import_flex_trades_csv(csv_string) do
+    alias Dividendsomatic.Portfolio.FlexTradesCsvParser
+
+    case FlexTradesCsvParser.parse(csv_string) do
+      {:ok, transactions} ->
+        results = Enum.map(transactions, &upsert_broker_transaction/1)
+        imported = Enum.count(results, &match?({:ok, _}, &1))
+        skipped = length(results) - imported
+        {:ok, %{imported: imported, skipped: skipped}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
 
   def create_broker_transaction(attrs) do
     %BrokerTransaction{}

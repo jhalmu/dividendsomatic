@@ -33,6 +33,9 @@ mix import.ibkr              # Import IBKR CSV/PDF
 # Data pipeline
 mix process.data --scan              # Report what would be processed
 mix process.data --all               # Run full import pipeline
+mix import.flex_div_csv path.csv     # Import Flex dividend CSV (11-col)
+mix import.flex_trades path.csv      # Import Flex trades CSV (14-col)
+mix check.integrity path.csv         # Check integrity vs Actions.csv
 mix report.gaps                      # 364-day gap analysis
 mix validate.data                    # Dividend data validation
 mix check.sqlite                     # Check SQLite for unique data

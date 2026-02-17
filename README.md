@@ -1,39 +1,6 @@
 # Dividendsomatic
 
-Portfolio and dividend tracking system for multi-broker data (Interactive Brokers, Nordnet). Built with Phoenix LiveView, custom terminal-themed UI, and PostgreSQL.
-
-## Setup
-
-```bash
-docker compose up -d          # Start PostgreSQL
-mix deps.get
-mix ecto.setup
-mix phx.server
-```
-
-Visit http://localhost:4000
-
-## Import Data
-
-```bash
-# IBKR Activity Flex CSV
-mix import.csv path/to/flex.csv
-
-# Batch import from directory
-mix import.batch path/to/csv_directory
-
-# Nordnet transactions
-mix import.nordnet
-
-# Nordnet 9A tax report (sold positions)
-mix import.nordnet --9a path/to/9a.csv
-
-# IBKR transactions
-mix import.ibkr
-
-# Historical prices (Yahoo Finance)
-mix fetch.historical_prices
-```
+Portfolio and dividend tracking system for multi-broker data. Built with Phoenix LiveView, custom terminal-themed UI, and PostgreSQL.
 
 ## Features
 
@@ -63,33 +30,6 @@ mix fetch.historical_prices
 - Tailwind CSS v4 + DaisyUI 5.0
 - NimbleCSV, Contex (sparklines), Req (HTTP)
 
-## Testing
-
-```bash
-mix test              # Run tests (447 tests)
-mix precommit         # compile --warnings-as-errors + format + test
-mix test.all          # precommit + credo --strict
-```
-
-## Code Quality
-
-```bash
-mix format                          # Format code
-mix credo --strict                  # Static analysis
-mix sobelow                         # Security analysis
-mix dialyzer                        # Type checking
-mix compile --warnings-as-errors    # Compiler warnings check
-```
-
-## Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | prod | PostgreSQL connection URL |
-| `FINNHUB_API_KEY` | optional | Stock quotes & company profiles |
-| `EODHD_API_KEY` | optional | Historical data & company profiles |
-| `GMAIL_CLIENT_ID` | optional | Gmail auto-import OAuth |
-| `GMAIL_CLIENT_SECRET` | optional | Gmail auto-import OAuth |
 
 ## License
 

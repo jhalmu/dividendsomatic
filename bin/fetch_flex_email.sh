@@ -5,7 +5,11 @@
 # Replicates the Automator "HaePortolioMailit" workflow:
 # 1. Tell Mail.app to check for new mail (Google account)
 # 2. Wait for sync
-# 3. Search "Activity Flex" mailbox for messages from last 2 days
+# 3. Search Flex mailboxes for messages from last 2 days
+#    - "Activity Flex" (Portfolio.csv — daily)
+#    - "Dividend Flex" (Dividends.csv — weekly)
+#    - "Trades Flex" (Trades.csv — weekly)
+#    - "Actions Flex" (Actions.csv — monthly)
 # 4. Save .csv attachments to csv_data/
 # 5. Skip files that already exist (idempotent)
 #
@@ -56,46 +60,50 @@ end tell
 delay 30
 
 tell application "Mail"
-    -- Find the Activity Flex mailbox
-    set flexMailbox to missing value
+    -- Search multiple Flex mailboxes for CSV attachments
+    set flexMailboxNames to {"Activity Flex", "Dividend Flex", "Trades Flex", "Actions Flex"}
+    set allFlexMailboxes to {}
+
     try
         repeat with acct in accounts
             if name of acct contains "Google" or name of acct contains "Gmail" then
                 repeat with mb in mailboxes of acct
-                    if name of mb is "Activity Flex" then
-                        set flexMailbox to mb
-                        exit repeat
+                    if name of mb is in flexMailboxNames then
+                        set end of allFlexMailboxes to mb
                     end if
                     -- Check under Harraste parent folder
                     try
                         repeat with submb in mailboxes of mb
-                            if name of submb is "Activity Flex" then
-                                set flexMailbox to submb
-                                exit repeat
+                            if name of submb is in flexMailboxNames then
+                                set end of allFlexMailboxes to submb
                             end if
                         end repeat
                     end try
-                    if flexMailbox is not missing value then exit repeat
                 end repeat
-                if flexMailbox is not missing value then exit repeat
             end if
         end repeat
     on error errMsg
         set end of errorList to "find_mailbox:" & errMsg
     end try
 
-    if flexMailbox is missing value then
-        return "error:Could not find Activity Flex mailbox"
+    if (count of allFlexMailboxes) is 0 then
+        return "error:Could not find any Flex mailboxes"
     end if
 
-    -- Get messages from last 2 days
+    -- Get messages from last 2 days across all Flex mailboxes
     set cutoffDate to (current date) - (2 * days)
+    set recentMessages to {}
 
-    try
-        set recentMessages to (every message of flexMailbox whose date received > cutoffDate)
-    on error errMsg
-        return "error:Could not list messages: " & errMsg
-    end try
+    repeat with flexMailbox in allFlexMailboxes
+        try
+            set mbMessages to (every message of flexMailbox whose date received > cutoffDate)
+            repeat with msg in mbMessages
+                set end of recentMessages to msg
+            end repeat
+        on error errMsg
+            set end of errorList to "list_messages:" & errMsg
+        end try
+    end repeat
 
     -- Process each message
     repeat with msg in recentMessages
@@ -127,7 +135,7 @@ tell application "Mail"
 end tell
 
 -- Return summary
-set resultStr to "saved:" & savedCount & ",skipped:" & skippedCount & ",messages:" & (count of recentMessages)
+set resultStr to "saved:" & savedCount & ",skipped:" & skippedCount & ",messages:" & (count of recentMessages) & ",mailboxes:" & (count of allFlexMailboxes)
 if (count of errorList) > 0 then
     set resultStr to resultStr & ",errors:" & (count of errorList)
     repeat with e in errorList

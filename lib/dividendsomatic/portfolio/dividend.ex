@@ -19,12 +19,27 @@ defmodule Dividendsomatic.Portfolio.Dividend do
     field :source, :string
     field :isin, :string
     field :amount_type, :string, default: "per_share"
+    field :figi, :string
+    field :gross_rate, :decimal
+    field :net_amount, :decimal
+    field :quantity_at_record, :decimal
+    field :fx_rate, :decimal
 
     timestamps()
   end
 
   @required_fields [:symbol, :ex_date, :amount, :currency]
-  @optional_fields [:pay_date, :source, :isin, :amount_type]
+  @optional_fields [
+    :pay_date,
+    :source,
+    :isin,
+    :amount_type,
+    :figi,
+    :gross_rate,
+    :net_amount,
+    :quantity_at_record,
+    :fx_rate
+  ]
 
   @doc false
   def changeset(dividend, attrs) do

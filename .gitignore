@@ -55,8 +55,7 @@ dividendsomatic-*.tar
 /csv_data/
 
 # Processed data exports and archives (contains portfolio data)
-/data_revisited/
-/data_archive/
+/data*/
 
 # Log files from automation scripts
 /log/
