@@ -92,6 +92,7 @@ defmodule Dividendsomatic.Portfolio.FlexActionsCsvParser do
       to_date: parse_date(Enum.at(fields, 6)),
       starting_cash: parse_decimal(Enum.at(fields, 7)),
       dividends: parse_decimal(Enum.at(fields, 61)),
+      payment_in_lieu: parse_decimal(Enum.at(fields, 100)),
       commissions: parse_decimal(Enum.at(fields, 14)),
       net_trades_purchases: parse_decimal(Enum.at(fields, 91)),
       net_trades_sales: parse_decimal(Enum.at(fields, 88)),
@@ -101,6 +102,7 @@ defmodule Dividendsomatic.Portfolio.FlexActionsCsvParser do
   end
 
   # Parse the transaction detail section
+  # Stops at section boundaries (new header rows from open/closed lot sections)
   defp parse_transactions([]), do: []
 
   defp parse_transactions([header | data_lines]) do
@@ -112,6 +114,7 @@ defmodule Dividendsomatic.Portfolio.FlexActionsCsvParser do
       |> Map.new()
 
     data_lines
+    |> Enum.take_while(&(not section_header?(&1)))
     |> Enum.reject(&header_row?(&1, header))
     |> Enum.map(&parse_transaction_row(&1, headers))
     |> Enum.reject(&is_nil/1)
@@ -119,6 +122,12 @@ defmodule Dividendsomatic.Portfolio.FlexActionsCsvParser do
 
   defp header_row?(line, header) do
     String.trim(line) == String.trim(header)
+  end
+
+  # Detect new section headers (open/closed lots, trade confirmations, etc.)
+  defp section_header?(line) do
+    stripped = String.trim_leading(line, "\"")
+    String.starts_with?(stripped, "ClientAccountID")
   end
 
   defp parse_transaction_row(line, headers) do

@@ -1035,15 +1035,32 @@ defmodule Dividendsomatic.Portfolio do
 
     case FlexTradesCsvParser.parse(csv_string) do
       {:ok, transactions} ->
-        results = Enum.map(transactions, &upsert_broker_transaction/1)
+        results = Enum.map(transactions, &upsert_flex_trade/1)
         imported = Enum.count(results, &match?({:ok, _}, &1))
-        skipped = length(results) - imported
+        skipped = Enum.count(results, &match?(:skipped, &1))
         {:ok, %{imported: imported, skipped: skipped}}
 
       {:error, reason} ->
         {:error, reason}
     end
   end
+
+  defp upsert_flex_trade(attrs) do
+    if trade_exists?(attrs) do
+      :skipped
+    else
+      upsert_broker_transaction(attrs)
+    end
+  end
+
+  defp trade_exists?(%{isin: isin, trade_date: date, transaction_type: type})
+       when is_binary(isin) and isin != "" and not is_nil(date) do
+    BrokerTransaction
+    |> where([t], t.isin == ^isin and t.trade_date == ^date and t.transaction_type == ^type)
+    |> Repo.exists?()
+  end
+
+  defp trade_exists?(_), do: false
 
   def create_broker_transaction(attrs) do
     %BrokerTransaction{}

@@ -50,16 +50,19 @@ defmodule Dividendsomatic.Portfolio.IntegrityChecker do
     actions_total = sum_amounts(actions_dividends)
     {from_date, to_date} = extract_date_range(summary, transactions)
     db_count = count_db_dividends(from_date, to_date)
-    summary_div_total = summary[:dividends] || Decimal.new("0")
+    # Summary tracks DIV and PIL in separate columns
+    summary_div = summary[:dividends] || Decimal.new("0")
+    summary_pil = summary[:payment_in_lieu] || Decimal.new("0")
+    summary_total = Decimal.add(summary_div, summary_pil)
     actions_count = length(actions_dividends)
 
     %{
       name: "Dividend Reconciliation",
-      status: dividend_status(actions_count, actions_total, summary_div_total),
+      status: dividend_status(actions_count, actions_total, summary_total),
       message:
         "Actions: #{actions_count} records (#{format_decimal(actions_total)} EUR), " <>
           "DB: #{db_count} records in range #{from_date}..#{to_date}, " <>
-          "Summary total: #{format_decimal(summary_div_total)} EUR",
+          "Summary: DIV #{format_decimal(summary_div)} + PIL #{format_decimal(summary_pil)} = #{format_decimal(summary_total)} EUR",
       details:
         Enum.map(actions_dividends, fn txn ->
           "#{txn.date} #{txn.symbol} #{format_decimal(txn.amount)} #{txn.currency}"
