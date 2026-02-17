@@ -527,6 +527,17 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   defp compute_dividend_income(dividend, positions_data) do
+    amount = dividend.amount || Decimal.new("0")
+
+    # For total_net amounts, the value is already the total payment
+    if Map.get(dividend, :amount_type) == "total_net" do
+      amount
+    else
+      compute_per_share_income(dividend, positions_data, amount)
+    end
+  end
+
+  defp compute_per_share_income(dividend, positions_data, amount) do
     # Only consider positions matching symbol and within -7..+45 days of ex_date
     matching =
       Enum.filter(positions_data, fn {date, symbol, _qty, _fx} ->
@@ -544,7 +555,6 @@ defmodule Dividendsomatic.Portfolio do
       {_date, _symbol, quantity, fx_rate} ->
         qty = quantity || Decimal.new("0")
         fx = fx_rate || Decimal.new("1")
-        amount = dividend.amount || Decimal.new("0")
         Decimal.mult(Decimal.mult(amount, qty), fx)
 
       nil ->

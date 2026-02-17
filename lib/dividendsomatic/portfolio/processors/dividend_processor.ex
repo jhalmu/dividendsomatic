@@ -5,6 +5,10 @@ defmodule Dividendsomatic.Portfolio.Processors.DividendProcessor do
   Handles Nordnet (per-share amount in price field) and IBKR (per-share amount
   extracted from description). Stores per-share gross amount in dividends table.
   Deduplicates by ISIN+ex_date first, then symbol+ex_date.
+
+  For IBKR "Payment in Lieu of Dividend" records where no per-share amount
+  can be extracted, falls back to storing the total net amount with
+  `amount_type: "total_net"`.
   """
 
   import Ecto.Query
@@ -21,6 +25,25 @@ defmodule Dividendsomatic.Portfolio.Processors.DividendProcessor do
   # "Cash Dividend Foreign Tax USD 0.0825 Withholding per Share"
   # "Cash Foreign Tax Dividend USD Withholding 0.24 per Share"
   @cash_dividend_pdf_regex ~r/Cash.*?\b([A-Z]{3})\b.*?([\d]+\.[\d]+)/
+
+  # ISIN country prefix to default currency mapping
+  @isin_currency_map %{
+    "US" => "USD",
+    "CA" => "CAD",
+    "SE" => "SEK",
+    "FI" => "EUR",
+    "DE" => "EUR",
+    "FR" => "EUR",
+    "NL" => "EUR",
+    "IE" => "EUR",
+    "NO" => "NOK",
+    "JP" => "JPY",
+    "GB" => "GBP",
+    "HK" => "HKD",
+    "DK" => "DKK",
+    "CH" => "CHF",
+    "AU" => "AUD"
+  }
 
   @doc """
   Processes all dividend transactions and inserts into dividends table.
@@ -42,33 +65,71 @@ defmodule Dividendsomatic.Portfolio.Processors.DividendProcessor do
   end
 
   defp insert_dividend(txn) do
-    {amount, currency} = extract_dividend_amount(txn)
+    if foreign_tax_only?(txn) do
+      :skipped
+    else
+      {amount, currency, amount_type} = extract_dividend_amount(txn)
 
-    cond do
-      is_nil(amount) || Decimal.compare(amount, Decimal.new("0")) != :gt -> :skipped
-      dividend_exists?(txn) -> :skipped
-      true -> do_insert_dividend(txn, amount, currency)
+      cond do
+        is_nil(amount) || Decimal.compare(amount, Decimal.new("0")) != :gt -> :skipped
+        dividend_exists?(txn) -> :skipped
+        true -> do_insert_dividend(txn, amount, currency, amount_type)
+      end
     end
+  end
+
+  # Skip Foreign Tax entries that aren't preceded by "Cash Dividend" in description.
+  # These are withholding tax records misclassified as dividends.
+  defp foreign_tax_only?(%{description: nil}), do: false
+
+  defp foreign_tax_only?(%{description: desc}) do
+    has_foreign_tax = String.contains?(desc, "Foreign Tax")
+    has_cash_dividend = String.contains?(desc, "Cash Dividend")
+    has_foreign_tax and not has_cash_dividend
   end
 
   # Nordnet: per-share amount in price field (Kurssi), or calculate from total/quantity
   defp extract_dividend_amount(%{broker: "nordnet"} = txn) do
     amount = txn.price || calculate_per_share(txn.amount, txn.quantity)
-    {amount, txn.currency || "EUR"}
+    {amount, txn.currency || "EUR", "per_share"}
   end
 
-  # IBKR: extract per-share amount and currency from description
+  # IBKR: extract per-share amount and currency from description, with total_net fallback
   defp extract_dividend_amount(%{broker: "ibkr"} = txn) do
     case extract_cash_dividend_info(txn.description) do
-      {per_share, currency} -> {per_share, currency}
-      nil -> {nil, nil}
+      {per_share, currency} ->
+        {per_share, currency, "per_share"}
+
+      nil ->
+        # Fallback: use transaction total amount as total_net
+        ibkr_total_net_fallback(txn)
     end
   end
 
   defp extract_dividend_amount(txn) do
     amount = txn.price || calculate_per_share(txn.amount, txn.quantity)
-    {amount, txn.currency || "EUR"}
+    {amount, txn.currency || "EUR", "per_share"}
   end
+
+  # When regex extraction fails (PIL records), use the total net amount directly.
+  defp ibkr_total_net_fallback(txn) do
+    amount = if txn.amount, do: Decimal.abs(txn.amount), else: nil
+    currency = txn.currency || currency_from_isin(txn.isin) || "EUR"
+    {amount, currency, "total_net"}
+  end
+
+  @doc """
+  Derives currency from ISIN country prefix.
+  Returns nil if ISIN is nil or country code is unknown.
+  """
+  def currency_from_isin(nil), do: nil
+
+  def currency_from_isin(isin) when byte_size(isin) >= 2 do
+    country = String.slice(isin, 0, 2)
+    Map.get(@isin_currency_map, country)
+  end
+
+  def currency_from_isin(_), do: nil
 
   defp extract_cash_dividend_info(nil), do: nil
 
@@ -91,7 +152,7 @@ defmodule Dividendsomatic.Portfolio.Processors.DividendProcessor do
     end
   end
 
-  defp do_insert_dividend(txn, amount, currency) do
+  defp do_insert_dividend(txn, amount, currency, amount_type) do
     attrs = %{
       symbol: txn.security_name,
       ex_date: txn.trade_date,
@@ -99,7 +160,8 @@ defmodule Dividendsomatic.Portfolio.Processors.DividendProcessor do
       amount: amount,
       currency: currency || "EUR",
       source: txn.broker,
-      isin: txn.isin
+      isin: txn.isin,
+      amount_type: amount_type
     }
 
     case %Dividend{} |> Dividend.changeset(attrs) |> Repo.insert() do
