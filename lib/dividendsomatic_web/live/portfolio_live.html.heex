@@ -1,9 +1,32 @@
 <main id="portfolio-view" class="terminal-theme" phx-hook="KeyboardNav" role="main">
   <div class="max-w-[var(--content-max-width)] mx-auto px-[var(--space-sm)] sm:px-[var(--space-md)] lg:px-[var(--space-lg)] py-[var(--space-md)]">
-    <!-- Brand + Motto -->
+    <!-- Brand + Motto + Theme Toggle -->
     <div class="terminal-branding">
-      <h1 class="terminal-brand-name">dividends-o-matic</h1>
-      <div class="terminal-motto">sisu &amp; dividends</div>
+      <div>
+        <h1 class="terminal-brand-name">dividends-o-matic</h1>
+        <div class="terminal-motto">sisu &amp; dividends</div>
+      </div>
+      <button
+        onclick="const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'; document.documentElement.setAttribute('data-theme', next); localStorage.setItem('phx:theme', next);"
+        class="btn btn-ghost btn-sm btn-circle"
+        aria-label="Toggle dark/light mode"
+        title="Toggle theme"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          stroke="currentColor"
+          class="w-5 h-5"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"
+          />
+        </svg>
+      </button>
     </div>
 
     <%= if @current_snapshot do %>
@@ -22,8 +45,20 @@
             disabled={!@has_prev}
             aria-label="First snapshot"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="2"
+              stroke="currentColor"
+              class="w-3.5 h-3.5"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5"
+              />
             </svg>
           </button>
 
@@ -34,16 +69,52 @@
             disabled={!@has_prev}
             aria-label="Previous snapshot"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-4 h-4" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="2.5"
+              stroke="currentColor"
+              class="w-4 h-4"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M15.75 19.5L8.25 12l7.5-7.5"
+              />
             </svg>
           </button>
 
           <%!-- Quick-jump pills --%>
           <div class="hidden sm:flex items-center gap-1">
-            <button phx-click="navigate" phx-value-direction="back_year" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_prev}>-1Y</button>
-            <button phx-click="navigate" phx-value-direction="back_month" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_prev}>-1M</button>
-            <button phx-click="navigate" phx-value-direction="back_week" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_prev}>-1W</button>
+            <button
+              phx-click="navigate"
+              phx-value-direction="back_year"
+              class="btn btn-xs btn-ghost"
+              style="font-size: 0.625rem; color: var(--terminal-dim);"
+              disabled={!@has_prev}
+            >
+              -1Y
+            </button>
+            <button
+              phx-click="navigate"
+              phx-value-direction="back_month"
+              class="btn btn-xs btn-ghost"
+              style="font-size: 0.625rem; color: var(--terminal-dim);"
+              disabled={!@has_prev}
+            >
+              -1M
+            </button>
+            <button
+              phx-click="navigate"
+              phx-value-direction="back_week"
+              class="btn btn-xs btn-ghost"
+              style="font-size: 0.625rem; color: var(--terminal-dim);"
+              disabled={!@has_prev}
+            >
+              -1W
+            </button>
           </div>
 
           <%!-- Date display + picker --%>
@@ -66,9 +137,33 @@
 
           <%!-- Quick-jump pills (forward) --%>
           <div class="hidden sm:flex items-center gap-1">
-            <button phx-click="navigate" phx-value-direction="forward_week" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_next}>+1W</button>
-            <button phx-click="navigate" phx-value-direction="forward_month" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_next}>+1M</button>
-            <button phx-click="navigate" phx-value-direction="forward_year" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_next}>+1Y</button>
+            <button
+              phx-click="navigate"
+              phx-value-direction="forward_week"
+              class="btn btn-xs btn-ghost"
+              style="font-size: 0.625rem; color: var(--terminal-dim);"
+              disabled={!@has_next}
+            >
+              +1W
+            </button>
+            <button
+              phx-click="navigate"
+              phx-value-direction="forward_month"
+              class="btn btn-xs btn-ghost"
+              style="font-size: 0.625rem; color: var(--terminal-dim);"
+              disabled={!@has_next}
+            >
+              +1M
+            </button>
+            <button
+              phx-click="navigate"
+              phx-value-direction="forward_year"
+              class="btn btn-xs btn-ghost"
+              style="font-size: 0.625rem; color: var(--terminal-dim);"
+              disabled={!@has_next}
+            >
+              +1Y
+            </button>
           </div>
 
           <button
@@ -78,7 +173,15 @@
             disabled={!@has_next}
             aria-label="Next snapshot"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-4 h-4" aria-hidden="true">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="2.5"
+              stroke="currentColor"
+              class="w-4 h-4"
+              aria-hidden="true"
+            >
               <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
             </svg>
           </button>
@@ -90,27 +193,92 @@
             disabled={!@has_next}
             aria-label="Latest snapshot"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 4.5l7.5 7.5-7.5 7.5m-6-15l7.5 7.5-7.5 7.5" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="2"
+              stroke="currentColor"
+              class="w-3.5 h-3.5"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M11.25 4.5l7.5 7.5-7.5 7.5m-6-15l7.5 7.5-7.5 7.5"
+              />
             </svg>
           </button>
 
           <%!-- Fear & Greed pill --%>
           <%= if @fear_greed do %>
             <div class="hidden sm:block ml-2">
-              {DividendsomaticWeb.Components.PortfolioChart.render_fear_greed_gauge(@fear_greed, id_suffix: "nav")}
+              {DividendsomaticWeb.Components.PortfolioChart.render_fear_greed_gauge(@fear_greed,
+                id_suffix: "nav"
+              )}
             </div>
           <% end %>
         </div>
 
         <%!-- Mobile quick-jump (visible on small screens) --%>
-        <div class="flex sm:hidden items-center justify-center gap-1 mt-1" style="font-size: 0.625rem;">
-          <button phx-click="navigate" phx-value-direction="back_year" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_prev}>-1Y</button>
-          <button phx-click="navigate" phx-value-direction="back_month" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_prev}>-1M</button>
-          <button phx-click="navigate" phx-value-direction="back_week" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_prev}>-1W</button>
-          <button phx-click="navigate" phx-value-direction="forward_week" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_next}>+1W</button>
-          <button phx-click="navigate" phx-value-direction="forward_month" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_next}>+1M</button>
-          <button phx-click="navigate" phx-value-direction="forward_year" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_next}>+1Y</button>
+        <div
+          class="flex sm:hidden items-center justify-center gap-1 mt-1"
+          style="font-size: 0.625rem;"
+        >
+          <button
+            phx-click="navigate"
+            phx-value-direction="back_year"
+            class="btn btn-xs btn-ghost"
+            style="font-size: 0.625rem; color: var(--terminal-dim);"
+            disabled={!@has_prev}
+          >
+            -1Y
+          </button>
+          <button
+            phx-click="navigate"
+            phx-value-direction="back_month"
+            class="btn btn-xs btn-ghost"
+            style="font-size: 0.625rem; color: var(--terminal-dim);"
+            disabled={!@has_prev}
+          >
+            -1M
+          </button>
+          <button
+            phx-click="navigate"
+            phx-value-direction="back_week"
+            class="btn btn-xs btn-ghost"
+            style="font-size: 0.625rem; color: var(--terminal-dim);"
+            disabled={!@has_prev}
+          >
+            -1W
+          </button>
+          <button
+            phx-click="navigate"
+            phx-value-direction="forward_week"
+            class="btn btn-xs btn-ghost"
+            style="font-size: 0.625rem; color: var(--terminal-dim);"
+            disabled={!@has_next}
+          >
+            +1W
+          </button>
+          <button
+            phx-click="navigate"
+            phx-value-direction="forward_month"
+            class="btn btn-xs btn-ghost"
+            style="font-size: 0.625rem; color: var(--terminal-dim);"
+            disabled={!@has_next}
+          >
+            +1M
+          </button>
+          <button
+            phx-click="navigate"
+            phx-value-direction="forward_year"
+            class="btn btn-xs btn-ghost"
+            style="font-size: 0.625rem; color: var(--terminal-dim);"
+            disabled={!@has_next}
+          >
+            +1Y
+          </button>
         </div>
       </div>
 
@@ -141,7 +309,10 @@
             {format_euro_decimal(@dividend_total)}
           </div>
           <%= if @projected_dividends do %>
-            <div class="mt-[var(--space-inline)]" style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);">
+            <div
+              class="mt-[var(--space-inline)]"
+              style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);"
+            >
               Proj. {format_euro_decimal(@projected_dividends)}/yr
             </div>
           <% end %>
@@ -166,7 +337,10 @@
                 <div class={"terminal-growth-badge #{if Decimal.compare(@growth_stats.absolute_change, Decimal.new("0")) == :lt, do: "negative"}"}>
                   {format_euro_signed(@growth_stats.absolute_change)}
                   <span style="opacity: 0.6;">
-                    (<%= if pnl_positive?(@growth_stats.percent_change) do %>+<% end %>{Decimal.to_string(@growth_stats.percent_change)}%)
+                    (<%= if pnl_positive?(@growth_stats.percent_change) do %>
+                      +
+                    <% end %>
+                    {Decimal.to_string(@growth_stats.percent_change)}%)
                   </span>
                 </div>
               <% end %>
@@ -175,9 +349,16 @@
               <div class="terminal-chart-title" id="chart-title" style="text-align: right;">
                 Portfolio Performance
               </div>
-              <div class="terminal-chart-legend" id="chart-legend" aria-label="Chart legend" style="justify-content: flex-end;">
+              <div
+                class="terminal-chart-legend"
+                id="chart-legend"
+                aria-label="Chart legend"
+                style="justify-content: flex-end;"
+              >
                 <span class="terminal-legend-item">
-                  <span class="terminal-legend-line" style="background: var(--chart-line);"></span> Value
+                  <span class="terminal-legend-line" style="background: var(--chart-line);">
+                  </span>
+                  Value
                 </span>
                 <span class="terminal-legend-item">
                   <span class="terminal-legend-line terminal-legend-dashed"></span> Cost Basis
@@ -189,7 +370,11 @@
           <%!-- Chart Range Presets + Year Filter --%>
           <div class="flex items-center gap-1 flex-wrap mb-[var(--space-xs)]">
             <%= for preset <- ["1M", "3M", "6M", "YTD", "1Y", "ALL"] do %>
-              <button phx-click="chart_range_preset" phx-value-preset={preset} class="btn btn-xs btn-outline">
+              <button
+                phx-click="chart_range_preset"
+                phx-value-preset={preset}
+                class="btn btn-xs btn-outline"
+              >
                 {preset}
               </button>
             <% end %>
@@ -220,13 +405,21 @@
               phx-hook="ApexChartHook"
               phx-update="ignore"
               data-chart-config={Jason.encode!(build_portfolio_apex_config(chart_json))}
-            ></div>
+            >
+            </div>
           <% end %>
 
           <%!-- Chart Footer --%>
           <%= if @growth_stats do %>
-            <div class="mt-[var(--space-xs)] flex items-center justify-between" style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);">
-              <span>{Date.to_string(@growth_stats.first_date)} → {Date.to_string(@growth_stats.latest_date)}</span>
+            <div
+              class="mt-[var(--space-xs)] flex items-center justify-between"
+              style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);"
+            >
+              <span>
+                {Date.to_string(@growth_stats.first_date)} → {Date.to_string(
+                  @growth_stats.latest_date
+                )}
+              </span>
               <span>{length(@chart_data)} trading days</span>
             </div>
           <% end %>
@@ -238,12 +431,20 @@
         <div class="terminal-chart mb-[var(--space-xs)] animate-fade-in animate-delay-3">
           <div class="terminal-chart-header">
             <div class="terminal-chart-title">Dividend History</div>
-            <div class="terminal-chart-legend" aria-label="Dividend chart legend" style="justify-content: flex-end;">
+            <div
+              class="terminal-chart-legend"
+              aria-label="Dividend chart legend"
+              style="justify-content: flex-end;"
+            >
               <span class="terminal-legend-item">
-                <span class="terminal-legend-line" style="background: var(--chart-dividend);"></span> Monthly
+                <span class="terminal-legend-line" style="background: var(--chart-dividend);">
+                </span>
+                Monthly
               </span>
               <span class="terminal-legend-item">
-                <span class="terminal-legend-line" style="background: var(--chart-cumulative);"></span> Cumulative
+                <span class="terminal-legend-line" style="background: var(--chart-cumulative);">
+                </span>
+                Cumulative
               </span>
             </div>
           </div>
@@ -253,14 +454,24 @@
             phx-hook="ApexChartHook"
             phx-update="ignore"
             data-chart-config={Jason.encode!(build_dividend_apex_config(div_json))}
-          ></div>
+          >
+          </div>
           <%= if length(@recent_dividends) > 0 do %>
-            <div class="flex items-center gap-[var(--space-xs)] flex-wrap p-[var(--space-xs)]" style="font-family: var(--font-mono); font-size: 0.625rem;">
-              <span style="color: var(--terminal-dim); font-size: 0.5625rem; text-transform: uppercase; letter-spacing: 0.05em;">Recent</span>
+            <div
+              class="flex items-center gap-[var(--space-xs)] flex-wrap p-[var(--space-xs)]"
+              style="font-family: var(--font-mono); font-size: 0.625rem;"
+            >
+              <span style="color: var(--terminal-dim); font-size: 0.5625rem; text-transform: uppercase; letter-spacing: 0.05em;">
+                Recent
+              </span>
               <%= for entry <- @recent_dividends do %>
                 <span class="inline-flex items-center gap-1" style="color: var(--terminal-muted);">
-                  <span style="color: var(--terminal-text); font-weight: 500;">{entry.dividend.symbol}</span>
-                  <span style="color: var(--terminal-dim);">{Calendar.strftime(entry.dividend.ex_date, "%b %d")}</span>
+                  <span style="color: var(--terminal-text); font-weight: 500;">
+                    {entry.dividend.symbol}
+                  </span>
+                  <span style="color: var(--terminal-dim);">
+                    {Calendar.strftime(entry.dividend.ex_date, "%b %d")}
+                  </span>
                   <span style="color: var(--gain);">+{format_euro_decimal(entry.income)}</span>
                 </span>
               <% end %>
@@ -308,12 +519,32 @@
       </div>
 
       <%!-- ── Tab: Holdings ── --%>
-      <div :if={@active_tab == "holdings"} id="panel-holdings" role="tabpanel" class="animate-fade-in">
+      <div
+        :if={@active_tab == "holdings"}
+        id="panel-holdings"
+        role="tabpanel"
+        class="animate-fade-in"
+      >
         <%!-- Reconstruction Banner --%>
         <%= if @is_reconstructed do %>
-          <div class="mb-[var(--space-xs)]" style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-muted); background: var(--terminal-elevated); border: 1px solid var(--terminal-border); border-radius: 8px; padding: 0.375rem 0.5rem; display: flex; align-items: center; gap: 0.375rem;">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5" style="flex-shrink: 0; opacity: 0.6;">
-              <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+          <div
+            class="mb-[var(--space-xs)]"
+            style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-muted); background: var(--terminal-elevated); border: 1px solid var(--terminal-border); border-radius: 8px; padding: 0.375rem 0.5rem; display: flex; align-items: center; gap: 0.375rem;"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              class="w-3.5 h-3.5"
+              style="flex-shrink: 0; opacity: 0.6;"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z"
+              />
             </svg>
             <span>
               Reconstructed from Nordnet transactions
@@ -356,31 +587,48 @@
                   <%= for pos <- @positions do %>
                     <tr>
                       <td>
-                        <.link navigate={~p"/stocks/#{pos.symbol}"} class="terminal-symbol hover:underline">
+                        <.link
+                          navigate={~p"/stocks/#{pos.symbol}"}
+                          class="terminal-symbol hover:underline"
+                        >
                           {pos.symbol}
                         </.link>
                         <%= if Decimal.compare(pos.quantity, Decimal.new("0")) == :lt do %>
-                          <span style="display: inline-block; background: var(--loss); color: #fff; font-size: 0.45rem; font-weight: 700; padding: 0px 4px; border-radius: 3px; margin-left: 4px; vertical-align: middle; letter-spacing: 0.05em;" data-testid="short-badge">SHORT</span>
+                          <span
+                            style="display: inline-block; background: var(--loss); color: #fff; font-size: 0.45rem; font-weight: 700; padding: 0px 4px; border-radius: 3px; margin-left: 4px; vertical-align: middle; letter-spacing: 0.05em;"
+                            data-testid="short-badge"
+                          >
+                            SHORT
+                          </span>
                         <% end %>
                       </td>
                       <td><span class="terminal-description">{pos.name}</span></td>
                       <td class="terminal-number">{format_integer(pos.quantity)}</td>
                       <td class="terminal-number" style="text-align: right;">
                         <%= if is_nil(pos.price) do %>
-                          <span style="color: var(--loss); opacity: 0.6; font-size: 0.625rem;">N/A</span>
+                          <span style="color: var(--loss); opacity: 0.6; font-size: 0.625rem;">
+                            N/A
+                          </span>
                         <% else %>
                           {format_decimal(pos.price)}
-                          <span style="color: var(--terminal-dim); font-size: 0.625rem; position: absolute; margin-left: 0.35rem;">{pos.currency}</span>
+                          <span style="color: var(--terminal-dim); font-size: 0.625rem; position: absolute; margin-left: 0.35rem;">
+                            {pos.currency}
+                          </span>
                         <% end %>
                       </td>
                       <td class="terminal-number" style="font-weight: 500; text-align: right;">
                         <%= if is_nil(pos.value) do %>
-                          <span style="color: var(--loss); opacity: 0.6; font-size: 0.625rem;">N/A</span>
+                          <span style="color: var(--loss); opacity: 0.6; font-size: 0.625rem;">
+                            N/A
+                          </span>
                         <% else %>
                           {format_decimal(pos.value)}
                         <% end %>
                       </td>
-                      <td class="terminal-number" style="color: var(--terminal-dim); text-align: right;">
+                      <td
+                        class="terminal-number"
+                        style="color: var(--terminal-dim); text-align: right;"
+                      >
                         {format_decimal(pos.cost_basis)}
                       </td>
                       <td class="terminal-number">
@@ -388,11 +636,16 @@
                           class={pnl_badge_class(pos.unrealized_pnl)}
                           aria-label={"#{if pnl_positive?(pos.unrealized_pnl), do: "Gain", else: "Loss"}: #{format_decimal(pos.unrealized_pnl)}"}
                         >
-                          <%= if pnl_positive?(pos.unrealized_pnl) do %>+<% end %>{format_decimal(pos.unrealized_pnl)}
+                          <%= if pnl_positive?(pos.unrealized_pnl) do %>
+                            +
+                          <% end %>
+                          {format_decimal(pos.unrealized_pnl)}
                         </span>
                       </td>
                       <td class="terminal-number">
-                        <span style="color: var(--terminal-muted);">{format_decimal(pos.weight)}%</span>
+                        <span style="color: var(--terminal-muted);">
+                          {format_decimal(pos.weight)}%
+                        </span>
                       </td>
                     </tr>
                   <% end %>
@@ -407,7 +660,10 @@
       <div :if={@active_tab == "income"} id="panel-income" role="tabpanel" class="animate-fade-in">
         <%!-- Dividend Cash Flow --%>
         <%= if length(@cash_flow) > 0 do %>
-          <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]" data-testid="cash-flow">
+          <div
+            class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]"
+            data-testid="cash-flow"
+          >
             <div class="flex items-center justify-between">
               <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
                 Dividend Cash Flow {Date.utc_today().year}
@@ -417,17 +673,25 @@
               </div>
             </div>
             <%!-- Mini Bar Chart --%>
-            <div class="mt-[var(--space-xs)]" style="display: flex; align-items: flex-end; gap: 2px; height: 60px;">
-              <% max_income = @cash_flow |> Enum.map(&Decimal.to_float(&1.income)) |> Enum.max() |> max(0.01) %>
+            <div
+              class="mt-[var(--space-xs)]"
+              style="display: flex; align-items: flex-end; gap: 2px; height: 60px;"
+            >
+              <% max_income =
+                @cash_flow |> Enum.map(&Decimal.to_float(&1.income)) |> Enum.max() |> max(0.01) %>
               <%= for entry <- @cash_flow do %>
                 <% bar_h = Decimal.to_float(entry.income) / max_income * 100 %>
                 <div
                   style={"flex: 1; height: #{max(bar_h, 2)}%; background: var(--chart-dividend); border-radius: 3px 3px 0 0; min-width: 8px;"}
                   title={"#{entry.month}: #{format_euro_decimal(entry.income)}"}
-                ></div>
+                >
+                </div>
               <% end %>
             </div>
-            <div class="mt-1" style="display: flex; gap: 2px; font-family: var(--font-mono); font-size: 0.5rem; color: var(--terminal-dim);">
+            <div
+              class="mt-1"
+              style="display: flex; gap: 2px; font-family: var(--font-mono); font-size: 0.5rem; color: var(--terminal-dim);"
+            >
               <%= for entry <- @cash_flow do %>
                 <div style="flex: 1; text-align: center; min-width: 8px;">
                   {String.slice(entry.month, 5, 2)}
@@ -472,8 +736,12 @@
               <%= for entry <- @recent_dividends do %>
                 <div class="terminal-dividend-row">
                   <span class="terminal-dividend-symbol">{entry.dividend.symbol}</span>
-                  <span class="terminal-dividend-date">{Calendar.strftime(entry.dividend.ex_date, "%Y-%m-%d")}</span>
-                  <span class="terminal-dividend-amount">+{format_euro_decimal(entry.income)}</span>
+                  <span class="terminal-dividend-date">
+                    {Calendar.strftime(entry.dividend.ex_date, "%Y-%m-%d")}
+                  </span>
+                  <span class="terminal-dividend-amount">
+                    +{format_euro_decimal(entry.income)}
+                  </span>
                 </div>
               <% end %>
             </div>
@@ -482,10 +750,18 @@
       </div>
 
       <%!-- ── Tab: Summary ── --%>
-      <div :if={@active_tab == "summary"} id="panel-summary" role="tabpanel" class="animate-fade-in">
+      <div
+        :if={@active_tab == "summary"}
+        id="panel-summary"
+        role="tabpanel"
+        class="animate-fade-in"
+      >
         <%!-- Investment Summary --%>
         <%= if @investment_summary do %>
-          <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]" data-testid="investment-summary">
+          <div
+            class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]"
+            data-testid="investment-summary"
+          >
             <div class="terminal-section-label">Investment Summary</div>
             <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)] mt-[var(--space-sm)]">
               <div class="text-center">
@@ -496,19 +772,28 @@
               </div>
               <div class="text-center">
                 <div class="terminal-stat-label">Realized P&amp;L</div>
-                <div class={"terminal-stat-value #{if pnl_positive?(@investment_summary.realized_pnl), do: "gain", else: "loss"}"} style="font-size: 0.8125rem;">
+                <div
+                  class={"terminal-stat-value #{if pnl_positive?(@investment_summary.realized_pnl), do: "gain", else: "loss"}"}
+                  style="font-size: 0.8125rem;"
+                >
                   {format_euro_signed(@investment_summary.realized_pnl)}
                 </div>
               </div>
               <div class="text-center">
                 <div class="terminal-stat-label">Unrealized P&amp;L</div>
-                <div class={"terminal-stat-value #{if pnl_positive?(@investment_summary.unrealized_pnl), do: "gain", else: "loss"}"} style="font-size: 0.8125rem;">
+                <div
+                  class={"terminal-stat-value #{if pnl_positive?(@investment_summary.unrealized_pnl), do: "gain", else: "loss"}"}
+                  style="font-size: 0.8125rem;"
+                >
                   {format_euro_signed(@investment_summary.unrealized_pnl)}
                 </div>
               </div>
               <div class="text-center">
                 <div class="terminal-stat-label">Total Dividends</div>
-                <div class="terminal-stat-value" style="font-size: 0.8125rem; color: var(--chart-dividend);">
+                <div
+                  class="terminal-stat-value"
+                  style="font-size: 0.8125rem; color: var(--chart-dividend);"
+                >
                   {format_euro_decimal(@investment_summary.total_dividends)}
                 </div>
               </div>
@@ -520,7 +805,10 @@
               </div>
               <div class="text-center">
                 <div class="terminal-stat-label" style="font-weight: 600;">Total Return</div>
-                <div class={"terminal-stat-value #{if pnl_positive?(@investment_summary.total_return), do: "gain", else: "loss"}"} style="font-size: 0.875rem; font-weight: 700;">
+                <div
+                  class={"terminal-stat-value #{if pnl_positive?(@investment_summary.total_return), do: "gain", else: "loss"}"}
+                  style="font-size: 0.875rem; font-weight: 700;"
+                >
                   {format_euro_signed(@investment_summary.total_return)}
                 </div>
               </div>
@@ -529,40 +817,80 @@
         <% end %>
 
         <%!-- Realized P&L --%>
-        <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]" data-testid="realized-pnl-card">
+        <div
+          class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]"
+          data-testid="realized-pnl-card"
+        >
           <div class="flex flex-wrap items-center justify-between gap-[var(--space-xs)]">
             <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
               Realized P&amp;L
             </div>
             <div class="flex items-center gap-1 flex-wrap">
-              <button phx-click="pnl_year" phx-value-year="all" class={"btn btn-xs #{if @pnl_year == nil, do: "btn-primary", else: "btn-outline"}"}>All</button>
+              <button
+                phx-click="pnl_year"
+                phx-value-year="all"
+                class={"btn btn-xs #{if @pnl_year == nil, do: "btn-primary", else: "btn-outline"}"}
+              >
+                All
+              </button>
               <%= for y <- @pnl.available_years do %>
-                <button phx-click="pnl_year" phx-value-year={to_string(y)} class={"btn btn-xs #{if @pnl_year == y, do: "btn-primary", else: "btn-outline"}"}>{y}</button>
+                <button
+                  phx-click="pnl_year"
+                  phx-value-year={to_string(y)}
+                  class={"btn btn-xs #{if @pnl_year == y, do: "btn-primary", else: "btn-outline"}"}
+                >
+                  {y}
+                </button>
               <% end %>
             </div>
             <div class="flex items-center gap-[var(--space-xs)]">
-              <div class={"terminal-stat-value #{if pnl_positive?(@pnl.total_pnl), do: "gain", else: "loss"}"} style="font-size: 0.875rem;">
+              <div
+                class={"terminal-stat-value #{if pnl_positive?(@pnl.total_pnl), do: "gain", else: "loss"}"}
+                style="font-size: 0.875rem;"
+              >
                 {format_euro_signed(@pnl.total_pnl)}
               </div>
               <%= if @pnl.has_unconverted do %>
-                <span class="badge badge-warning badge-xs" title="Some positions have not been converted to EUR. Run mix backfill.sold_pnl_eur">FX pending</span>
+                <span
+                  class="badge badge-warning badge-xs"
+                  title="Some positions have not been converted to EUR. Run mix backfill.sold_pnl_eur"
+                >
+                  FX pending
+                </span>
               <% end %>
             </div>
           </div>
 
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-[var(--space-xs)] mt-[var(--space-sm)]" data-testid="pnl-summary-stats">
+          <div
+            class="grid grid-cols-2 sm:grid-cols-4 gap-[var(--space-xs)] mt-[var(--space-sm)]"
+            data-testid="pnl-summary-stats"
+          >
             <div class="text-center">
-              <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">Gains</div>
-              <div style="color: var(--gain); font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;">{format_euro_decimal(@pnl.total_gains)}</div>
-              <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);">{@pnl.win_count} symbols</div>
+              <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">
+                Gains
+              </div>
+              <div style="color: var(--gain); font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;">
+                {format_euro_decimal(@pnl.total_gains)}
+              </div>
+              <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);">
+                {@pnl.win_count} symbols
+              </div>
             </div>
             <div class="text-center">
-              <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">Losses</div>
-              <div style="color: var(--loss); font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;">{format_euro_decimal(@pnl.total_losses)}</div>
-              <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);">{@pnl.loss_count} symbols</div>
+              <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">
+                Losses
+              </div>
+              <div style="color: var(--loss); font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;">
+                {format_euro_decimal(@pnl.total_losses)}
+              </div>
+              <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);">
+                {@pnl.loss_count} symbols
+              </div>
             </div>
             <div class="text-center">
-              <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">Win Rate</div>
+              <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">
+                Win Rate
+              </div>
               <div style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;">
                 <%= if @pnl.win_count + @pnl.loss_count > 0 do %>
                   {Float.round(@pnl.win_count / (@pnl.win_count + @pnl.loss_count) * 100, 1)}%
@@ -572,9 +900,15 @@
               </div>
             </div>
             <div class="text-center">
-              <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">Trades</div>
-              <div style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;">{@pnl.total_trades}</div>
-              <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);">{@pnl.symbol_count} symbols</div>
+              <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">
+                Trades
+              </div>
+              <div style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;">
+                {@pnl.total_trades}
+              </div>
+              <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);">
+                {@pnl.symbol_count} symbols
+              </div>
             </div>
           </div>
 
@@ -582,7 +916,9 @@
           <%= if @pnl.symbol_count > 0 do %>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-[var(--space-xs)] mt-[var(--space-sm)]">
               <div>
-                <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--gain); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; font-weight: 600;">Top Winners</div>
+                <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--gain); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; font-weight: 600;">
+                  Top Winners
+                </div>
                 <div class="overflow-x-auto">
                   <table class="terminal-table">
                     <thead>
@@ -597,11 +933,37 @@
                     <tbody>
                       <%= for sp <- @pnl.top_winners do %>
                         <tr>
-                          <td><.link navigate={~p"/stocks/#{sp.symbol}"} class="terminal-symbol hover:underline">{sp.symbol}</.link></td>
-                          <td class="terminal-number" style="text-align: right; color: var(--terminal-dim);">{sp.trades}</td>
-                          <td class="terminal-number" style="text-align: right;">{format_integer(sp.total_quantity)}</td>
-                          <td class="terminal-number" style="text-align: right;"><span class="terminal-badge-gain">+{format_euro_decimal(sp.total_pnl)}</span></td>
-                          <td class="terminal-number" style="text-align: right; color: var(--terminal-dim); font-size: 0.75rem;">{Calendar.strftime(sp.first_date, "%Y")}&ndash;{Calendar.strftime(sp.last_date, "%Y")}</td>
+                          <td>
+                            <.link
+                              navigate={~p"/stocks/#{sp.symbol}"}
+                              class="terminal-symbol hover:underline"
+                            >
+                              {sp.symbol}
+                            </.link>
+                          </td>
+                          <td
+                            class="terminal-number"
+                            style="text-align: right; color: var(--terminal-dim);"
+                          >
+                            {sp.trades}
+                          </td>
+                          <td class="terminal-number" style="text-align: right;">
+                            {format_integer(sp.total_quantity)}
+                          </td>
+                          <td class="terminal-number" style="text-align: right;">
+                            <span class="terminal-badge-gain">
+                              +{format_euro_decimal(sp.total_pnl)}
+                            </span>
+                          </td>
+                          <td
+                            class="terminal-number"
+                            style="text-align: right; color: var(--terminal-dim); font-size: 0.75rem;"
+                          >
+                            {Calendar.strftime(sp.first_date, "%Y")}&ndash;{Calendar.strftime(
+                              sp.last_date,
+                              "%Y"
+                            )}
+                          </td>
                         </tr>
                       <% end %>
                     </tbody>
@@ -609,7 +971,9 @@
                 </div>
               </div>
               <div>
-                <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--loss); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; font-weight: 600;">Top Losers</div>
+                <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--loss); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; font-weight: 600;">
+                  Top Losers
+                </div>
                 <div class="overflow-x-auto">
                   <table class="terminal-table">
                     <thead>
@@ -624,11 +988,37 @@
                     <tbody>
                       <%= for sp <- @pnl.top_losers do %>
                         <tr>
-                          <td><.link navigate={~p"/stocks/#{sp.symbol}"} class="terminal-symbol hover:underline">{sp.symbol}</.link></td>
-                          <td class="terminal-number" style="text-align: right; color: var(--terminal-dim);">{sp.trades}</td>
-                          <td class="terminal-number" style="text-align: right;">{format_integer(sp.total_quantity)}</td>
-                          <td class="terminal-number" style="text-align: right;"><span class="terminal-badge-loss">{format_euro_decimal(sp.total_pnl)}</span></td>
-                          <td class="terminal-number" style="text-align: right; color: var(--terminal-dim); font-size: 0.75rem;">{Calendar.strftime(sp.first_date, "%Y")}&ndash;{Calendar.strftime(sp.last_date, "%Y")}</td>
+                          <td>
+                            <.link
+                              navigate={~p"/stocks/#{sp.symbol}"}
+                              class="terminal-symbol hover:underline"
+                            >
+                              {sp.symbol}
+                            </.link>
+                          </td>
+                          <td
+                            class="terminal-number"
+                            style="text-align: right; color: var(--terminal-dim);"
+                          >
+                            {sp.trades}
+                          </td>
+                          <td class="terminal-number" style="text-align: right;">
+                            {format_integer(sp.total_quantity)}
+                          </td>
+                          <td class="terminal-number" style="text-align: right;">
+                            <span class="terminal-badge-loss">
+                              {format_euro_decimal(sp.total_pnl)}
+                            </span>
+                          </td>
+                          <td
+                            class="terminal-number"
+                            style="text-align: right; color: var(--terminal-dim); font-size: 0.75rem;"
+                          >
+                            {Calendar.strftime(sp.first_date, "%Y")}&ndash;{Calendar.strftime(
+                              sp.last_date,
+                              "%Y"
+                            )}
+                          </td>
                         </tr>
                       <% end %>
                     </tbody>
@@ -639,7 +1029,11 @@
 
             <div class="mt-[var(--space-sm)] text-center">
               <button phx-click="pnl_show_all" class="btn btn-xs btn-outline">
-                <%= if @pnl_show_all do %>Hide<% else %>Show all {@pnl.symbol_count} symbols<% end %>
+                <%= if @pnl_show_all do %>
+                  Hide
+                <% else %>
+                  Show all {@pnl.symbol_count} symbols
+                <% end %>
               </button>
             </div>
 
@@ -658,15 +1052,40 @@
                   <tbody>
                     <%= for sp <- @pnl.all_grouped do %>
                       <tr>
-                        <td><.link navigate={~p"/stocks/#{sp.symbol}"} class="terminal-symbol hover:underline">{sp.symbol}</.link></td>
-                        <td class="terminal-number" style="text-align: right; color: var(--terminal-dim);">{sp.trades}</td>
-                        <td class="terminal-number" style="text-align: right;">{format_integer(sp.total_quantity)}</td>
+                        <td>
+                          <.link
+                            navigate={~p"/stocks/#{sp.symbol}"}
+                            class="terminal-symbol hover:underline"
+                          >
+                            {sp.symbol}
+                          </.link>
+                        </td>
+                        <td
+                          class="terminal-number"
+                          style="text-align: right; color: var(--terminal-dim);"
+                        >
+                          {sp.trades}
+                        </td>
+                        <td class="terminal-number" style="text-align: right;">
+                          {format_integer(sp.total_quantity)}
+                        </td>
                         <td class="terminal-number" style="text-align: right;">
                           <span class={pnl_badge_class(sp.total_pnl)}>
-                            <%= if pnl_positive?(sp.total_pnl) do %>+<% end %>{format_euro_decimal(sp.total_pnl)}
+                            <%= if pnl_positive?(sp.total_pnl) do %>
+                              +
+                            <% end %>
+                            {format_euro_decimal(sp.total_pnl)}
                           </span>
                         </td>
-                        <td class="terminal-number" style="text-align: right; color: var(--terminal-dim); font-size: 0.75rem;">{Calendar.strftime(sp.first_date, "%Y")}&ndash;{Calendar.strftime(sp.last_date, "%Y")}</td>
+                        <td
+                          class="terminal-number"
+                          style="text-align: right; color: var(--terminal-dim); font-size: 0.75rem;"
+                        >
+                          {Calendar.strftime(sp.first_date, "%Y")}&ndash;{Calendar.strftime(
+                            sp.last_date,
+                            "%Y"
+                          )}
+                        </td>
                       </tr>
                     <% end %>
                   </tbody>
@@ -678,7 +1097,10 @@
 
         <%!-- FX Exposure --%>
         <%= if length(@fx_exposure) > 1 do %>
-          <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]" data-testid="fx-exposure">
+          <div
+            class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]"
+            data-testid="fx-exposure"
+          >
             <div class="terminal-section-label">Currency Exposure</div>
             <div class="overflow-x-auto mt-[var(--space-xs)]">
               <table class="terminal-table">
@@ -697,10 +1119,21 @@
                     <tr>
                       <td style="font-weight: 500;">{fx.currency}</td>
                       <td class="terminal-number">{fx.holdings_count}</td>
-                      <td class="terminal-number" style="text-align: right;">{format_decimal(fx.local_value)}</td>
-                      <td class="terminal-number" style="text-align: right;">{format_euro_decimal(fx.eur_value)}</td>
-                      <td class="terminal-number" style="text-align: right; color: var(--terminal-dim);">{format_decimal(fx.fx_rate)}</td>
-                      <td class="terminal-number" style="text-align: right;">{format_decimal(fx.pct)}%</td>
+                      <td class="terminal-number" style="text-align: right;">
+                        {format_decimal(fx.local_value)}
+                      </td>
+                      <td class="terminal-number" style="text-align: right;">
+                        {format_euro_decimal(fx.eur_value)}
+                      </td>
+                      <td
+                        class="terminal-number"
+                        style="text-align: right; color: var(--terminal-dim);"
+                      >
+                        {format_decimal(fx.fx_rate)}
+                      </td>
+                      <td class="terminal-number" style="text-align: right;">
+                        {format_decimal(fx.pct)}%
+                      </td>
                     </tr>
                   <% end %>
                 </tbody>
@@ -712,29 +1145,67 @@
         <%!-- P&L Waterfall (collapsible) --%>
         <div class="mb-[var(--space-xs)]">
           <button phx-click="toggle_waterfall" class="btn btn-xs btn-outline w-full">
-            <%= if @show_waterfall do %>Hide P&amp;L Waterfall<% else %>Show P&amp;L Waterfall<% end %>
+            <%= if @show_waterfall do %>
+              Hide P&amp;L Waterfall
+            <% else %>
+              Show P&amp;L Waterfall
+            <% end %>
           </button>
           <%= if @show_waterfall and length(@waterfall_data) > 0 do %>
             <div class="terminal-chart mt-[var(--space-xs)]">
               <div class="terminal-chart-header">
                 <div class="terminal-chart-title">P&amp;L Waterfall</div>
-                <div class="terminal-chart-legend" aria-label="Waterfall chart legend" style="justify-content: flex-end;">
-                  <span class="terminal-legend-item"><span class="terminal-legend-line" style="background: var(--gain);"></span> Deposits</span>
-                  <span class="terminal-legend-item"><span class="terminal-legend-line" style="background: var(--chart-dividend);"></span> Dividends</span>
-                  <span class="terminal-legend-item"><span class="terminal-legend-line" style="background: var(--terminal-accent);"></span> Realized P&amp;L</span>
-                  <span class="terminal-legend-item"><span class="terminal-legend-line" style="background: var(--loss);"></span> Costs</span>
-                  <span class="terminal-legend-item"><span class="terminal-legend-line" style="background: var(--chart-cumulative);"></span> Withdrawals</span>
-                  <span class="terminal-legend-item"><span class="terminal-legend-line" style="background: var(--terminal-text);"></span> Cumulative</span>
+                <div
+                  class="terminal-chart-legend"
+                  aria-label="Waterfall chart legend"
+                  style="justify-content: flex-end;"
+                >
+                  <span class="terminal-legend-item">
+                    <span class="terminal-legend-line" style="background: var(--gain);"></span>
+                    Deposits
+                  </span>
+                  <span class="terminal-legend-item">
+                    <span class="terminal-legend-line" style="background: var(--chart-dividend);">
+                    </span>
+                    Dividends
+                  </span>
+                  <span class="terminal-legend-item">
+                    <span class="terminal-legend-line" style="background: var(--terminal-accent);">
+                    </span>
+                    Realized P&amp;L
+                  </span>
+                  <span class="terminal-legend-item">
+                    <span class="terminal-legend-line" style="background: var(--loss);"></span>
+                    Costs
+                  </span>
+                  <span class="terminal-legend-item">
+                    <span
+                      class="terminal-legend-line"
+                      style="background: var(--chart-cumulative);"
+                    >
+                    </span>
+                    Withdrawals
+                  </span>
+                  <span class="terminal-legend-item">
+                    <span class="terminal-legend-line" style="background: var(--terminal-text);">
+                    </span>
+                    Cumulative
+                  </span>
                 </div>
               </div>
-              {DividendsomaticWeb.Components.PortfolioChart.render_waterfall_chart(@waterfall_data)}
+              {DividendsomaticWeb.Components.PortfolioChart.render_waterfall_chart(
+                @waterfall_data
+              )}
             </div>
           <% end %>
         </div>
       </div>
 
       <%!-- Footer --%>
-      <div class="mt-[var(--space-md)] flex items-center justify-between animate-fade-in animate-delay-5" style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim); letter-spacing: 0.02em;">
+      <div
+        class="mt-[var(--space-md)] flex items-center justify-between animate-fade-in animate-delay-5"
+        style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim); letter-spacing: 0.02em;"
+      >
         <div aria-hidden="true">
           <span class="terminal-kbd">←</span>
           <span class="terminal-kbd ml-0.5">→</span>
@@ -756,8 +1227,21 @@
       <div class="terminal-card">
         <div class="terminal-empty">
           <div class="terminal-empty-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7" style="color: var(--terminal-muted);" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              class="w-7 h-7"
+              style="color: var(--terminal-muted);"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
+              />
             </svg>
           </div>
           <h2>No Portfolio Data</h2>

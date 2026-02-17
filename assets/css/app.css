@@ -190,7 +190,9 @@
 
 /* ── Branding ── */
 .terminal-branding {
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     margin-bottom: 1.25rem;
     position: relative;
     z-index: 10;

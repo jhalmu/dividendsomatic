@@ -266,7 +266,21 @@ defmodule DividendsomaticWeb.PortfolioLive do
   end
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
-    {:noreply, assign(socket, :active_tab, tab)}
+    socket = assign(socket, :active_tab, tab)
+
+    # Lazy-load heavy data when Summary tab is first activated
+    socket =
+      if tab == "summary" and not socket.assigns[:summary_loaded] do
+        socket
+        |> assign(:summary_loaded, true)
+        |> assign(:fx_exposure, Portfolio.compute_fx_exposure(socket.assigns.positions))
+        |> assign_pnl_summary()
+        |> assign_investment_summary()
+      else
+        socket
+      end
+
+    {:noreply, socket}
   end
 
   def handle_event("toggle_waterfall", _params, socket) do
@@ -600,17 +614,29 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:dividend_by_month, dividend_dashboard.by_month_full_range)
     |> assign(:sparkline_values, sparkline_values)
     |> assign(:fear_greed, get_fear_greed_for_snapshot(socket, snapshot))
-    |> assign(:fx_exposure, Portfolio.compute_fx_exposure(positions))
+    |> assign(:fx_exposure, [])
     |> assign(:cash_flow, dividend_dashboard.cash_flow_summary)
     |> assign(:show_waterfall, false)
     |> assign(:waterfall_data, [])
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
+    |> assign(:pnl, %{winners: [], losers: [], total_realized: Decimal.new("0")})
+    |> assign(:investment_summary, nil)
+    |> assign(:summary_loaded, false)
     |> assign_new(:active_tab, fn -> "holdings" end)
     |> assign_freshness_and_source(snapshot, positions)
+    |> maybe_load_summary()
+  end
+
+  defp maybe_load_summary(%{assigns: %{active_tab: "summary"}} = socket) do
+    socket
+    |> assign(:summary_loaded, true)
+    |> assign(:fx_exposure, Portfolio.compute_fx_exposure(socket.assigns.positions))
     |> assign_pnl_summary()
     |> assign_investment_summary()
   end
+
+  defp maybe_load_summary(socket), do: socket
 
   defp assign_chart_range(socket) do
     all = socket.assigns.all_chart_data
