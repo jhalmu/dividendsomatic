@@ -737,13 +737,13 @@ defmodule DividendsomaticWeb.PortfolioLive do
         %{
           x: date_to_unix_ms(current_date),
           strokeDashArray: 3,
-          borderColor: "#F5F5F4",
+          borderColor: "#E8ECF1",
           opacity: 0.3,
           label: %{
             text: "Current",
             style: %{
-              color: "#F5F5F4",
-              background: "#292524",
+              color: "#E8ECF1",
+              background: "#141920",
               fontSize: "10px",
               fontFamily: "JetBrains Mono"
             }
@@ -807,7 +807,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
         curve: "smooth",
         dashArray: [0, 5]
       },
-      colors: ["#38BDF8", "#78716C"],
+      colors: ["#38BDF8", "#5C6678"],
       fill: %{
         type: ["gradient", "solid"],
         gradient: %{
@@ -821,18 +821,18 @@ defmodule DividendsomaticWeb.PortfolioLive do
       xaxis: %{
         type: "datetime",
         labels: %{
-          style: %{colors: "#78716C", fontSize: "10px"}
+          style: %{colors: "#5C6678", fontSize: "10px"}
         },
         axisBorder: %{show: false},
         axisTicks: %{show: false}
       },
       yaxis: %{
         labels: %{
-          style: %{colors: "#78716C", fontSize: "10px"}
+          style: %{colors: "#5C6678", fontSize: "10px"}
         }
       },
       grid: %{
-        borderColor: "rgba(120, 113, 108, 0.15)",
+        borderColor: "rgba(91, 103, 120, 0.15)",
         strokeDashArray: 3,
         xaxis: %{lines: %{show: false}}
       },
@@ -879,7 +879,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
       xaxis: %{
         categories: categories,
         labels: %{
-          style: %{colors: "#78716C", fontSize: "10px"},
+          style: %{colors: "#5C6678", fontSize: "10px"},
           rotate: -45,
           rotateAlways: false
         },
@@ -890,19 +890,19 @@ defmodule DividendsomaticWeb.PortfolioLive do
         %{
           title: %{text: ""},
           labels: %{
-            style: %{colors: "#78716C", fontSize: "10px"}
+            style: %{colors: "#5C6678", fontSize: "10px"}
           }
         },
         %{
           opposite: true,
           title: %{text: ""},
           labels: %{
-            style: %{colors: "#78716C", fontSize: "10px"}
+            style: %{colors: "#5C6678", fontSize: "10px"}
           }
         }
       ],
       grid: %{
-        borderColor: "rgba(120, 113, 108, 0.15)",
+        borderColor: "rgba(91, 103, 120, 0.15)",
         strokeDashArray: 3,
         xaxis: %{lines: %{show: false}}
       },

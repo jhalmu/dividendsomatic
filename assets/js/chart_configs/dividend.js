@@ -33,7 +33,7 @@ export function dividendChartConfig(series) {
       categories: [],
       labels: {
         style: {
-          colors: "#78716C",
+          colors: "#5C6678",
           fontSize: "10px"
         },
         rotate: -45,
@@ -47,7 +47,7 @@ export function dividendChartConfig(series) {
         title: { text: "" },
         labels: {
           style: {
-            colors: "#78716C",
+            colors: "#5C6678",
             fontSize: "10px"
           },
           formatter: (val) => val.toFixed(0)
@@ -58,7 +58,7 @@ export function dividendChartConfig(series) {
         title: { text: "" },
         labels: {
           style: {
-            colors: "#78716C",
+            colors: "#5C6678",
             fontSize: "10px"
           },
           formatter: (val) => val >= 1000 ? (val / 1000).toFixed(1) + "k" : val.toFixed(0)
@@ -66,7 +66,7 @@ export function dividendChartConfig(series) {
       }
     ],
     grid: {
-      borderColor: "rgba(120, 113, 108, 0.15)",
+      borderColor: "rgba(91, 103, 120, 0.15)",
       strokeDashArray: 3,
       xaxis: { lines: { show: false } }
     },

@@ -21,7 +21,7 @@ export function portfolioChartConfig(series, annotations) {
       curve: "smooth",
       dashArray: [0, 5]
     },
-    colors: ["#38BDF8", "#78716C"],
+    colors: ["#38BDF8", "#5C6678"],
     fill: {
       type: ["gradient", "solid"],
       gradient: {
@@ -36,7 +36,7 @@ export function portfolioChartConfig(series, annotations) {
       type: "datetime",
       labels: {
         style: {
-          colors: "#78716C",
+          colors: "#5C6678",
           fontSize: "10px"
         }
       },
@@ -46,14 +46,14 @@ export function portfolioChartConfig(series, annotations) {
     yaxis: {
       labels: {
         style: {
-          colors: "#78716C",
+          colors: "#5C6678",
           fontSize: "10px"
         },
         formatter: (val) => val >= 1000 ? (val / 1000).toFixed(0) + "k" : val.toFixed(0)
       }
     },
     grid: {
-      borderColor: "rgba(120, 113, 108, 0.15)",
+      borderColor: "rgba(91, 103, 120, 0.15)",
       strokeDashArray: 3,
       xaxis: { lines: { show: false } }
     },
@@ -70,11 +70,11 @@ export function portfolioChartConfig(series, annotations) {
         })
         const pnl = cost != null ? val - cost : null
 
-        let html = `<div style="padding: 8px 12px; font-family: 'JetBrains Mono', monospace; font-size: 12px;">`
-        html += `<div style="color: #A8A29E; margin-bottom: 4px;">${dateStr}</div>`
-        html += `<div style="color: #F5F5F4;">Value: <b>${val.toLocaleString("en", {minimumFractionDigits: 0})}</b></div>`
+        let html = `<div style="padding: 8px 12px; font-family: 'JetBrains Mono', monospace; font-size: 12px; background: #141920; border: 1px solid #2A3140;">`
+        html += `<div style="color: #8B95A5; margin-bottom: 4px;">${dateStr}</div>`
+        html += `<div style="color: #E8ECF1;">Value: <b>${val.toLocaleString("en", {minimumFractionDigits: 0})}</b></div>`
         if (cost != null) {
-          html += `<div style="color: #78716C;">Cost: ${cost.toLocaleString("en", {minimumFractionDigits: 0})}</div>`
+          html += `<div style="color: #5C6678;">Cost: ${cost.toLocaleString("en", {minimumFractionDigits: 0})}</div>`
         }
         if (pnl != null) {
           const color = pnl >= 0 ? "#22C55E" : "#EF4444"

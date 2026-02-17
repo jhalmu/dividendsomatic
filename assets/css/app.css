@@ -25,18 +25,18 @@
     default: true;
     prefersdark: true;
     color-scheme: "dark";
-    --color-base-100: oklch(20.8% 0.006 49);
-    --color-base-200: oklch(15.8% 0.006 49);
-    --color-base-300: oklch(12.5% 0.005 49);
-    --color-base-content: oklch(96.7% 0.003 90);
+    --color-base-100: oklch(16% 0.005 260);
+    --color-base-200: oklch(13% 0.005 260);
+    --color-base-300: oklch(10.5% 0.004 260);
+    --color-base-content: oklch(95% 0.005 260);
     --color-primary: oklch(75.5% 0.14 230);
     --color-primary-content: oklch(97% 0.01 230);
     --color-secondary: oklch(78% 0.16 75);
-    --color-secondary-content: oklch(15.8% 0.006 49);
+    --color-secondary-content: oklch(13% 0.005 260);
     --color-accent: oklch(73% 0.17 50);
-    --color-accent-content: oklch(15.8% 0.006 49);
-    --color-neutral: oklch(32% 0.006 49);
-    --color-neutral-content: oklch(96.7% 0.003 90);
+    --color-accent-content: oklch(13% 0.005 260);
+    --color-neutral: oklch(25% 0.008 260);
+    --color-neutral-content: oklch(95% 0.005 260);
     --color-info: oklch(75.5% 0.14 230);
     --color-info-content: oklch(97% 0.01 230);
     --color-success: oklch(72% 0.19 150);
@@ -138,16 +138,16 @@
 /* Import distinctive fonts — DM Sans for display, JetBrains Mono for data */
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap");
 
-/* Nordic Warmth color palette */
+/* Dark slate color palette */
 :root {
-    --terminal-bg: #1C1917;
-    --terminal-surface: #292524;
-    --terminal-elevated: #33302E;
-    --terminal-border: #44403C;
-    --terminal-border-bright: #57534E;
-    --terminal-text: #F5F5F4;
-    --terminal-muted: #A8A29E;
-    --terminal-dim: #78716C;
+    --terminal-bg: #0B0F14;
+    --terminal-surface: #141920;
+    --terminal-elevated: #1C222B;
+    --terminal-border: #2A3140;
+    --terminal-border-bright: #3B4557;
+    --terminal-text: #E8ECF1;
+    --terminal-muted: #8B95A5;
+    --terminal-dim: #5C6678;
     --terminal-accent: #38BDF8;
 
     /* P&L Colors */
@@ -162,7 +162,7 @@
     /* Chart colors */
     --chart-line: #38BDF8;
     --chart-area: rgba(56, 189, 248, 0.08);
-    --chart-grid: rgba(120, 113, 108, 0.15);
+    --chart-grid: rgba(91, 103, 120, 0.15);
     --chart-dividend: #F59E0B;
     --chart-cumulative: #F97316;
     --chart-pnl-positive: rgba(34, 197, 94, 0.6);
