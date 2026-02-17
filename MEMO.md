@@ -61,16 +61,26 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.21.0 (IBKR Dividend Recovery)
-**Status:** Full dividend pipeline, 500 tests, 0 credo issues
+**Version:** 0.22.0 (Gmail API + Multi-Type Flex Import)
+**Status:** Full dividend pipeline, Gmail auto-import, 547 tests, 0 credo issues
 
-**Latest session (2026-02-17):**
+**Latest session (2026-02-17 night):**
+- **Gmail module rewrite** — handles all 4 IBKR Flex CSV types (Activity, Dividend, Trades, Actions)
+- **IntegrityChecker** — `run_all_from_string/1` for Gmail-downloaded CSV data
+- **OAuth2** — configured, published to production (no 7-day token expiry)
+- **Bug fixes** — sender address, MM/DD/YYYY date parsing, StockLive stale metrics test
+- 547 tests, 0 failures, 0 credo issues
+
+**Previous session (2026-02-17 evening):**
+- **Multi-CSV import pipeline** — FlexCsvRouter, FlexDividendCsvParser, FlexTradesCsvParser, FlexActionsCsvParser
+- **Integrity checker** — 4 reconciliation checks (dividends, trades, ISINs, summary totals)
+- **Import orchestrator** — auto-detect + route all CSV types, archive processed files
+- **Bug fixes** — section boundary parsing, PIL summary, trade dedup
+- 547 tests (up from 500)
+
+**Previous session (2026-02-17 morning):**
 - **IBKR dividend fix** — DividendProcessor PIL fallback (total_net), Foreign Tax filter, ISIN→currency map
-- **Schema** — `amount_type` field on dividends (per_share | total_net)
-- **Parsers** — IbkrFlexDividendParser, YahooDividendParser
-- **Import tasks** — `mix import.flex_dividends`, `import.yahoo_dividends`, `process.data` orchestrator
-- **Analysis** — DataGapAnalyzer (364-day chunks), DividendValidator, `mix report.gaps`, `mix validate.data`
-- **Data check** — `mix check.sqlite`, `scripts/extract_lynx_pdfs.py`, `mix import.lynx_data`
+- **Parsers** — IbkrFlexDividendParser, YahooDividendParser, `process.data` orchestrator
 - Pipeline recovered 73 new dividends → 6,221 total, grand total 137K EUR
 - 500 tests, 0 failures, 0 credo issues
 
@@ -145,7 +155,7 @@ All issues (#1-#22) closed.
 
 ## Technical Debt
 
-- [ ] Gmail integration needs OAuth env vars (`GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`)
+- [x] Gmail integration: OAuth configured, app published to production, all 4 Flex types supported
 - [ ] Finnhub free tier: quotes work, candles return 403 (using Yahoo Finance instead)
 - [ ] 10 stocks missing Yahoo Finance data (delisted/renamed)
 - [ ] No production deployment (Hetzner via docker-compose)

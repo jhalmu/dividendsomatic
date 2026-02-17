@@ -571,17 +571,17 @@ defmodule DividendsomaticWeb.StockLiveTest do
     end
 
     test "should show updated date from fetched_at", %{conn: conn} do
-      fetched = ~U[2026-02-10 14:30:00Z]
+      today = DateTime.utc_now() |> DateTime.truncate(:second)
 
       Dividendsomatic.Repo.insert!(%Dividendsomatic.Stocks.StockMetric{
         symbol: "KESKOB",
         pe_ratio: Decimal.new("15.20"),
-        fetched_at: fetched
+        fetched_at: today
       })
 
       {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
 
-      assert html =~ "Updated 2026-02-10"
+      assert html =~ "Updated #{Date.to_string(DateTime.to_date(today))}"
     end
   end
 

@@ -1,141 +1,87 @@
 defmodule Dividendsomatic.Gmail do
   @moduledoc """
-  Gmail integration for fetching CSV files from Interactive Brokers emails.
+  Gmail integration for fetching IBKR Flex CSV reports.
 
-  This module provides functions to:
-  - Search for Activity Flex emails
-  - Download CSV attachments
-  - Parse email data
+  Searches for 4 Flex report types and routes each through the appropriate
+  import pipeline:
 
-  ## Integration Options
+  - **Activity Flex** (daily) → portfolio snapshots
+  - **Dividend Flex** (weekly) → dividend records
+  - **Trades Flex** (weekly) → broker transactions
+  - **Actions Flex** (monthly) → integrity checks
 
-  1. **Gmail MCP** (Preferred when available):
-     - Uses Claude's Gmail MCP tools for direct access
-     - Requires MCP session with Gmail scope
-
-  2. **Google OAuth** (Production):
-     - Full API access with credentials stored in config
-     - Requires `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`
-
-  3. **Manual Import** (Fallback):
-     - Use `mix import.csv path/to/file.csv`
-
-  ## Usage
-
-      # Search for recent Activity Flex emails
-      {:ok, emails} = Dividendsomatic.Gmail.search_activity_flex_emails()
-
-      # Get CSV data from an email
-      {:ok, csv_data} = Dividendsomatic.Gmail.get_csv_from_email(email_id)
+  Requires `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`.
   """
 
   require Logger
 
+  alias Dividendsomatic.Portfolio
+  alias Dividendsomatic.Portfolio.{FlexCsvRouter, IntegrityChecker}
+
   @gmail_api_base "https://gmail.googleapis.com/gmail/v1/users/me"
-  @ib_sender "noreply@interactivebrokers.com"
+  @ib_sender "donotreply@interactivebrokers.com"
+
+  @flex_subjects [
+    "Activity Flex",
+    "Dividend Flex",
+    "Trades Flex",
+    "Actions Flex"
+  ]
+
+  # --- Public API ---
 
   @doc """
-  Searches Gmail for Activity Flex emails from Interactive Brokers.
+  Searches Gmail for all IBKR Flex report emails.
 
-  Returns list of email message IDs that contain CSV attachments.
+  Returns a flat list of `%{id, subject}` maps across all 4 Flex types.
 
   ## Options
 
-  - `:max_results` - Maximum number of emails to fetch (default: 30)
+  - `:max_results` - Max emails per type (default: 10)
   - `:days_back` - How many days back to search (default: 30)
-
-  ## Examples
-
-      iex> Dividendsomatic.Gmail.search_activity_flex_emails()
-      {:ok, [%{id: "abc123", subject: "Activity Flex for 01/28/2026"}]}
+  - `:subjects` - List of subject prefixes to search (default: all 4 types)
   """
-  def search_activity_flex_emails(opts \\ []) do
-    max_results = Keyword.get(opts, :max_results, 30)
+  def search_flex_emails(opts \\ []) do
+    max_results = Keyword.get(opts, :max_results, 10)
     days_back = Keyword.get(opts, :days_back, 30)
-
-    query = build_search_query(days_back)
-    Logger.info("Searching Gmail with query: #{query}")
+    subjects = Keyword.get(opts, :subjects, @flex_subjects)
 
     case get_access_token() do
       {:ok, token} ->
-        search_with_oauth(token, query, max_results)
+        emails =
+          Enum.flat_map(subjects, fn subject_prefix ->
+            query = build_flex_query(subject_prefix, days_back)
+            Logger.info("Gmail: searching #{subject_prefix} (#{days_back}d)")
+            search_or_empty(token, query, max_results)
+          end)
+
+        {:ok, emails}
 
       {:error, :not_configured} ->
         Logger.warning("Gmail OAuth not configured - use manual import")
         {:ok, []}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
   @doc """
-  Downloads CSV attachment from a specific email.
+  Imports all new Flex reports from Gmail.
 
-  Returns the CSV data as a string.
-  """
-  def get_csv_from_email(email_id) do
-    case get_access_token() do
-      {:ok, token} ->
-        fetch_email_attachment(token, email_id)
+  Searches for all 4 Flex types, downloads CSV attachments, auto-detects type
+  via FlexCsvRouter, and routes to the correct import pipeline.
 
-      {:error, :not_configured} ->
-        Logger.warning("Gmail OAuth not configured - cannot fetch email: #{email_id}")
-        {:error, :not_configured}
-    end
-  end
+  ## Options
 
-  @doc """
-  Extracts report date from email subject line.
-
-  Subject format: "Activity Flex for DD/MM/YYYY"
-
-  ## Examples
-
-      iex> Dividendsomatic.Gmail.extract_date_from_subject("Activity Flex for 28/01/2026")
-      ~D[2026-01-28]
-  """
-  def extract_date_from_subject(subject) do
-    # Match pattern: "Activity Flex for DD/MM/YYYY"
-    case Regex.run(~r/Activity Flex for (\d{2})\/(\d{2})\/(\d{4})/, subject) do
-      [_, day, month, year] ->
-        case Date.new(
-               String.to_integer(year),
-               String.to_integer(month),
-               String.to_integer(day)
-             ) do
-          {:ok, date} ->
-            date
-
-          {:error, _} ->
-            Logger.warning("Invalid date in subject: #{subject}, using today's date as fallback")
-
-            Date.utc_today()
-        end
-
-      _ ->
-        Logger.warning(
-          "Could not extract date from subject: #{subject}, using today's date as fallback"
-        )
-
-        Date.utc_today()
-    end
-  end
-
-  @doc """
-  Imports all new CSV files from Gmail.
-
-  Searches for recent emails and imports any that haven't been imported yet.
-  Returns a summary of the import operation.
-
-  ## Examples
-
-      iex> Dividendsomatic.Gmail.import_all_new()
-      {:ok, %{imported: 3, skipped: 2, errors: 0}}
+  Same as `search_flex_emails/1`.
   """
   def import_all_new(opts \\ []) do
-    case search_activity_flex_emails(opts) do
+    case search_flex_emails(opts) do
       {:ok, emails} when emails != [] ->
         results =
           emails
-          |> Enum.map(&import_email/1)
+          |> Enum.map(&import_flex_email/1)
           |> Enum.group_by(&elem(&1, 0))
 
         summary = %{
@@ -148,7 +94,7 @@ defmodule Dividendsomatic.Gmail do
         {:ok, summary}
 
       {:ok, []} ->
-        Logger.info("No new emails found")
+        Logger.info("No new Flex emails found")
         {:ok, %{imported: 0, skipped: 0, errors: 0}}
 
       {:error, reason} ->
@@ -156,34 +102,163 @@ defmodule Dividendsomatic.Gmail do
     end
   end
 
-  defp import_email(%{id: email_id, subject: subject}) do
-    report_date = extract_date_from_subject(subject)
+  @doc """
+  Searches Gmail for Activity Flex emails only (backward-compatible).
+  """
+  def search_activity_flex_emails(opts \\ []) do
+    search_flex_emails(Keyword.put(opts, :subjects, ["Activity Flex"]))
+  end
 
-    if Dividendsomatic.Portfolio.get_snapshot_by_date(report_date) do
-      Logger.info("Snapshot already exists for #{report_date}, skipping")
+  @doc """
+  Downloads CSV attachment from a specific email.
+  """
+  def get_csv_from_email(email_id) do
+    case get_access_token() do
+      {:ok, token} ->
+        fetch_email_attachment(token, email_id)
+
+      {:error, :not_configured} ->
+        Logger.warning("Gmail OAuth not configured - cannot fetch email: #{email_id}")
+        {:error, :not_configured}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Extracts report date from email subject line.
+
+  Subject format: "* Flex for MM/DD/YYYY" (IBKR US date format)
+
+  ## Examples
+
+      iex> Dividendsomatic.Gmail.extract_date_from_subject("Activity Flex for 01/28/2026")
+      ~D[2026-01-28]
+
+      iex> Dividendsomatic.Gmail.extract_date_from_subject("Dividend Flex for 02/14/2026")
+      ~D[2026-02-14]
+  """
+  def extract_date_from_subject(subject) do
+    case Regex.run(~r/Flex for (\d{2})\/(\d{2})\/(\d{4})/, subject) do
+      [_, month, day, year] ->
+        case Date.new(
+               String.to_integer(year),
+               String.to_integer(month),
+               String.to_integer(day)
+             ) do
+          {:ok, date} ->
+            date
+
+          {:error, _} ->
+            Logger.warning("Invalid date in subject: #{subject}, using today as fallback")
+            Date.utc_today()
+        end
+
+      _ ->
+        Logger.warning("Could not extract date from subject: #{subject}, using today as fallback")
+        Date.utc_today()
+    end
+  end
+
+  # --- Import routing ---
+
+  defp import_flex_email(%{id: email_id, subject: subject}) do
+    case get_csv_from_email(email_id) do
+      {:ok, csv_data} ->
+        csv_type = FlexCsvRouter.detect_csv_type(csv_data)
+        report_date = extract_date_from_subject(subject)
+
+        Logger.info("Gmail: #{subject} → type=#{csv_type}, date=#{report_date}")
+        route_by_type(csv_type, csv_data, report_date, subject)
+
+      {:error, reason} ->
+        Logger.error("Gmail: failed to fetch #{subject}: #{inspect(reason)}")
+        {:error, {subject, reason}}
+    end
+  end
+
+  defp route_by_type(:portfolio, csv_data, report_date, subject) do
+    if Portfolio.get_snapshot_by_date(report_date) do
+      Logger.info("Gmail: snapshot #{report_date} exists, skipping")
       {:skipped, report_date}
     else
-      import_new_snapshot(email_id, report_date)
+      case Portfolio.create_snapshot_from_csv(csv_data, report_date) do
+        {:ok, snapshot} ->
+          Logger.info(
+            "Gmail: imported snapshot #{report_date} (#{snapshot.positions_count} positions)"
+          )
+
+          {:ok, report_date}
+
+        {:error, reason} ->
+          Logger.error("Gmail: snapshot import failed for #{subject}: #{inspect(reason)}")
+          {:error, {subject, reason}}
+      end
     end
   end
 
-  defp import_new_snapshot(email_id, report_date) do
-    with {:ok, csv_data} <- get_csv_from_email(email_id),
-         {:ok, _snapshot} <-
-           Dividendsomatic.Portfolio.create_snapshot_from_csv(csv_data, report_date) do
-      Logger.info("Successfully imported snapshot for #{report_date}")
-      {:ok, report_date}
-    else
+  defp route_by_type(:dividends, csv_data, _report_date, subject) do
+    case Portfolio.import_flex_dividends_csv(csv_data) do
+      {:ok, %{imported: 0}} ->
+        {:skipped, subject}
+
+      {:ok, %{imported: n, skipped: s}} ->
+        Logger.info("Gmail: #{subject} → #{n} dividends imported, #{s} skipped")
+        {:ok, subject}
+
       {:error, reason} ->
-        Logger.error("Failed to import for #{report_date}: #{inspect(reason)}")
-        {:error, {report_date, reason}}
+        Logger.error("Gmail: dividend import failed for #{subject}: #{inspect(reason)}")
+        {:error, {subject, reason}}
     end
   end
 
-  # Private functions
+  defp route_by_type(:trades, csv_data, _report_date, subject) do
+    case Portfolio.import_flex_trades_csv(csv_data) do
+      {:ok, %{imported: 0}} ->
+        {:skipped, subject}
 
-  defp build_search_query(days_back) do
-    "from:#{@ib_sender} subject:\"Activity Flex\" has:attachment newer_than:#{days_back}d"
+      {:ok, %{imported: n, skipped: s}} ->
+        Logger.info("Gmail: #{subject} → #{n} trades imported, #{s} skipped")
+        {:ok, subject}
+
+      {:error, reason} ->
+        Logger.error("Gmail: trade import failed for #{subject}: #{inspect(reason)}")
+        {:error, {subject, reason}}
+    end
+  end
+
+  defp route_by_type(:actions, csv_data, _report_date, subject) do
+    case IntegrityChecker.run_all_from_string(csv_data) do
+      {:ok, checks} ->
+        pass = Enum.count(checks, &(&1.status == :pass))
+        fail = Enum.count(checks, &(&1.status == :fail))
+        warn = Enum.count(checks, &(&1.status == :warn))
+        Logger.info("Gmail: #{subject} integrity → #{pass} PASS, #{warn} WARN, #{fail} FAIL")
+        {:ok, subject}
+
+      {:error, reason} ->
+        Logger.error("Gmail: integrity check failed for #{subject}: #{inspect(reason)}")
+        {:error, {subject, reason}}
+    end
+  end
+
+  defp route_by_type(:unknown, _csv_data, _report_date, subject) do
+    Logger.warning("Gmail: #{subject} has unknown CSV type, skipping")
+    {:skipped, subject}
+  end
+
+  defp search_or_empty(token, query, max_results) do
+    case search_with_oauth(token, query, max_results) do
+      {:ok, results} -> results
+      {:error, _} -> []
+    end
+  end
+
+  # --- Gmail API helpers ---
+
+  defp build_flex_query(subject_prefix, days_back) do
+    ~s(from:#{@ib_sender} subject:"#{subject_prefix}" has:attachment newer_than:#{days_back}d)
   end
 
   defp get_access_token do

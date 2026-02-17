@@ -26,19 +26,33 @@ defmodule Dividendsomatic.Portfolio.IntegrityChecker do
   @spec run_all(String.t()) :: {:ok, [check_result()]} | {:error, term()}
   def run_all(csv_path) do
     case FlexActionsCsvParser.parse_file(csv_path) do
-      {:ok, actions_data} ->
-        checks = [
-          reconcile_dividends(actions_data),
-          reconcile_trades(actions_data),
-          find_missing_isins(actions_data),
-          check_summary_totals(actions_data)
-        ]
-
-        {:ok, checks}
-
-      {:error, reason} ->
-        {:error, reason}
+      {:ok, actions_data} -> run_checks(actions_data)
+      {:error, reason} -> {:error, reason}
     end
+  end
+
+  @doc """
+  Runs all integrity checks against an Actions CSV string (already in memory).
+
+  Used by Gmail import when CSV data is downloaded directly from email.
+  """
+  @spec run_all_from_string(String.t()) :: {:ok, [check_result()]} | {:error, term()}
+  def run_all_from_string(csv_string) do
+    case FlexActionsCsvParser.parse(csv_string) do
+      {:ok, actions_data} -> run_checks(actions_data)
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp run_checks(actions_data) do
+    checks = [
+      reconcile_dividends(actions_data),
+      reconcile_trades(actions_data),
+      find_missing_isins(actions_data),
+      check_summary_totals(actions_data)
+    ]
+
+    {:ok, checks}
   end
 
   @doc """

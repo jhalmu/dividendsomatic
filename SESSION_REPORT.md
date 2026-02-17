@@ -1,3 +1,40 @@
+# Session Report — 2026-02-17 (Night)
+
+## Gmail API Integration + Multi-Type Flex Import
+
+### Context
+Extended the Gmail module to handle all 4 IBKR Flex CSV report types (not just Activity Flex). Configured OAuth2, fixed date parsing, and resolved integrity checker issues.
+
+### Changes Made
+
+#### Gmail Module Rewrite (`gmail.ex`)
+- **New `search_flex_emails/1`** — searches Gmail for all 4 Flex types (Activity, Dividend, Trades, Actions) in one call
+- **New `import_all_new/1`** — downloads CSV, auto-detects type via FlexCsvRouter, routes to correct pipeline
+- **`route_by_type/4`** — clauses for `:portfolio`, `:dividends`, `:trades`, `:actions`, `:unknown`
+- `search_activity_flex_emails/1` kept as backward-compatible wrapper
+- Fixed sender: `noreply@` → `donotreply@interactivebrokers.com`
+- Fixed date parsing: IBKR uses MM/DD/YYYY (US format), code had DD/MM/YYYY
+- Credo fixes: extracted `search_or_empty/3`, replaced `with` single-clause with `case`
+
+#### IntegrityChecker Enhancement
+- **New `run_all_from_string/1`** — parses CSV from string (used by Gmail import)
+- Extracted shared `run_checks/1` helper to DRY up `run_all/1` and `run_all_from_string/1`
+
+#### OAuth2 Configuration
+- Generated new OAuth refresh token via localhost:8085 callback flow
+- Published OAuth app from Testing → Production (no more 7-day token expiry)
+- `gmail.readonly` scope (restricted) — 100 user lifetime cap, fine for single-user app
+
+#### Test Fixes
+- Updated Gmail tests: MM/DD/YYYY format, multi-type search API
+- Fixed pre-existing `StockLiveTest` failure: `fetched_at` was hardcoded 7+ days ago, causing staleness check to fail. Now uses `DateTime.utc_now()`.
+
+### Quality
+- 547 tests, 0 failures, 0 credo issues
+- Gmail API verified: token refresh works, email search returns results, CSV download and snapshot import functional
+
+---
+
 # Session Report — 2026-02-17 (Evening)
 
 ## Multi-CSV Import Pipeline + Integrity Checking
