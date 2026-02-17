@@ -30,6 +30,13 @@ mix import.nordnet           # Import Nordnet CSV
 mix import.nordnet --9a path # Import 9A tax report
 mix import.ibkr              # Import IBKR CSV/PDF
 
+# Data pipeline
+mix process.data --scan              # Report what would be processed
+mix process.data --all               # Run full import pipeline
+mix report.gaps                      # 364-day gap analysis
+mix validate.data                    # Dividend data validation
+mix check.sqlite                     # Check SQLite for unique data
+
 # Historical data
 mix fetch.historical_prices              # Full pipeline
 mix fetch.historical_prices --resolve    # Only resolve symbols
@@ -51,10 +58,20 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.20.0 (Portfolio UI Overhaul)
-**Status:** Unified portfolio history, 447 tests, 0 credo issues
+**Version:** 0.21.0 (IBKR Dividend Recovery)
+**Status:** Full dividend pipeline, 500 tests, 0 credo issues
 
-**Latest session (2026-02-15 evening):**
+**Latest session (2026-02-17):**
+- **IBKR dividend fix** — DividendProcessor PIL fallback (total_net), Foreign Tax filter, ISIN→currency map
+- **Schema** — `amount_type` field on dividends (per_share | total_net)
+- **Parsers** — IbkrFlexDividendParser, YahooDividendParser
+- **Import tasks** — `mix import.flex_dividends`, `import.yahoo_dividends`, `process.data` orchestrator
+- **Analysis** — DataGapAnalyzer (364-day chunks), DividendValidator, `mix report.gaps`, `mix validate.data`
+- **Data check** — `mix check.sqlite`, `scripts/extract_lynx_pdfs.py`, `mix import.lynx_data`
+- Pipeline recovered 73 new dividends → 6,221 total, grand total 137K EUR
+- 500 tests, 0 failures, 0 credo issues
+
+**Previous session (2026-02-15 evening):**
 - **Layout reorder** — Dividend chart moved above portfolio chart, recent dividends compact inline
 - **Enhanced navigation** — `-1Y/-1M/-1W` buttons, date picker, `+1W/+1M/+1Y`, Shift+Arrow week jumps
 - **Chart presets** — 1M/3M/6M/YTD/1Y/ALL range buttons alongside year filter
@@ -94,7 +111,7 @@ mix ecto.reset              # Drop + create + migrate
 - Historical price reconstruction (Yahoo Finance, 2017-2026 continuous chart)
 - Batch-loaded chart pricing (3 queries instead of 3,700+, cached in persistent_term)
 - Symbol resolution: ISIN → Finnhub/Yahoo via cascading lookup
-- Dividend tracking (6,148 records across 60+ symbols)
+- Dividend tracking (6,221 records across 60+ symbols, 137K EUR total)
 - Finnhub financial metrics, company profiles, stock quotes
 - Fear & Greed Index (365 days history)
 - Costs system, FX exposure, sold positions (grouped), data gaps analysis
@@ -104,12 +121,12 @@ mix ecto.reset              # Drop + create + migrate
 - Investment summary card (deposits, P&L, dividends, costs, total return)
 - Enhanced navigation: week/month/year jumps, date picker, chart presets
 - Dividend diagnostics for IEx verification
-- 447 tests + 13 Playwright E2E tests, 0 credo issues
+- 500 tests + 13 Playwright E2E tests, 0 credo issues
 - Multi-provider market data: Finnhub + Yahoo Finance + EODHD with fallback chains
 
 **Next priorities:**
-- Run `diagnose_dividends()` to verify dividend totals
 - Cross-check: `net_invested + total_return ≈ current_value`
+- Investigate 5,623 zero-income dividends (Yahoo historical, no matching positions)
 - EODHD historical data backfill (30+ years available)
 - Production deployment
 
@@ -131,7 +148,8 @@ All issues (#1-#22) closed.
 - [ ] No production deployment (Hetzner via docker-compose)
 - [x] Chart reconstruction N+1 queries fixed (3,700+ → 3 queries + persistent_term cache)
 - [x] Multi-provider market data architecture (Finnhub + Yahoo + EODHD)
-- [x] Test coverage: 426 tests + 13 Playwright E2E, 0 credo issues
+- [x] IBKR dividend recovery: PIL fallback, Foreign Tax filter, 73 new dividends
+- [x] Test coverage: 500 tests + 13 Playwright E2E, 0 credo issues
 - [x] Historical prices: 53/63 stocks + 7 forex pairs fetched
 - [x] Symbol resolution: 64 resolved, 44 unmappable, 0 pending
 
