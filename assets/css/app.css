@@ -18,31 +18,31 @@
 }
 
 /* ============================================
-   Nordic Warmth — Dark Theme (default)
+   Deep Space — Dark Theme (default)
    ============================================ */
 @plugin "../vendor/daisyui-theme" {
     name: "dark";
     default: true;
     prefersdark: true;
     color-scheme: "dark";
-    --color-base-100: oklch(16% 0.005 260);
-    --color-base-200: oklch(13% 0.005 260);
-    --color-base-300: oklch(10.5% 0.004 260);
-    --color-base-content: oklch(95% 0.005 260);
-    --color-primary: oklch(75.5% 0.14 230);
+    --color-base-100: oklch(13.5% 0.008 265);
+    --color-base-200: oklch(11% 0.008 265);
+    --color-base-300: oklch(8.5% 0.006 265);
+    --color-base-content: oklch(93% 0.005 260);
+    --color-primary: oklch(75% 0.14 230);
     --color-primary-content: oklch(97% 0.01 230);
-    --color-secondary: oklch(78% 0.16 75);
-    --color-secondary-content: oklch(13% 0.005 260);
+    --color-secondary: oklch(78% 0.15 80);
+    --color-secondary-content: oklch(11% 0.008 265);
     --color-accent: oklch(73% 0.17 50);
-    --color-accent-content: oklch(13% 0.005 260);
-    --color-neutral: oklch(25% 0.008 260);
-    --color-neutral-content: oklch(95% 0.005 260);
-    --color-info: oklch(75.5% 0.14 230);
+    --color-accent-content: oklch(11% 0.008 265);
+    --color-neutral: oklch(20% 0.01 265);
+    --color-neutral-content: oklch(93% 0.005 260);
+    --color-info: oklch(75% 0.14 230);
     --color-info-content: oklch(97% 0.01 230);
     --color-success: oklch(72% 0.19 150);
     --color-success-content: oklch(97% 0.02 150);
-    --color-warning: oklch(78% 0.16 75);
-    --color-warning-content: oklch(15.8% 0.006 49);
+    --color-warning: oklch(78% 0.15 80);
+    --color-warning-content: oklch(11% 0.008 265);
     --color-error: oklch(63% 0.24 25);
     --color-error-content: oklch(97% 0.02 25);
     --radius-selector: 0.375rem;
@@ -56,26 +56,26 @@
 }
 
 /* ============================================
-   Nordic Warmth — Light Theme
+   Deep Space — Light Theme
    ============================================ */
 @plugin "../vendor/daisyui-theme" {
     name: "light";
     default: false;
     prefersdark: false;
     color-scheme: "light";
-    --color-base-100: oklch(100% 0 0);
-    --color-base-200: oklch(98% 0.003 90);
-    --color-base-300: oklch(96.5% 0.005 80);
-    --color-base-content: oklch(15.8% 0.006 49);
-    --color-primary: oklch(37% 0.09 235);
+    --color-base-100: oklch(98.5% 0.003 265);
+    --color-base-200: oklch(96% 0.005 265);
+    --color-base-300: oklch(93% 0.008 265);
+    --color-base-content: oklch(15% 0.01 265);
+    --color-primary: oklch(45% 0.14 235);
     --color-primary-content: oklch(97% 0.01 230);
     --color-secondary: oklch(53% 0.14 55);
     --color-secondary-content: oklch(97% 0.02 55);
-    --color-accent: oklch(15.8% 0.006 49);
-    --color-accent-content: oklch(100% 0 0);
-    --color-neutral: oklch(42% 0.01 50);
-    --color-neutral-content: oklch(97% 0.003 90);
-    --color-info: oklch(37% 0.09 235);
+    --color-accent: oklch(15% 0.01 265);
+    --color-accent-content: oklch(98.5% 0.003 265);
+    --color-neutral: oklch(40% 0.015 265);
+    --color-neutral-content: oklch(97% 0.003 260);
+    --color-info: oklch(45% 0.14 235);
     --color-info-content: oklch(97% 0.01 235);
     --color-success: oklch(50% 0.15 155);
     --color-success-content: oklch(97% 0.02 155);
@@ -107,7 +107,7 @@
     display: contents;
 }
 
-/* Design tokens from homesite */
+/* Design tokens */
 :root {
     /* Spacing */
     --space-inline: clamp(0.25rem, 0.5vw, 0.5rem);
@@ -132,49 +132,49 @@
 }
 
 /* ============================================
-   DIVIDENDSOMATIC — Nordic Warmth
+   DIVIDENDSOMATIC — Deep Space
    ============================================ */
 
-/* Import distinctive fonts — DM Sans for display, JetBrains Mono for data */
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap");
+/* Fonts — Instrument Sans: geometric precision. IBM Plex Mono: authoritative data. */
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap");
 
-/* Dark slate color palette */
+/* Deep space palette — luminous data on the abyss */
 :root {
-    --terminal-bg: #0B0F14;
-    --terminal-surface: #141920;
-    --terminal-elevated: #1C222B;
-    --terminal-border: #2A3140;
-    --terminal-border-bright: #3B4557;
-    --terminal-text: #E8ECF1;
-    --terminal-muted: #8B95A5;
-    --terminal-dim: #5C6678;
-    --terminal-accent: #38BDF8;
+    --terminal-bg: #06080D;
+    --terminal-surface: rgba(14, 18, 27, 0.85);
+    --terminal-elevated: rgba(22, 28, 40, 0.9);
+    --terminal-border: rgba(45, 55, 80, 0.5);
+    --terminal-border-bright: rgba(65, 80, 110, 0.6);
+    --terminal-text: #D8DEE9;
+    --terminal-muted: #7E8BA3;
+    --terminal-dim: #4C5772;
+    --terminal-accent: #5EADF7;
 
-    /* P&L Colors */
-    --gain: #22C55E;
-    --gain-light: #4ADE80;
-    --gain-bg: rgba(34, 197, 94, 0.1);
-    --gain-glow: 0 0 20px rgba(34, 197, 94, 0.15);
-    --loss: #EF4444;
-    --loss-light: #F87171;
-    --loss-bg: rgba(239, 68, 68, 0.1);
+    /* P&L Colors — luminous against dark */
+    --gain: #34D399;
+    --gain-light: #6EE7B7;
+    --gain-bg: rgba(52, 211, 153, 0.08);
+    --gain-glow: 0 0 20px rgba(52, 211, 153, 0.12);
+    --loss: #F87171;
+    --loss-light: #FCA5A5;
+    --loss-bg: rgba(248, 113, 113, 0.08);
 
-    /* Chart colors */
-    --chart-line: #38BDF8;
-    --chart-area: rgba(56, 189, 248, 0.08);
-    --chart-grid: rgba(91, 103, 120, 0.15);
-    --chart-dividend: #F59E0B;
-    --chart-cumulative: #F97316;
-    --chart-pnl-positive: rgba(34, 197, 94, 0.6);
-    --chart-pnl-negative: rgba(239, 68, 68, 0.6);
+    /* Chart colors — glowing data */
+    --chart-line: #5EADF7;
+    --chart-area: rgba(94, 173, 247, 0.06);
+    --chart-grid: rgba(76, 87, 114, 0.12);
+    --chart-dividend: #FBBF24;
+    --chart-cumulative: #F59E0B;
+    --chart-pnl-positive: rgba(52, 211, 153, 0.5);
+    --chart-pnl-negative: rgba(248, 113, 113, 0.5);
 
     /* Fonts */
-    --font-display: "DM Sans", system-ui, sans-serif;
-    --font-mono: "JetBrains Mono", "Fira Code", monospace;
+    --font-display: "Instrument Sans", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", "JetBrains Mono", monospace;
     --font-brand: var(--font-display);
 }
 
-/* Base warm theme styling */
+/* ── Base ── */
 .terminal-theme {
     background: var(--terminal-bg);
     color: var(--terminal-text);
@@ -183,9 +183,35 @@
     position: relative;
 }
 
-/* Grid pattern — removed for clean warm aesthetic */
+/* Subtle noise grain texture — analog warmth without color warmth */
+.terminal-theme::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 256px 256px;
+}
+
+/* Subtle radial glow at top center */
+.terminal-theme::after {
+    content: "";
+    position: fixed;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 500px;
+    background: radial-gradient(ellipse, rgba(94, 173, 247, 0.03) 0%, transparent 70%);
+    z-index: 0;
+    pointer-events: none;
+}
+
 .terminal-grid {
-    /* intentionally empty — warm bg is clean */
+    /* intentionally empty */
 }
 
 /* ── Branding ── */
@@ -200,10 +226,10 @@
 
 .terminal-brand-name {
     font-family: var(--font-display);
-    font-size: 0.8rem;
-    font-weight: 500;
+    font-size: 0.75rem;
+    font-weight: 600;
     color: var(--terminal-dim);
-    letter-spacing: 0.15em;
+    letter-spacing: 0.2em;
     text-transform: uppercase;
     margin: 0;
     line-height: 1;
@@ -213,11 +239,11 @@
 .terminal-motto {
     font-style: italic;
     color: var(--terminal-dim);
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     font-family: var(--font-display);
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
     margin-top: 0.375rem;
-    opacity: 0.7;
+    opacity: 0.5;
 }
 
 .terminal-rose-line {
@@ -233,46 +259,46 @@
     align-items: center;
     justify-content: center;
     gap: 0.75rem;
-    padding: 1rem 1.5rem;
+    padding: 0.875rem 1.5rem;
     background: var(--terminal-surface);
     border: 1px solid var(--terminal-border);
-    border-radius: 12px;
+    border-radius: 14px;
     position: relative;
     z-index: 1;
-    backdrop-filter: blur(8px);
+    backdrop-filter: blur(16px) saturate(1.2);
+    -webkit-backdrop-filter: blur(16px) saturate(1.2);
 }
 
-/* Warm accent line on top */
+/* Accent glow line */
 .terminal-nav-bar::before {
     content: "";
     position: absolute;
     top: 0;
-    left: 1.5rem;
-    right: 1.5rem;
+    left: 2rem;
+    right: 2rem;
     height: 1px;
     background: linear-gradient(
         90deg,
         transparent,
-        var(--terminal-accent) 20%,
-        var(--chart-dividend) 50%,
-        var(--terminal-accent) 80%,
+        rgba(94, 173, 247, 0.25) 30%,
+        rgba(251, 191, 36, 0.15) 50%,
+        rgba(94, 173, 247, 0.25) 70%,
         transparent
     );
-    opacity: 0.3;
 }
 
 .terminal-nav-btn {
-    width: 40px;
-    height: 40px;
+    width: 38px;
+    height: 38px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: transparent;
     border: 1px solid var(--terminal-border);
-    border-radius: 8px;
+    border-radius: 10px;
     color: var(--terminal-muted);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
     font-weight: 600;
 }
 
@@ -280,6 +306,7 @@
     background: var(--terminal-elevated);
     border-color: var(--terminal-border-bright);
     color: var(--terminal-text);
+    box-shadow: 0 0 12px rgba(94, 173, 247, 0.06);
 }
 
 .terminal-nav-btn:active:not(:disabled) {
@@ -287,22 +314,22 @@
 }
 
 .terminal-nav-btn:disabled {
-    opacity: 0.2;
+    opacity: 0.15;
     cursor: not-allowed;
 }
 
 .terminal-nav-btn-sm {
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: transparent;
     border: 1px solid transparent;
-    border-radius: 6px;
+    border-radius: 8px;
     color: var(--terminal-dim);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
 }
 
 .terminal-nav-btn-sm:hover:not(:disabled) {
@@ -311,7 +338,7 @@
 }
 
 .terminal-nav-btn-sm:disabled {
-    opacity: 0.15;
+    opacity: 0.12;
     cursor: not-allowed;
 }
 
@@ -324,9 +351,10 @@
     padding: 0.375rem 1rem;
     background: var(--terminal-surface);
     border: 1px solid var(--terminal-border);
-    border-radius: 8px;
+    border-radius: 10px;
     position: relative;
     z-index: 1;
+    backdrop-filter: blur(16px);
 }
 
 .terminal-nav-bar-compact::before {
@@ -339,9 +367,9 @@
     background: linear-gradient(
         90deg,
         transparent,
-        rgba(245, 245, 244, 0.08) 30%,
-        rgba(245, 245, 244, 0.04) 50%,
-        rgba(245, 245, 244, 0.08) 70%,
+        rgba(216, 222, 233, 0.06) 30%,
+        rgba(216, 222, 233, 0.03) 50%,
+        rgba(216, 222, 233, 0.06) 70%,
         transparent
     );
 }
@@ -357,7 +385,7 @@
     border-radius: 6px;
     color: var(--terminal-muted);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
 }
 
 .terminal-nav-btn-compact:hover:not(:disabled) {
@@ -371,7 +399,7 @@
 }
 
 .terminal-nav-btn-compact:disabled {
-    opacity: 0.2;
+    opacity: 0.15;
     cursor: not-allowed;
 }
 
@@ -414,7 +442,7 @@
     font-size: 0.6875rem;
     color: var(--terminal-dim);
     margin-top: 0.125rem;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.03em;
 }
 
 .terminal-nav-footer {
@@ -446,17 +474,18 @@
 .terminal-stat {
     background: var(--terminal-surface);
     border: 1px solid var(--terminal-border);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 1rem 1.25rem;
     position: relative;
     overflow: hidden;
-    transition: border-color 0.2s ease;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
     z-index: 1;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(12px);
 }
 
 .terminal-stat:hover {
     border-color: var(--terminal-border-bright);
+    box-shadow: 0 2px 20px rgba(0, 0, 0, 0.15);
 }
 
 .terminal-stat-label {
@@ -464,7 +493,7 @@
     font-size: 0.6875rem;
     font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     color: var(--terminal-dim);
     margin-bottom: 0.5rem;
 }
@@ -472,7 +501,7 @@
 .terminal-stat-value {
     font-family: var(--font-mono);
     font-size: 1.5rem;
-    font-weight: 600;
+    font-weight: 500;
     line-height: 1;
     color: var(--terminal-text);
     font-variant-numeric: tabular-nums;
@@ -512,29 +541,29 @@
 .terminal-card {
     background: var(--terminal-surface);
     border: 1px solid var(--terminal-border);
-    border-radius: 12px;
+    border-radius: 14px;
     position: relative;
     z-index: 1;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(12px);
 }
 
 /* ── Chart Section ── */
 .terminal-chart {
     background: var(--terminal-surface);
     border: 1px solid var(--terminal-border);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 1.25rem 1.5rem;
     position: relative;
     z-index: 1;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(12px);
 }
 
 .terminal-chart-title {
     font-family: var(--font-display);
     font-size: 0.6875rem;
-    font-weight: 500;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     color: var(--terminal-dim);
 }
 
@@ -599,7 +628,7 @@
 
 .terminal-legend-dashed {
     background: transparent !important;
-    border-top: 2px dashed #38BDF8;
+    border-top: 2px dashed var(--chart-line);
     height: 0;
     width: 14px;
 }
@@ -628,8 +657,8 @@
     gap: 0.375rem;
     padding: 0.25rem 0.625rem;
     background: var(--gain-bg);
-    border: 1px solid rgba(34, 197, 94, 0.2);
-    border-radius: 6px;
+    border: 1px solid rgba(52, 211, 153, 0.15);
+    border-radius: 8px;
     color: var(--gain);
     font-family: var(--font-mono);
     font-size: 0.75rem;
@@ -638,7 +667,7 @@
 
 .terminal-growth-badge.negative {
     background: var(--loss-bg);
-    border-color: rgba(239, 68, 68, 0.2);
+    border-color: rgba(248, 113, 113, 0.15);
     color: var(--loss);
 }
 
@@ -663,7 +692,7 @@
     font-size: 0.625rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     color: var(--terminal-dim);
     white-space: nowrap;
 }
@@ -683,11 +712,11 @@
     font-family: var(--font-mono);
     font-size: 0.8125rem;
     white-space: nowrap;
-    transition: background-color 0.1s ease;
+    transition: background-color 0.15s ease;
 }
 
 .terminal-table tbody tr:hover td {
-    background: rgba(56, 189, 248, 0.03);
+    background: rgba(94, 173, 247, 0.03);
 }
 
 .terminal-table tbody tr:last-child td {
@@ -725,6 +754,16 @@
 
 .terminal-loss {
     color: var(--loss);
+}
+
+.terminal-badge-gain {
+    color: var(--gain);
+    font-weight: 500;
+}
+
+.terminal-badge-loss {
+    color: var(--loss);
+    font-weight: 500;
 }
 
 /* Percentage bar (NAV) */
@@ -784,7 +823,7 @@
     align-items: center;
     gap: 0.375rem;
     padding: 0.25rem 0.625rem;
-    border-radius: 6px;
+    border-radius: 8px;
     font-family: var(--font-mono);
     font-size: 0.6875rem;
     font-weight: 500;
@@ -792,33 +831,33 @@
 }
 
 .terminal-fear-greed-badge.red {
-    background: rgba(239, 68, 68, 0.1);
-    color: #EF4444;
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    background: rgba(248, 113, 113, 0.08);
+    color: #F87171;
+    border: 1px solid rgba(248, 113, 113, 0.15);
 }
 
 .terminal-fear-greed-badge.orange {
-    background: rgba(249, 115, 22, 0.1);
-    color: #F97316;
-    border: 1px solid rgba(249, 115, 22, 0.2);
+    background: rgba(251, 146, 60, 0.08);
+    color: #FB923C;
+    border: 1px solid rgba(251, 146, 60, 0.15);
 }
 
 .terminal-fear-greed-badge.yellow {
-    background: rgba(234, 179, 8, 0.1);
-    color: #EAB308;
-    border: 1px solid rgba(234, 179, 8, 0.2);
+    background: rgba(251, 191, 36, 0.08);
+    color: #FBBF24;
+    border: 1px solid rgba(251, 191, 36, 0.15);
 }
 
 .terminal-fear-greed-badge.emerald {
-    background: rgba(34, 197, 94, 0.1);
-    color: #22C55E;
-    border: 1px solid rgba(34, 197, 94, 0.2);
+    background: rgba(52, 211, 153, 0.08);
+    color: #34D399;
+    border: 1px solid rgba(52, 211, 153, 0.15);
 }
 
 .terminal-fear-greed-badge.green {
-    background: rgba(34, 197, 94, 0.1);
-    color: #22C55E;
-    border: 1px solid rgba(34, 197, 94, 0.2);
+    background: rgba(52, 211, 153, 0.08);
+    color: #34D399;
+    border: 1px solid rgba(52, 211, 153, 0.15);
 }
 
 /* ── Empty state ── */
@@ -858,7 +897,7 @@
     background: var(--terminal-surface);
     border: 1px solid var(--terminal-border);
     padding: 0.625rem 1rem;
-    border-radius: 6px;
+    border-radius: 8px;
     font-size: 0.8125rem;
     color: var(--gain);
     display: inline-block;
@@ -870,7 +909,7 @@
     font-size: 0.625rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     color: var(--terminal-dim);
     padding-bottom: 0.5rem;
     border-bottom: 1px solid var(--terminal-border);
@@ -881,7 +920,7 @@
 @keyframes fade-in {
     from {
         opacity: 0;
-        transform: translateY(6px);
+        transform: translateY(8px);
     }
     to {
         opacity: 1;
@@ -901,38 +940,38 @@
 }
 
 .animate-fade-in {
-    animation: fade-in 0.35s ease-out forwards;
+    animation: fade-in 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
 .animate-slide-in {
-    animation: slide-in 0.3s ease-out forwards;
+    animation: slide-in 0.35s ease-out forwards;
 }
 
 .animate-delay-1 {
-    animation-delay: 0.05s;
+    animation-delay: 0.06s;
     opacity: 0;
 }
 .animate-delay-2 {
-    animation-delay: 0.1s;
+    animation-delay: 0.12s;
     opacity: 0;
 }
 .animate-delay-3 {
-    animation-delay: 0.15s;
+    animation-delay: 0.18s;
     opacity: 0;
 }
 .animate-delay-4 {
-    animation-delay: 0.2s;
+    animation-delay: 0.24s;
     opacity: 0;
 }
 .animate-delay-5 {
-    animation-delay: 0.25s;
+    animation-delay: 0.3s;
     opacity: 0;
 }
 
 /* ── Scrollbar ── */
 .terminal-theme ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
 }
 
 .terminal-theme ::-webkit-scrollbar-track {
@@ -976,7 +1015,7 @@
     font-size: 0.8rem;
     color: var(--terminal-muted);
     text-decoration: none;
-    transition: color 0.15s ease;
+    transition: color 0.2s ease;
 }
 
 .terminal-back-link:hover {
@@ -1004,7 +1043,7 @@
     font-size: 0.625rem;
     font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     color: var(--terminal-dim);
     margin-bottom: 0.25rem;
 }
@@ -1022,12 +1061,12 @@
     padding: 0.375rem 0.75rem;
     background: var(--terminal-elevated);
     border: 1px solid var(--terminal-border);
-    border-radius: 6px;
+    border-radius: 8px;
     font-family: var(--font-display);
     font-size: 0.75rem;
     color: var(--terminal-muted);
     text-decoration: none;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
 }
 
 .terminal-external-link:hover {
@@ -1052,13 +1091,13 @@
         opacity: 1;
     }
     50% {
-        opacity: 0.6;
-        filter: drop-shadow(0 0 4px var(--chart-line));
+        opacity: 0.5;
+        filter: drop-shadow(0 0 6px var(--chart-line));
     }
 }
 
 .chart-current-marker {
-    animation: pulse-dot 2s ease-in-out infinite;
+    animation: pulse-dot 2.5s ease-in-out infinite;
 }
 
 /* Smooth chart transitions for marker and line positions */
@@ -1094,9 +1133,9 @@
     border: none;
     border-bottom: 2px solid transparent;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.04em;
 }
 
 .tab-strip-btn:hover {

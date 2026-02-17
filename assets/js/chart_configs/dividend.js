@@ -5,7 +5,7 @@ export function dividendChartConfig(series) {
       type: "bar",
       height: 260,
       toolbar: { show: false },
-      fontFamily: "'JetBrains Mono', monospace",
+      fontFamily: "'IBM Plex Mono', monospace",
       background: "transparent",
       animations: {
         enabled: true,
@@ -25,7 +25,7 @@ export function dividendChartConfig(series) {
       width: [0, 2.5],
       curve: "smooth"
     },
-    colors: ["#F59E0B", "#F97316"],
+    colors: ["#FBBF24", "#F59E0B"],
     fill: {
       opacity: [0.85, 1]
     },
@@ -33,7 +33,7 @@ export function dividendChartConfig(series) {
       categories: [],
       labels: {
         style: {
-          colors: "#5C6678",
+          colors: "#4C5772",
           fontSize: "10px"
         },
         rotate: -45,
@@ -47,7 +47,7 @@ export function dividendChartConfig(series) {
         title: { text: "" },
         labels: {
           style: {
-            colors: "#5C6678",
+            colors: "#4C5772",
             fontSize: "10px"
           },
           formatter: (val) => val.toFixed(0)
@@ -58,7 +58,7 @@ export function dividendChartConfig(series) {
         title: { text: "" },
         labels: {
           style: {
-            colors: "#5C6678",
+            colors: "#4C5772",
             fontSize: "10px"
           },
           formatter: (val) => val >= 1000 ? (val / 1000).toFixed(1) + "k" : val.toFixed(0)
@@ -66,7 +66,7 @@ export function dividendChartConfig(series) {
       }
     ],
     grid: {
-      borderColor: "rgba(91, 103, 120, 0.15)",
+      borderColor: "rgba(76, 87, 114, 0.12)",
       strokeDashArray: 3,
       xaxis: { lines: { show: false } }
     },

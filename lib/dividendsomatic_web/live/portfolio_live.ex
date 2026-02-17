@@ -737,15 +737,15 @@ defmodule DividendsomaticWeb.PortfolioLive do
         %{
           x: date_to_unix_ms(current_date),
           strokeDashArray: 3,
-          borderColor: "#E8ECF1",
-          opacity: 0.3,
+          borderColor: "#D8DEE9",
+          opacity: 0.25,
           label: %{
             text: "Current",
             style: %{
-              color: "#E8ECF1",
-              background: "#141920",
+              color: "#D8DEE9",
+              background: "rgba(14, 18, 27, 0.9)",
               fontSize: "10px",
-              fontFamily: "JetBrains Mono"
+              fontFamily: "IBM Plex Mono"
             }
           }
         }
@@ -792,7 +792,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
         height: 320,
         toolbar: %{show: false},
         zoom: %{enabled: true},
-        fontFamily: "'JetBrains Mono', monospace",
+        fontFamily: "'IBM Plex Mono', monospace",
         background: "transparent",
         animations: %{
           enabled: true,
@@ -807,32 +807,32 @@ defmodule DividendsomaticWeb.PortfolioLive do
         curve: "smooth",
         dashArray: [0, 5]
       },
-      colors: ["#38BDF8", "#5C6678"],
+      colors: ["#5EADF7", "#4C5772"],
       fill: %{
         type: ["gradient", "solid"],
         gradient: %{
           shadeIntensity: 1,
-          opacityFrom: 0.12,
-          opacityTo: 0.02,
-          stops: [0, 90, 100]
+          opacityFrom: 0.15,
+          opacityTo: 0.01,
+          stops: [0, 85, 100]
         },
         opacity: [1, 0]
       },
       xaxis: %{
         type: "datetime",
         labels: %{
-          style: %{colors: "#5C6678", fontSize: "10px"}
+          style: %{colors: "#4C5772", fontSize: "10px"}
         },
         axisBorder: %{show: false},
         axisTicks: %{show: false}
       },
       yaxis: %{
         labels: %{
-          style: %{colors: "#5C6678", fontSize: "10px"}
+          style: %{colors: "#4C5772", fontSize: "10px"}
         }
       },
       grid: %{
-        borderColor: "rgba(91, 103, 120, 0.15)",
+        borderColor: "rgba(76, 87, 114, 0.12)",
         strokeDashArray: 3,
         xaxis: %{lines: %{show: false}}
       },
@@ -854,7 +854,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
         type: "bar",
         height: 260,
         toolbar: %{show: false},
-        fontFamily: "'JetBrains Mono', monospace",
+        fontFamily: "'IBM Plex Mono', monospace",
         background: "transparent",
         animations: %{
           enabled: true,
@@ -874,12 +874,12 @@ defmodule DividendsomaticWeb.PortfolioLive do
         width: [0, 2.5],
         curve: "smooth"
       },
-      colors: ["#F59E0B", "#F97316"],
+      colors: ["#FBBF24", "#F59E0B"],
       fill: %{opacity: [0.85, 1]},
       xaxis: %{
         categories: categories,
         labels: %{
-          style: %{colors: "#5C6678", fontSize: "10px"},
+          style: %{colors: "#4C5772", fontSize: "10px"},
           rotate: -45,
           rotateAlways: false
         },
@@ -890,19 +890,19 @@ defmodule DividendsomaticWeb.PortfolioLive do
         %{
           title: %{text: ""},
           labels: %{
-            style: %{colors: "#5C6678", fontSize: "10px"}
+            style: %{colors: "#4C5772", fontSize: "10px"}
           }
         },
         %{
           opposite: true,
           title: %{text: ""},
           labels: %{
-            style: %{colors: "#5C6678", fontSize: "10px"}
+            style: %{colors: "#4C5772", fontSize: "10px"}
           }
         }
       ],
       grid: %{
-        borderColor: "rgba(91, 103, 120, 0.15)",
+        borderColor: "rgba(76, 87, 114, 0.12)",
         strokeDashArray: 3,
         xaxis: %{lines: %{show: false}}
       },
