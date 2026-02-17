@@ -265,6 +265,10 @@ defmodule DividendsomaticWeb.PortfolioLive do
     end
   end
 
+  def handle_event("switch_tab", %{"tab" => tab}, socket) do
+    {:noreply, assign(socket, :active_tab, tab)}
+  end
+
   def handle_event("toggle_waterfall", _params, socket) do
     if socket.assigns.show_waterfall do
       {:noreply, assign(socket, show_waterfall: false, waterfall_data: [])}
@@ -515,6 +519,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:waterfall_data, [])
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
+    |> assign(:active_tab, "holdings")
     |> assign(:is_reconstructed, false)
     |> assign(:missing_price_count, 0)
     |> assign(:pnl, %{
@@ -601,6 +606,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:waterfall_data, [])
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
+    |> assign_new(:active_tab, fn -> "holdings" end)
     |> assign_freshness_and_source(snapshot, positions)
     |> assign_pnl_summary()
     |> assign_investment_summary()
@@ -644,9 +650,15 @@ defmodule DividendsomaticWeb.PortfolioLive do
           socket.assigns.growth_stats
       end
 
+    chart_json = serialize_portfolio_chart(sliced, socket.assigns.current_snapshot.date)
+
     socket
     |> assign(:chart_data, sliced)
     |> assign(:growth_stats, growth_stats)
+    |> push_event("update-chart-portfolio-apex-chart", %{
+      series: chart_json.series,
+      options: %{annotations: chart_json.annotations}
+    })
   end
 
   defp assign_freshness_and_source(socket, snapshot, positions) do
@@ -676,5 +688,212 @@ defmodule DividendsomaticWeb.PortfolioLive do
       |> Map.put(:total_return, total_return)
 
     assign(socket, :investment_summary, investment_summary)
+  end
+
+  # --- ApexCharts Data Serialization ---
+
+  @doc false
+  def serialize_portfolio_chart(chart_data, current_date) do
+    value_series =
+      Enum.map(chart_data, fn point ->
+        ts = date_to_unix_ms(point.date)
+        [ts, point.value_float]
+      end)
+
+    cost_series =
+      Enum.map(chart_data, fn point ->
+        ts = date_to_unix_ms(point.date)
+        [ts, point.cost_basis_float]
+      end)
+
+    annotations = %{
+      xaxis: [
+        %{
+          x: date_to_unix_ms(current_date),
+          strokeDashArray: 3,
+          borderColor: "#F5F5F4",
+          opacity: 0.3,
+          label: %{
+            text: "Current",
+            style: %{
+              color: "#F5F5F4",
+              background: "#292524",
+              fontSize: "10px",
+              fontFamily: "JetBrains Mono"
+            }
+          }
+        }
+      ]
+    }
+
+    %{
+      series: [
+        %{name: "Portfolio Value", type: "area", data: value_series},
+        %{name: "Cost Basis", type: "line", data: cost_series}
+      ],
+      annotations: annotations
+    }
+  end
+
+  @doc false
+  def serialize_dividend_chart(dividend_by_month) do
+    categories = Enum.map(dividend_by_month, fn m -> m.month end)
+
+    monthly_data =
+      Enum.map(dividend_by_month, fn m ->
+        Decimal.to_float(m.total)
+      end)
+
+    # Compute cumulative from monthly totals
+    cumulative_data =
+      dividend_by_month
+      |> Enum.scan(0.0, fn m, acc -> acc + Decimal.to_float(m.total) end)
+
+    %{
+      series: [
+        %{name: "Monthly", type: "bar", data: monthly_data},
+        %{name: "Cumulative", type: "line", data: cumulative_data}
+      ],
+      categories: categories
+    }
+  end
+
+  @doc false
+  def build_portfolio_apex_config(%{series: series, annotations: annotations}) do
+    %{
+      chart: %{
+        type: "area",
+        height: 320,
+        toolbar: %{show: false},
+        zoom: %{enabled: true},
+        fontFamily: "'JetBrains Mono', monospace",
+        background: "transparent",
+        animations: %{
+          enabled: true,
+          easing: "easeinout",
+          speed: 600,
+          dynamicAnimation: %{enabled: true, speed: 350}
+        }
+      },
+      series: series,
+      stroke: %{
+        width: [2.5, 1.5],
+        curve: "smooth",
+        dashArray: [0, 5]
+      },
+      colors: ["#38BDF8", "#78716C"],
+      fill: %{
+        type: ["gradient", "solid"],
+        gradient: %{
+          shadeIntensity: 1,
+          opacityFrom: 0.12,
+          opacityTo: 0.02,
+          stops: [0, 90, 100]
+        },
+        opacity: [1, 0]
+      },
+      xaxis: %{
+        type: "datetime",
+        labels: %{
+          style: %{colors: "#78716C", fontSize: "10px"}
+        },
+        axisBorder: %{show: false},
+        axisTicks: %{show: false}
+      },
+      yaxis: %{
+        labels: %{
+          style: %{colors: "#78716C", fontSize: "10px"}
+        }
+      },
+      grid: %{
+        borderColor: "rgba(120, 113, 108, 0.15)",
+        strokeDashArray: 3,
+        xaxis: %{lines: %{show: false}}
+      },
+      tooltip: %{
+        theme: "dark",
+        x: %{format: "dd MMM yyyy"},
+        style: %{fontSize: "12px"}
+      },
+      legend: %{show: false},
+      annotations: annotations,
+      dataLabels: %{enabled: false}
+    }
+  end
+
+  @doc false
+  def build_dividend_apex_config(%{series: series, categories: categories}) do
+    %{
+      chart: %{
+        type: "bar",
+        height: 260,
+        toolbar: %{show: false},
+        fontFamily: "'JetBrains Mono', monospace",
+        background: "transparent",
+        animations: %{
+          enabled: true,
+          easing: "easeinout",
+          speed: 600
+        }
+      },
+      series: series,
+      plotOptions: %{
+        bar: %{
+          borderRadius: 4,
+          borderRadiusApplication: "end",
+          columnWidth: "60%"
+        }
+      },
+      stroke: %{
+        width: [0, 2.5],
+        curve: "smooth"
+      },
+      colors: ["#F59E0B", "#F97316"],
+      fill: %{opacity: [0.85, 1]},
+      xaxis: %{
+        categories: categories,
+        labels: %{
+          style: %{colors: "#78716C", fontSize: "10px"},
+          rotate: -45,
+          rotateAlways: false
+        },
+        axisBorder: %{show: false},
+        axisTicks: %{show: false}
+      },
+      yaxis: [
+        %{
+          title: %{text: ""},
+          labels: %{
+            style: %{colors: "#78716C", fontSize: "10px"}
+          }
+        },
+        %{
+          opposite: true,
+          title: %{text: ""},
+          labels: %{
+            style: %{colors: "#78716C", fontSize: "10px"}
+          }
+        }
+      ],
+      grid: %{
+        borderColor: "rgba(120, 113, 108, 0.15)",
+        strokeDashArray: 3,
+        xaxis: %{lines: %{show: false}}
+      },
+      tooltip: %{
+        theme: "dark",
+        shared: true,
+        intersect: false,
+        style: %{fontSize: "12px"}
+      },
+      legend: %{show: false},
+      dataLabels: %{enabled: false}
+    }
+  end
+
+  defp date_to_unix_ms(date) do
+    date
+    |> DateTime.new!(~T[00:00:00], "Etc/UTC")
+    |> DateTime.to_unix(:millisecond)
   end
 end

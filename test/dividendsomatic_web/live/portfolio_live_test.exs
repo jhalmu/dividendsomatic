@@ -251,8 +251,9 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
 
     test "should show FX exposure table when multiple currencies exist", %{conn: conn} do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@multi_currency_csv, ~D[2026-01-28])
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/")
 
+      html = render_hook(view, "switch_tab", %{"tab" => "summary"})
       assert html =~ "Currency Exposure"
       assert html =~ "fx-exposure"
       assert html =~ "EUR"
@@ -261,8 +262,9 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
 
     test "should hide FX exposure when single currency", %{conn: conn} do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/")
 
+      html = render_hook(view, "switch_tab", %{"tab" => "summary"})
       refute html =~ "fx-exposure"
       refute html =~ "Currency Exposure"
     end
@@ -286,8 +288,9 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     end
 
     test "should show realized P&L section with summary stats", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/")
 
+      html = render_hook(view, "switch_tab", %{"tab" => "summary"})
       assert html =~ "Realized P&amp;L"
       assert html =~ "pnl-summary-stats"
       assert html =~ "Gains"
@@ -297,28 +300,32 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     end
 
     test "should show top winners table with AAPL", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/")
 
+      html = render_hook(view, "switch_tab", %{"tab" => "summary"})
       assert html =~ "Top Winners"
       assert html =~ "AAPL"
     end
 
     test "should link sold symbol to stock page", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/")
 
+      html = render_hook(view, "switch_tab", %{"tab" => "summary"})
       assert html =~ ~s{href="/stocks/AAPL"}
     end
 
     test "should show holding period years", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/")
 
+      html = render_hook(view, "switch_tab", %{"tab" => "summary"})
       assert html =~ "2025"
       assert html =~ "2026"
     end
 
     test "should show year filter buttons", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/")
 
+      html = render_hook(view, "switch_tab", %{"tab" => "summary"})
       # Should have "All" button and year buttons
       assert html =~ "All"
       assert html =~ "2026"
@@ -336,7 +343,10 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
           sale_date: ~D[2025-06-15]
         })
 
-      {:ok, view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      # Switch to summary tab first
+      html = render_hook(view, "switch_tab", %{"tab" => "summary"})
 
       # Both symbols visible in "All" mode
       assert html =~ "AAPL"
@@ -359,8 +369,9 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     end
 
     test "should toggle show all symbols", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/")
 
+      html = render_hook(view, "switch_tab", %{"tab" => "summary"})
       assert html =~ "Show all"
 
       html = render_hook(view, "pnl_show_all", %{})
@@ -409,8 +420,9 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
           currency: "EUR"
         })
 
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/")
 
+      html = render_hook(view, "switch_tab", %{"tab" => "income"})
       assert html =~ "Dividend Cash Flow"
       assert html =~ "cash-flow"
     end

@@ -24,6 +24,7 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/dividendsomatic"
 import topbar from "../vendor/topbar"
+import ApexChartHook from "./hooks/apex_chart_hook"
 
 // Custom hooks
 const Hooks = {
@@ -49,83 +50,7 @@ const Hooks = {
       window.removeEventListener("keydown", this.handleKeydown)
     }
   },
-  ChartAnimation: {
-    mounted() {
-      this.animatePaths()
-    },
-    updated() {
-      this.animatePaths()
-    },
-    animatePaths() {
-      const paths = this.el.querySelectorAll('svg path[stroke="#10b981"][stroke-width="2.5"]')
-      paths.forEach(path => {
-        const length = path.getTotalLength()
-        path.style.setProperty('--path-length', length)
-        path.classList.add('chart-line-animated')
-      })
-    }
-  },
-  ChartTransition: {
-    mounted() {
-      this.prevPaths = this.capturePaths()
-    },
-    updated() {
-      const newPaths = this.capturePaths()
-      this.morph(this.prevPaths, newPaths)
-      this.prevPaths = newPaths
-    },
-    capturePaths() {
-      return {
-        areaFill: this.el.querySelector('[data-role="area-fill"]')?.getAttribute('d'),
-        valueLine: this.el.querySelector('[data-role="value-line"]')?.getAttribute('d'),
-        costLine: this.el.querySelector('[data-role="cost-line"]')?.getAttribute('d'),
-        markerCx: this.el.querySelector('[data-role="current-marker"]')?.getAttribute('cx'),
-        markerCy: this.el.querySelector('[data-role="current-marker"]')?.getAttribute('cy'),
-        lineCx: this.el.querySelector('[data-role="current-line"]')?.getAttribute('x1'),
-      }
-    },
-    morph(from, to) {
-      if (!from || !to) return
-
-      const transitions = [
-        {role: 'area-fill', attr: 'd', fromVal: from.areaFill, toVal: to.areaFill},
-        {role: 'value-line', attr: 'd', fromVal: from.valueLine, toVal: to.valueLine},
-        {role: 'cost-line', attr: 'd', fromVal: from.costLine, toVal: to.costLine},
-      ]
-
-      for (const {role, attr, fromVal, toVal} of transitions) {
-        const el = this.el.querySelector(`[data-role="${role}"]`)
-        if (el && fromVal && toVal && fromVal !== toVal) {
-          el.setAttribute(attr, fromVal)
-          requestAnimationFrame(() => {
-            el.style.transition = 'd 0.3s ease-out'
-            el.setAttribute(attr, toVal)
-          })
-        }
-      }
-
-      // Marker position transition (handled by CSS)
-      const marker = this.el.querySelector('[data-role="current-marker"]')
-      if (marker && from.markerCx && to.markerCx) {
-        marker.setAttribute('cx', from.markerCx)
-        marker.setAttribute('cy', from.markerCy)
-        requestAnimationFrame(() => {
-          marker.setAttribute('cx', to.markerCx)
-          marker.setAttribute('cy', to.markerCy)
-        })
-      }
-
-      const line = this.el.querySelector('[data-role="current-line"]')
-      if (line && from.lineCx && to.lineCx) {
-        line.setAttribute('x1', from.lineCx)
-        line.setAttribute('x2', from.lineCx)
-        requestAnimationFrame(() => {
-          line.setAttribute('x1', to.lineCx)
-          line.setAttribute('x2', to.lineCx)
-        })
-      }
-    }
-  }
+  ApexChartHook: ApexChartHook
 }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
@@ -136,7 +61,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
 })
 
 // Show progress bar on live navigation and form submits
-topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})
+topbar.config({barColors: {0: "#38BDF8"}, shadowColor: "rgba(0, 0, 0, .3)"})
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 
@@ -183,4 +108,3 @@ if (process.env.NODE_ENV === "development") {
     window.liveReloader = reloader
   })
 }
-

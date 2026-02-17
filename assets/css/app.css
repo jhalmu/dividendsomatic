@@ -17,76 +17,78 @@
     themes: false;
 }
 
-/* daisyUI theme plugin. You can update this file by fetching the latest version with:
-  curl -sLO https://github.com/saadeghi/daisyui/releases/latest/download/daisyui-theme.js
-  We ship with two themes, a light one inspired on Phoenix colors and a dark one inspired
-  on Elixir colors. Build your own at: https://daisyui.com/theme-generator/ */
+/* ============================================
+   Nordic Warmth — Dark Theme (default)
+   ============================================ */
 @plugin "../vendor/daisyui-theme" {
     name: "dark";
-    default: false;
+    default: true;
     prefersdark: true;
     color-scheme: "dark";
-    --color-base-100: oklch(30.33% 0.016 252.42);
-    --color-base-200: oklch(25.26% 0.014 253.1);
-    --color-base-300: oklch(20.15% 0.012 254.09);
-    --color-base-content: oklch(97.807% 0.029 256.847);
-    --color-primary: oklch(58% 0.233 277.117);
-    --color-primary-content: oklch(96% 0.018 272.314);
-    --color-secondary: oklch(58% 0.233 277.117);
-    --color-secondary-content: oklch(96% 0.018 272.314);
-    --color-accent: oklch(60% 0.25 292.717);
-    --color-accent-content: oklch(96% 0.016 293.756);
-    --color-neutral: oklch(37% 0.044 257.287);
-    --color-neutral-content: oklch(98% 0.003 247.858);
-    --color-info: oklch(58% 0.158 241.966);
-    --color-info-content: oklch(97% 0.013 236.62);
-    --color-success: oklch(60% 0.118 184.704);
-    --color-success-content: oklch(98% 0.014 180.72);
-    --color-warning: oklch(66% 0.179 58.318);
-    --color-warning-content: oklch(98% 0.022 95.277);
-    --color-error: oklch(58% 0.253 17.585);
-    --color-error-content: oklch(96% 0.015 12.422);
-    --radius-selector: 0.25rem;
-    --radius-field: 0.25rem;
-    --radius-box: 0.5rem;
-    --size-selector: 0.21875rem;
-    --size-field: 0.21875rem;
-    --border: 1.5px;
+    --color-base-100: oklch(20.8% 0.006 49);
+    --color-base-200: oklch(15.8% 0.006 49);
+    --color-base-300: oklch(12.5% 0.005 49);
+    --color-base-content: oklch(96.7% 0.003 90);
+    --color-primary: oklch(75.5% 0.14 230);
+    --color-primary-content: oklch(97% 0.01 230);
+    --color-secondary: oklch(78% 0.16 75);
+    --color-secondary-content: oklch(15.8% 0.006 49);
+    --color-accent: oklch(73% 0.17 50);
+    --color-accent-content: oklch(15.8% 0.006 49);
+    --color-neutral: oklch(32% 0.006 49);
+    --color-neutral-content: oklch(96.7% 0.003 90);
+    --color-info: oklch(75.5% 0.14 230);
+    --color-info-content: oklch(97% 0.01 230);
+    --color-success: oklch(72% 0.19 150);
+    --color-success-content: oklch(97% 0.02 150);
+    --color-warning: oklch(78% 0.16 75);
+    --color-warning-content: oklch(15.8% 0.006 49);
+    --color-error: oklch(63% 0.24 25);
+    --color-error-content: oklch(97% 0.02 25);
+    --radius-selector: 0.375rem;
+    --radius-field: 0.375rem;
+    --radius-box: 0.75rem;
+    --size-selector: 0.25rem;
+    --size-field: 0.25rem;
+    --border: 1px;
     --depth: 1;
     --noise: 0;
 }
 
+/* ============================================
+   Nordic Warmth — Light Theme
+   ============================================ */
 @plugin "../vendor/daisyui-theme" {
     name: "light";
-    default: true;
+    default: false;
     prefersdark: false;
     color-scheme: "light";
-    --color-base-100: oklch(98% 0 0);
-    --color-base-200: oklch(96% 0.001 286.375);
-    --color-base-300: oklch(92% 0.004 286.32);
-    --color-base-content: oklch(21% 0.006 285.885);
-    --color-primary: oklch(70% 0.213 47.604);
-    --color-primary-content: oklch(98% 0.016 73.684);
-    --color-secondary: oklch(55% 0.027 264.364);
-    --color-secondary-content: oklch(98% 0.002 247.839);
-    --color-accent: oklch(0% 0 0);
+    --color-base-100: oklch(100% 0 0);
+    --color-base-200: oklch(98% 0.003 90);
+    --color-base-300: oklch(96.5% 0.005 80);
+    --color-base-content: oklch(15.8% 0.006 49);
+    --color-primary: oklch(37% 0.09 235);
+    --color-primary-content: oklch(97% 0.01 230);
+    --color-secondary: oklch(53% 0.14 55);
+    --color-secondary-content: oklch(97% 0.02 55);
+    --color-accent: oklch(15.8% 0.006 49);
     --color-accent-content: oklch(100% 0 0);
-    --color-neutral: oklch(44% 0.017 285.786);
-    --color-neutral-content: oklch(98% 0 0);
-    --color-info: oklch(62% 0.214 259.815);
-    --color-info-content: oklch(97% 0.014 254.604);
-    --color-success: oklch(70% 0.14 182.503);
-    --color-success-content: oklch(98% 0.014 180.72);
-    --color-warning: oklch(66% 0.179 58.318);
-    --color-warning-content: oklch(98% 0.022 95.277);
-    --color-error: oklch(58% 0.253 17.585);
-    --color-error-content: oklch(96% 0.015 12.422);
-    --radius-selector: 0.25rem;
-    --radius-field: 0.25rem;
-    --radius-box: 0.5rem;
-    --size-selector: 0.21875rem;
-    --size-field: 0.21875rem;
-    --border: 1.5px;
+    --color-neutral: oklch(42% 0.01 50);
+    --color-neutral-content: oklch(97% 0.003 90);
+    --color-info: oklch(37% 0.09 235);
+    --color-info-content: oklch(97% 0.01 235);
+    --color-success: oklch(50% 0.15 155);
+    --color-success-content: oklch(97% 0.02 155);
+    --color-warning: oklch(53% 0.14 55);
+    --color-warning-content: oklch(97% 0.02 55);
+    --color-error: oklch(47% 0.2 25);
+    --color-error-content: oklch(97% 0.02 25);
+    --radius-selector: 0.375rem;
+    --radius-field: 0.375rem;
+    --radius-box: 0.75rem;
+    --size-selector: 0.25rem;
+    --size-field: 0.25rem;
+    --border: 1px;
     --depth: 1;
     --noise: 0;
 }
@@ -130,48 +132,49 @@
 }
 
 /* ============================================
-   DIVIDENDSOMATIC - Institutional Terminal
+   DIVIDENDSOMATIC — Nordic Warmth
    ============================================ */
 
-/* Import distinctive fonts - Geist Mono for data, DM Sans for display */
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap");
+/* Import distinctive fonts — DM Sans for display, JetBrains Mono for data */
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap");
 
-/* Terminal-inspired color palette */
+/* Nordic Warmth color palette */
 :root {
-    --terminal-bg: #0a0e17;
-    --terminal-surface: #111827;
-    --terminal-elevated: #1a2234;
-    --terminal-border: #1e293b;
-    --terminal-border-bright: #334155;
-    --terminal-text: #e2e8f0;
-    --terminal-muted: #8896ab;
-    --terminal-dim: #475569;
-    --terminal-accent: #3b82f6;
+    --terminal-bg: #1C1917;
+    --terminal-surface: #292524;
+    --terminal-elevated: #33302E;
+    --terminal-border: #44403C;
+    --terminal-border-bright: #57534E;
+    --terminal-text: #F5F5F4;
+    --terminal-muted: #A8A29E;
+    --terminal-dim: #78716C;
+    --terminal-accent: #38BDF8;
 
     /* P&L Colors */
-    --gain: #10b981;
-    --gain-light: #34d399;
-    --gain-bg: rgba(16, 185, 129, 0.08);
-    --gain-glow: 0 0 20px rgba(16, 185, 129, 0.15);
-    --loss: #ef4444;
-    --loss-light: #f87171;
-    --loss-bg: rgba(239, 68, 68, 0.08);
+    --gain: #22C55E;
+    --gain-light: #4ADE80;
+    --gain-bg: rgba(34, 197, 94, 0.1);
+    --gain-glow: 0 0 20px rgba(34, 197, 94, 0.15);
+    --loss: #EF4444;
+    --loss-light: #F87171;
+    --loss-bg: rgba(239, 68, 68, 0.1);
 
     /* Chart colors */
-    --chart-line: #10b981;
-    --chart-area: rgba(16, 185, 129, 0.12);
-    --chart-grid: rgba(59, 130, 246, 0.06);
-    --chart-dividend: #f59e0b;
-    --chart-pnl-positive: rgba(16, 185, 129, 0.6);
+    --chart-line: #38BDF8;
+    --chart-area: rgba(56, 189, 248, 0.08);
+    --chart-grid: rgba(120, 113, 108, 0.15);
+    --chart-dividend: #F59E0B;
+    --chart-cumulative: #F97316;
+    --chart-pnl-positive: rgba(34, 197, 94, 0.6);
     --chart-pnl-negative: rgba(239, 68, 68, 0.6);
 
     /* Fonts */
-    --font-display: "Outfit", "DM Sans", system-ui, sans-serif;
+    --font-display: "DM Sans", system-ui, sans-serif;
     --font-mono: "JetBrains Mono", "Fira Code", monospace;
-    --font-brand: var(--font-mono);
+    --font-brand: var(--font-display);
 }
 
-/* Base terminal styling */
+/* Base warm theme styling */
 .terminal-theme {
     background: var(--terminal-bg);
     color: var(--terminal-text);
@@ -180,42 +183,9 @@
     position: relative;
 }
 
-/* Scanline texture overlay for CRT feel */
-.terminal-theme::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    background: repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 2px,
-        rgba(0, 0, 0, 0.03) 2px,
-        rgba(0, 0, 0, 0.03) 4px
-    );
-    pointer-events: none;
-    z-index: 1000;
-}
-
-/* Subtle grid pattern overlay with tile background */
+/* Grid pattern — removed for clean warm aesthetic */
 .terminal-grid {
-    background-image:
-        linear-gradient(rgba(30, 41, 59, 0.3) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(30, 41, 59, 0.3) 1px, transparent 1px),
-        radial-gradient(
-            ellipse at 20% 0%,
-            rgba(16, 185, 129, 0.04) 0%,
-            transparent 50%
-        ),
-        radial-gradient(
-            ellipse at 80% 100%,
-            rgba(59, 130, 246, 0.03) 0%,
-            transparent 50%
-        );
-    background-size:
-        40px 40px,
-        40px 40px,
-        100% 100%,
-        100% 100%;
+    /* intentionally empty — warm bg is clean */
 }
 
 /* ── Branding ── */
@@ -227,11 +197,11 @@
 }
 
 .terminal-brand-name {
-    font-family: var(--font-brand);
-    font-size: 0.75rem;
-    font-weight: 400;
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    font-weight: 500;
     color: var(--terminal-dim);
-    letter-spacing: 0.25em;
+    letter-spacing: 0.15em;
     text-transform: uppercase;
     margin: 0;
     line-height: 1;
@@ -241,9 +211,9 @@
 .terminal-motto {
     font-style: italic;
     color: var(--terminal-dim);
-    font-size: 0.625rem;
-    font-family: var(--font-mono);
-    letter-spacing: 0.08em;
+    font-size: 0.65rem;
+    font-family: var(--font-display);
+    letter-spacing: 0.06em;
     margin-top: 0.375rem;
     opacity: 0.7;
 }
@@ -264,12 +234,13 @@
     padding: 1rem 1.5rem;
     background: var(--terminal-surface);
     border: 1px solid var(--terminal-border);
-    border-radius: 8px;
+    border-radius: 12px;
     position: relative;
     z-index: 1;
+    backdrop-filter: blur(8px);
 }
 
-/* Active indicator line on top */
+/* Warm accent line on top */
 .terminal-nav-bar::before {
     content: "";
     position: absolute;
@@ -281,11 +252,11 @@
         90deg,
         transparent,
         var(--terminal-accent) 20%,
-        var(--gain) 50%,
+        var(--chart-dividend) 50%,
         var(--terminal-accent) 80%,
         transparent
     );
-    opacity: 0.5;
+    opacity: 0.3;
 }
 
 .terminal-nav-btn {
@@ -296,7 +267,7 @@
     justify-content: center;
     background: transparent;
     border: 1px solid var(--terminal-border);
-    border-radius: 6px;
+    border-radius: 8px;
     color: var(--terminal-muted);
     cursor: pointer;
     transition: all 0.15s ease;
@@ -326,7 +297,7 @@
     justify-content: center;
     background: transparent;
     border: 1px solid transparent;
-    border-radius: 4px;
+    border-radius: 6px;
     color: var(--terminal-dim);
     cursor: pointer;
     transition: all 0.15s ease;
@@ -351,7 +322,7 @@
     padding: 0.375rem 1rem;
     background: var(--terminal-surface);
     border: 1px solid var(--terminal-border);
-    border-radius: 6px;
+    border-radius: 8px;
     position: relative;
     z-index: 1;
 }
@@ -366,9 +337,9 @@
     background: linear-gradient(
         90deg,
         transparent,
-        rgba(255, 255, 255, 0.12) 30%,
-        rgba(255, 255, 255, 0.06) 50%,
-        rgba(255, 255, 255, 0.12) 70%,
+        rgba(245, 245, 244, 0.08) 30%,
+        rgba(245, 245, 244, 0.04) 50%,
+        rgba(245, 245, 244, 0.08) 70%,
         transparent
     );
 }
@@ -381,7 +352,7 @@
     justify-content: center;
     background: transparent;
     border: 1px solid var(--terminal-border);
-    border-radius: 4px;
+    border-radius: 6px;
     color: var(--terminal-muted);
     cursor: pointer;
     transition: all 0.15s ease;
@@ -409,11 +380,11 @@
 }
 
 .terminal-nav-date-main-compact {
-    font-family: var(--font-mono);
+    font-family: var(--font-display);
     font-size: 0.875rem;
     font-weight: 500;
     color: var(--terminal-text);
-    letter-spacing: 0.04em;
+    letter-spacing: 0.02em;
 }
 
 .terminal-rose-flourish {
@@ -429,11 +400,11 @@
 }
 
 .terminal-nav-date-main {
-    font-family: var(--font-mono);
+    font-family: var(--font-display);
     font-size: 1.125rem;
     font-weight: 500;
     color: var(--terminal-text);
-    letter-spacing: 0.04em;
+    letter-spacing: 0.02em;
 }
 
 .terminal-nav-date-sub {
@@ -463,7 +434,7 @@
     padding: 0.125rem 0.375rem;
     background: var(--terminal-elevated);
     border: 1px solid var(--terminal-border);
-    border-radius: 3px;
+    border-radius: 4px;
     font-family: var(--font-mono);
     font-size: 0.5625rem;
     line-height: 1.4;
@@ -471,15 +442,15 @@
 
 /* ── Stats ── */
 .terminal-stat {
-    background: var(--terminal-elevated);
-    border: 1px solid var(--terminal-border-bright);
-    border-radius: 8px;
+    background: var(--terminal-surface);
+    border: 1px solid var(--terminal-border);
+    border-radius: 12px;
     padding: 1rem 1.25rem;
     position: relative;
     overflow: hidden;
     transition: border-color 0.2s ease;
     z-index: 1;
-    backdrop-filter: blur(8px);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .terminal-stat:hover {
@@ -487,11 +458,11 @@
 }
 
 .terminal-stat-label {
-    font-family: var(--font-mono);
-    font-size: 0.625rem;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
     font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.05em;
     color: var(--terminal-dim);
     margin-bottom: 0.5rem;
 }
@@ -502,6 +473,7 @@
     font-weight: 600;
     line-height: 1;
     color: var(--terminal-text);
+    font-variant-numeric: tabular-nums;
 }
 
 .terminal-stat-value.gain {
@@ -538,27 +510,29 @@
 .terminal-card {
     background: var(--terminal-surface);
     border: 1px solid var(--terminal-border);
-    border-radius: 8px;
+    border-radius: 12px;
     position: relative;
     z-index: 1;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 /* ── Chart Section ── */
 .terminal-chart {
     background: var(--terminal-surface);
     border: 1px solid var(--terminal-border);
-    border-radius: 8px;
+    border-radius: 12px;
     padding: 1.25rem 1.5rem;
     position: relative;
     z-index: 1;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .terminal-chart-title {
-    font-family: var(--font-mono);
-    font-size: 0.625rem;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
     font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.05em;
     color: var(--terminal-dim);
 }
 
@@ -623,7 +597,7 @@
 
 .terminal-legend-dashed {
     background: transparent !important;
-    border-top: 2px dashed #3b82f6;
+    border-top: 2px dashed #38BDF8;
     height: 0;
     width: 14px;
 }
@@ -652,8 +626,8 @@
     gap: 0.375rem;
     padding: 0.25rem 0.625rem;
     background: var(--gain-bg);
-    border: 1px solid rgba(16, 185, 129, 0.2);
-    border-radius: 4px;
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    border-radius: 6px;
     color: var(--gain);
     font-family: var(--font-mono);
     font-size: 0.75rem;
@@ -683,11 +657,11 @@
     background: var(--terminal-surface);
     border-bottom: 1px solid var(--terminal-border-bright);
     padding: 0.625rem 0.875rem;
-    font-family: var(--font-mono);
-    font-size: 0.5625rem;
+    font-family: var(--font-display);
+    font-size: 0.625rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.05em;
     color: var(--terminal-dim);
     white-space: nowrap;
 }
@@ -711,7 +685,7 @@
 }
 
 .terminal-table tbody tr:hover td {
-    background: rgba(59, 130, 246, 0.03);
+    background: rgba(56, 189, 248, 0.03);
 }
 
 .terminal-table tbody tr:last-child td {
@@ -808,7 +782,7 @@
     align-items: center;
     gap: 0.375rem;
     padding: 0.25rem 0.625rem;
-    border-radius: 4px;
+    border-radius: 6px;
     font-family: var(--font-mono);
     font-size: 0.6875rem;
     font-weight: 500;
@@ -817,31 +791,31 @@
 
 .terminal-fear-greed-badge.red {
     background: rgba(239, 68, 68, 0.1);
-    color: #ef4444;
+    color: #EF4444;
     border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .terminal-fear-greed-badge.orange {
     background: rgba(249, 115, 22, 0.1);
-    color: #f97316;
+    color: #F97316;
     border: 1px solid rgba(249, 115, 22, 0.2);
 }
 
 .terminal-fear-greed-badge.yellow {
     background: rgba(234, 179, 8, 0.1);
-    color: #eab308;
+    color: #EAB308;
     border: 1px solid rgba(234, 179, 8, 0.2);
 }
 
 .terminal-fear-greed-badge.emerald {
-    background: rgba(16, 185, 129, 0.1);
-    color: #10b981;
-    border: 1px solid rgba(16, 185, 129, 0.2);
+    background: rgba(34, 197, 94, 0.1);
+    color: #22C55E;
+    border: 1px solid rgba(34, 197, 94, 0.2);
 }
 
 .terminal-fear-greed-badge.green {
     background: rgba(34, 197, 94, 0.1);
-    color: #22c55e;
+    color: #22C55E;
     border: 1px solid rgba(34, 197, 94, 0.2);
 }
 
@@ -856,7 +830,7 @@
     height: 64px;
     margin: 0 auto 1.5rem;
     background: var(--terminal-elevated);
-    border-radius: 12px;
+    border-radius: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -882,19 +856,19 @@
     background: var(--terminal-surface);
     border: 1px solid var(--terminal-border);
     padding: 0.625rem 1rem;
-    border-radius: 4px;
+    border-radius: 6px;
     font-size: 0.8125rem;
-    color: #6ee7b7;
+    color: var(--gain);
     display: inline-block;
 }
 
 /* ── Section labels ── */
 .terminal-section-label {
-    font-family: var(--font-mono);
-    font-size: 0.5625rem;
+    font-family: var(--font-display);
+    font-size: 0.625rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.15em;
+    letter-spacing: 0.05em;
     color: var(--terminal-dim);
     padding-bottom: 0.5rem;
     border-bottom: 1px solid var(--terminal-border);
@@ -996,8 +970,8 @@
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-family: var(--font-display);
+    font-size: 0.8rem;
     color: var(--terminal-muted);
     text-decoration: none;
     transition: color 0.15s ease;
@@ -1024,11 +998,11 @@
 }
 
 .terminal-info-label {
-    font-family: var(--font-mono);
-    font-size: 0.5625rem;
+    font-family: var(--font-display);
+    font-size: 0.625rem;
     font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.05em;
     color: var(--terminal-dim);
     margin-bottom: 0.25rem;
 }
@@ -1046,8 +1020,8 @@
     padding: 0.375rem 0.75rem;
     background: var(--terminal-elevated);
     border: 1px solid var(--terminal-border);
-    border-radius: 4px;
-    font-family: var(--font-mono);
+    border-radius: 6px;
+    font-family: var(--font-display);
     font-size: 0.75rem;
     color: var(--terminal-muted);
     text-decoration: none;
@@ -1077,7 +1051,7 @@
     }
     50% {
         opacity: 0.6;
-        filter: drop-shadow(0 0 4px #10b981);
+        filter: drop-shadow(0 0 4px var(--chart-line));
     }
 }
 
@@ -1100,26 +1074,63 @@
     animation: draw-line 1.2s ease-out forwards;
 }
 
+/* ── Tab Navigation ── */
+.tab-strip {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--terminal-border);
+    margin-bottom: var(--space-sm);
+}
+
+.tab-strip-btn {
+    padding: 0.625rem 1.25rem;
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--terminal-dim);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.tab-strip-btn:hover {
+    color: var(--terminal-muted);
+}
+
+.tab-strip-btn.active {
+    color: var(--terminal-text);
+    border-bottom-color: var(--terminal-accent);
+}
+
 /* ── Focus Indicators (WCAG 2.4.7) ── */
 .terminal-nav-btn:focus-visible,
 .terminal-nav-btn-compact:focus-visible,
 .terminal-nav-btn-sm:focus-visible {
-    outline: 2px solid var(--gain);
+    outline: 2px solid var(--terminal-accent);
     outline-offset: 2px;
 }
 
 .terminal-back-link:focus-visible,
 .terminal-external-link:focus-visible,
 .terminal-symbol:focus-visible {
-    outline: 2px solid var(--gain);
+    outline: 2px solid var(--terminal-accent);
     outline-offset: 2px;
-    border-radius: 2px;
+    border-radius: 4px;
 }
 
 a:focus-visible,
 button:focus-visible {
-    outline: 2px solid var(--gain);
+    outline: 2px solid var(--terminal-accent);
     outline-offset: 2px;
+}
+
+.tab-strip-btn:focus-visible {
+    outline: 2px solid var(--terminal-accent);
+    outline-offset: -2px;
 }
 
 /* Screen reader only utility */

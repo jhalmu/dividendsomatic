@@ -1,4 +1,4 @@
-<main id="portfolio-view" class="terminal-theme terminal-grid" phx-hook="KeyboardNav" role="main">
+<main id="portfolio-view" class="terminal-theme" phx-hook="KeyboardNav" role="main">
   <div class="max-w-[var(--content-max-width)] mx-auto px-[var(--space-sm)] sm:px-[var(--space-md)] lg:px-[var(--space-lg)] py-[var(--space-md)]">
     <!-- Brand + Motto -->
     <div class="terminal-branding">
@@ -7,10 +7,116 @@
     </div>
 
     <%= if @current_snapshot do %>
-      
-<!-- Stats Row -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-[var(--space-xs)] mb-[var(--space-md)]">
-        <div class="terminal-stat animate-fade-in animate-delay-1">
+      <%!-- ═══════════════════════════════════════
+           ZONE 1 — "The Day" (sticky date + stats)
+           ═══════════════════════════════════════ --%>
+
+      <%!-- Date Navigation Bar --%>
+      <div class="sticky top-0 z-20 mb-[var(--space-xs)]">
+        <div class="terminal-nav-bar">
+          <%!-- Arrow nav buttons --%>
+          <button
+            phx-click="navigate"
+            phx-value-direction="first"
+            class="terminal-nav-btn-sm"
+            disabled={!@has_prev}
+            aria-label="First snapshot"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5" />
+            </svg>
+          </button>
+
+          <button
+            phx-click="navigate"
+            phx-value-direction="prev"
+            class="terminal-nav-btn"
+            disabled={!@has_prev}
+            aria-label="Previous snapshot"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-4 h-4" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
+          </button>
+
+          <%!-- Quick-jump pills --%>
+          <div class="hidden sm:flex items-center gap-1">
+            <button phx-click="navigate" phx-value-direction="back_year" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_prev}>-1Y</button>
+            <button phx-click="navigate" phx-value-direction="back_month" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_prev}>-1M</button>
+            <button phx-click="navigate" phx-value-direction="back_week" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_prev}>-1W</button>
+          </div>
+
+          <%!-- Date display + picker --%>
+          <div class="terminal-nav-date">
+            <form phx-submit="goto_date" class="inline">
+              <input
+                type="date"
+                name="date"
+                value={Date.to_iso8601(@current_snapshot.date)}
+                class="bg-transparent border-none text-center cursor-pointer"
+                style="font-family: var(--font-display); font-size: 1.125rem; font-weight: 500; color: var(--terminal-text); letter-spacing: 0.02em; width: auto;"
+              />
+            </form>
+            <div class="terminal-nav-date-sub">
+              {Calendar.strftime(@current_snapshot.date, "%A")}
+              <span class="mx-1.5 opacity-30">|</span>
+              {@snapshot_position}/{@total_snapshots}
+            </div>
+          </div>
+
+          <%!-- Quick-jump pills (forward) --%>
+          <div class="hidden sm:flex items-center gap-1">
+            <button phx-click="navigate" phx-value-direction="forward_week" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_next}>+1W</button>
+            <button phx-click="navigate" phx-value-direction="forward_month" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_next}>+1M</button>
+            <button phx-click="navigate" phx-value-direction="forward_year" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_next}>+1Y</button>
+          </div>
+
+          <button
+            phx-click="navigate"
+            phx-value-direction="next"
+            class="terminal-nav-btn"
+            disabled={!@has_next}
+            aria-label="Next snapshot"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-4 h-4" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+            </svg>
+          </button>
+
+          <button
+            phx-click="navigate"
+            phx-value-direction="last"
+            class="terminal-nav-btn-sm"
+            disabled={!@has_next}
+            aria-label="Latest snapshot"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 4.5l7.5 7.5-7.5 7.5m-6-15l7.5 7.5-7.5 7.5" />
+            </svg>
+          </button>
+
+          <%!-- Fear & Greed pill --%>
+          <%= if @fear_greed do %>
+            <div class="hidden sm:block ml-2">
+              {DividendsomaticWeb.Components.PortfolioChart.render_fear_greed_gauge(@fear_greed, id_suffix: "nav")}
+            </div>
+          <% end %>
+        </div>
+
+        <%!-- Mobile quick-jump (visible on small screens) --%>
+        <div class="flex sm:hidden items-center justify-center gap-1 mt-1" style="font-size: 0.625rem;">
+          <button phx-click="navigate" phx-value-direction="back_year" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_prev}>-1Y</button>
+          <button phx-click="navigate" phx-value-direction="back_month" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_prev}>-1M</button>
+          <button phx-click="navigate" phx-value-direction="back_week" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_prev}>-1W</button>
+          <button phx-click="navigate" phx-value-direction="forward_week" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_next}>+1W</button>
+          <button phx-click="navigate" phx-value-direction="forward_month" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_next}>+1M</button>
+          <button phx-click="navigate" phx-value-direction="forward_year" class="btn btn-xs btn-ghost" style="font-size: 0.625rem; color: var(--terminal-dim);" disabled={!@has_next}>+1Y</button>
+        </div>
+      </div>
+
+      <%!-- Snapshot Stats --%>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-[var(--space-xs)] mb-[var(--space-md)] animate-fade-in animate-delay-1">
+        <div class="terminal-stat">
           <div class="terminal-stat-label">Portfolio Value</div>
           <div class="terminal-stat-value">
             {format_euro(@total_value)}
@@ -22,100 +128,45 @@
           <% end %>
         </div>
 
-        <div class={"terminal-stat terminal-stat-accent animate-fade-in animate-delay-2 #{if !pnl_positive?(@total_pnl), do: "negative"}"}>
+        <div class={"terminal-stat terminal-stat-accent #{if !pnl_positive?(@total_pnl), do: "negative"}"}>
           <div class="terminal-stat-label">Unrealized P&L</div>
           <div class={"terminal-stat-value #{if pnl_positive?(@total_pnl), do: "gain", else: "loss"}"}>
             {format_euro_signed(@total_pnl)}
           </div>
         </div>
 
-        <div class="terminal-stat animate-fade-in animate-delay-3">
+        <div class="terminal-stat">
           <div class="terminal-stat-label">Dividends {@dividend_year}</div>
-          <div class="terminal-stat-value gain">
+          <div class="terminal-stat-value" style="color: var(--chart-dividend);">
             {format_euro_decimal(@dividend_total)}
           </div>
           <%= if @projected_dividends do %>
-            <div
-              class="mt-[var(--space-inline)]"
-              style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);"
-            >
+            <div class="mt-[var(--space-inline)]" style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);">
               Proj. {format_euro_decimal(@projected_dividends)}/yr
             </div>
           <% end %>
         </div>
 
-        <div class="terminal-stat terminal-stat-fg animate-fade-in animate-delay-4">
-          <%= if @fear_greed do %>
-            <div class="terminal-stat-label">Market Sentiment</div>
-            <div class="flex justify-center">
-              {DividendsomaticWeb.Components.PortfolioChart.render_fear_greed_gauge(@fear_greed,
-                id_suffix: "stats"
-              )}
-            </div>
-          <% else %>
-            <div class="terminal-stat-label">Holdings</div>
-            <div class="terminal-stat-value">{length(@positions)}</div>
-          <% end %>
+        <div class="terminal-stat">
+          <div class="terminal-stat-label">Holdings</div>
+          <div class="terminal-stat-value">{length(@positions)}</div>
         </div>
       </div>
-      
-<!-- Dividend Chart (above portfolio chart) -->
-      <%= if length(@dividend_by_month) > 0 do %>
-        <div class="terminal-chart mb-[var(--space-xs)] animate-fade-in animate-delay-3">
-          <div class="terminal-chart-header">
-            <div class="terminal-chart-title">Dividend History</div>
-            <div
-              class="terminal-chart-legend"
-              aria-label="Dividend chart legend"
-              style="justify-content: flex-end;"
-            >
-              <span class="terminal-legend-item">
-                <span class="terminal-legend-line" style="background: #eab308;"></span> Monthly
-              </span>
-              <span class="terminal-legend-item">
-                <span class="terminal-legend-line" style="background: #f97316;"></span> Cumulative
-              </span>
-            </div>
-          </div>
-          {DividendsomaticWeb.Components.PortfolioChart.render_dividend_chart(@dividend_by_month)}
-          <%= if length(@recent_dividends) > 0 do %>
-            <div
-              class="flex items-center gap-[var(--space-xs)] flex-wrap p-[var(--space-xs)]"
-              style="font-family: var(--font-mono); font-size: 0.625rem;"
-            >
-              <span style="color: var(--terminal-dim); font-size: 0.5625rem; text-transform: uppercase; letter-spacing: 0.05em;">
-                Recent
-              </span>
-              <%= for entry <- @recent_dividends do %>
-                <span class="inline-flex items-center gap-1" style="color: var(--terminal-muted);">
-                  <span style="color: var(--terminal-text); font-weight: 500;">
-                    {entry.dividend.symbol}
-                  </span>
-                  <span style="color: var(--terminal-dim);">
-                    {Calendar.strftime(entry.dividend.ex_date, "%b %d")}
-                  </span>
-                  <span class="gain">+{format_euro_decimal(entry.income)}</span>
-                </span>
-              <% end %>
-            </div>
-          <% end %>
-        </div>
-      <% end %>
-      
-<!-- Chart Year Filter + Portfolio Chart -->
+
+      <%!-- ═══════════════════════════════════════
+           ZONE 2 — "The Journey" (charts)
+           ═══════════════════════════════════════ --%>
+
+      <%!-- Portfolio Chart --%>
       <%= if length(@all_chart_data) > 1 do %>
-        <div class="terminal-chart mb-[var(--space-xs)] animate-fade-in animate-delay-3">
-          <!-- Chart Header: Legend + Growth Badge -->
+        <div class="terminal-chart mb-[var(--space-xs)] animate-fade-in animate-delay-2">
           <div class="terminal-chart-header">
             <div class="flex items-center gap-[var(--space-sm)]">
               <%= if @growth_stats do %>
                 <div class={"terminal-growth-badge #{if Decimal.compare(@growth_stats.absolute_change, Decimal.new("0")) == :lt, do: "negative"}"}>
                   {format_euro_signed(@growth_stats.absolute_change)}
                   <span style="opacity: 0.6;">
-                    (<%= if pnl_positive?(@growth_stats.percent_change) do %>
-                      +
-                    <% end %>
-                    {Decimal.to_string(@growth_stats.percent_change)}%)
+                    (<%= if pnl_positive?(@growth_stats.percent_change) do %>+<% end %>{Decimal.to_string(@growth_stats.percent_change)}%)
                   </span>
                 </div>
               <% end %>
@@ -124,14 +175,9 @@
               <div class="terminal-chart-title" id="chart-title" style="text-align: right;">
                 Portfolio Performance
               </div>
-              <div
-                class="terminal-chart-legend"
-                id="chart-legend"
-                aria-label="Chart legend"
-                style="justify-content: flex-end;"
-              >
+              <div class="terminal-chart-legend" id="chart-legend" aria-label="Chart legend" style="justify-content: flex-end;">
                 <span class="terminal-legend-item">
-                  <span class="terminal-legend-line" style="background: #10b981;"></span> Value
+                  <span class="terminal-legend-line" style="background: var(--chart-line);"></span> Value
                 </span>
                 <span class="terminal-legend-item">
                   <span class="terminal-legend-line terminal-legend-dashed"></span> Cost Basis
@@ -139,15 +185,11 @@
               </div>
             </div>
           </div>
-          
-<!-- Chart Range Presets + Year Filter Buttons -->
+
+          <%!-- Chart Range Presets + Year Filter --%>
           <div class="flex items-center gap-1 flex-wrap mb-[var(--space-xs)]">
             <%= for preset <- ["1M", "3M", "6M", "YTD", "1Y", "ALL"] do %>
-              <button
-                phx-click="chart_range_preset"
-                phx-value-preset={preset}
-                class="btn btn-xs btn-outline"
-              >
+              <button phx-click="chart_range_preset" phx-value-preset={preset} class="btn btn-xs btn-outline">
                 {preset}
               </button>
             <% end %>
@@ -169,775 +211,530 @@
               </button>
             <% end %>
           </div>
-          
-<!-- Portfolio Value + Cost Basis Lines -->
+
+          <%!-- Portfolio Value + Cost Basis (ApexCharts) --%>
           <%= if length(@chart_data) > 1 do %>
-            <.live_component
-              module={DividendsomaticWeb.Components.PortfolioChart}
-              id="portfolio-chart"
-              chart_data={@chart_data}
-              current_date={@current_snapshot.date}
-              fear_greed={@fear_greed}
-            />
-          <% end %>
-          
-<!-- Chart Footer -->
-          <%= if @growth_stats do %>
+            <% chart_json = serialize_portfolio_chart(@chart_data, @current_snapshot.date) %>
             <div
-              class="mt-[var(--space-xs)] flex items-center justify-between"
-              style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);"
-            >
-              <span>
-                {Date.to_string(@growth_stats.first_date)} → {Date.to_string(
-                  @growth_stats.latest_date
-                )}
-              </span>
+              id="portfolio-apex-chart"
+              phx-hook="ApexChartHook"
+              phx-update="ignore"
+              data-chart-config={Jason.encode!(build_portfolio_apex_config(chart_json))}
+            ></div>
+          <% end %>
+
+          <%!-- Chart Footer --%>
+          <%= if @growth_stats do %>
+            <div class="mt-[var(--space-xs)] flex items-center justify-between" style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);">
+              <span>{Date.to_string(@growth_stats.first_date)} → {Date.to_string(@growth_stats.latest_date)}</span>
               <span>{length(@chart_data)} trading days</span>
             </div>
           <% end %>
         </div>
       <% end %>
-      
-<!-- P&L Waterfall Chart (lazy-loaded) -->
-      <div class="mb-[var(--space-xs)] animate-fade-in animate-delay-3">
-        <button phx-click="toggle_waterfall" class="btn btn-xs btn-outline w-full">
-          <%= if @show_waterfall do %>
-            Hide P&amp;L Waterfall
-          <% else %>
-            Show P&amp;L Waterfall
-          <% end %>
-        </button>
-        <%= if @show_waterfall and length(@waterfall_data) > 0 do %>
-          <div class="terminal-chart mt-[var(--space-xs)]">
-            <div class="terminal-chart-header">
-              <div class="terminal-chart-title">P&amp;L Waterfall</div>
-              <div
-                class="terminal-chart-legend"
-                aria-label="Waterfall chart legend"
-                style="justify-content: flex-end;"
-              >
-                <span class="terminal-legend-item">
-                  <span class="terminal-legend-line" style="background: #10b981;"></span> Deposits
-                </span>
-                <span class="terminal-legend-item">
-                  <span class="terminal-legend-line" style="background: #eab308;"></span>
-                  Dividends
-                </span>
-                <span class="terminal-legend-item">
-                  <span class="terminal-legend-line" style="background: #3b82f6;"></span>
-                  Realized P&amp;L
-                </span>
-                <span class="terminal-legend-item">
-                  <span class="terminal-legend-line" style="background: #ef4444;"></span> Costs
-                </span>
-                <span class="terminal-legend-item">
-                  <span class="terminal-legend-line" style="background: #f97316;"></span>
-                  Withdrawals
-                </span>
-                <span class="terminal-legend-item">
-                  <span class="terminal-legend-line" style="background: #e2e8f0;"></span>
-                  Cumulative
-                </span>
-              </div>
+
+      <%!-- Dividend Chart --%>
+      <%= if length(@dividend_by_month) > 0 do %>
+        <div class="terminal-chart mb-[var(--space-xs)] animate-fade-in animate-delay-3">
+          <div class="terminal-chart-header">
+            <div class="terminal-chart-title">Dividend History</div>
+            <div class="terminal-chart-legend" aria-label="Dividend chart legend" style="justify-content: flex-end;">
+              <span class="terminal-legend-item">
+                <span class="terminal-legend-line" style="background: var(--chart-dividend);"></span> Monthly
+              </span>
+              <span class="terminal-legend-item">
+                <span class="terminal-legend-line" style="background: var(--chart-cumulative);"></span> Cumulative
+              </span>
             </div>
-            {DividendsomaticWeb.Components.PortfolioChart.render_waterfall_chart(@waterfall_data)}
           </div>
-        <% end %>
-      </div>
-      
-<!-- Compact Nav (before holdings) -->
-      <div class="mb-[var(--space-xs)] animate-fade-in animate-delay-3">
-        <.nav_bar
-          current_snapshot={@current_snapshot}
-          has_prev={@has_prev}
-          has_next={@has_next}
-          snapshot_position={@snapshot_position}
-          total_snapshots={@total_snapshots}
-          compact
-        />
-        <!-- Extended navigation: week/month/year jumps + date picker -->
-        <div
-          class="flex items-center justify-center gap-1 flex-wrap mt-1 mb-1"
-          style="font-family: var(--font-mono); font-size: 0.625rem;"
-        >
-          <button
-            phx-click="navigate"
-            phx-value-direction="back_year"
-            class="btn btn-xs btn-outline"
-            disabled={!@has_prev}
-          >
-            -1Y
-          </button>
-          <button
-            phx-click="navigate"
-            phx-value-direction="back_month"
-            class="btn btn-xs btn-outline"
-            disabled={!@has_prev}
-          >
-            -1M
-          </button>
-          <button
-            phx-click="navigate"
-            phx-value-direction="back_week"
-            class="btn btn-xs btn-outline"
-            disabled={!@has_prev}
-          >
-            -1W
-          </button>
-          <form phx-submit="goto_date" class="inline-flex items-center">
-            <input
-              type="date"
-              name="date"
-              value={Date.to_iso8601(@current_snapshot.date)}
-              class="input input-xs input-bordered text-center"
-              style="font-family: var(--font-mono); font-size: 0.625rem; max-width: 130px; background: var(--terminal-elevated); border-color: var(--terminal-border); color: var(--terminal-text);"
-            />
-          </form>
-          <button
-            phx-click="navigate"
-            phx-value-direction="forward_week"
-            class="btn btn-xs btn-outline"
-            disabled={!@has_next}
-          >
-            +1W
-          </button>
-          <button
-            phx-click="navigate"
-            phx-value-direction="forward_month"
-            class="btn btn-xs btn-outline"
-            disabled={!@has_next}
-          >
-            +1M
-          </button>
-          <button
-            phx-click="navigate"
-            phx-value-direction="forward_year"
-            class="btn btn-xs btn-outline"
-            disabled={!@has_next}
-          >
-            +1Y
-          </button>
-        </div>
-      </div>
-      
-<!-- Reconstruction Banner -->
-      <%= if @is_reconstructed do %>
-        <div
-          class="mb-[var(--space-xs)] animate-fade-in"
-          style="font-family: var(--font-mono); font-size: 0.625rem; color: #94a3b8; background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 4px; padding: 0.375rem 0.5rem; display: flex; align-items: center; gap: 0.375rem;"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke-width="1.5"
-            stroke="currentColor"
-            class="w-3.5 h-3.5"
-            style="flex-shrink: 0; opacity: 0.6;"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z"
-            />
-          </svg>
-          <span>
-            Reconstructed from Nordnet transactions
-            <%= if @missing_price_count > 0 do %>
-              — {@missing_price_count} positions with unavailable prices
-            <% end %>
-          </span>
+          <% div_json = serialize_dividend_chart(@dividend_by_month) %>
+          <div
+            id="dividend-apex-chart"
+            phx-hook="ApexChartHook"
+            phx-update="ignore"
+            data-chart-config={Jason.encode!(build_dividend_apex_config(div_json))}
+          ></div>
+          <%= if length(@recent_dividends) > 0 do %>
+            <div class="flex items-center gap-[var(--space-xs)] flex-wrap p-[var(--space-xs)]" style="font-family: var(--font-mono); font-size: 0.625rem;">
+              <span style="color: var(--terminal-dim); font-size: 0.5625rem; text-transform: uppercase; letter-spacing: 0.05em;">Recent</span>
+              <%= for entry <- @recent_dividends do %>
+                <span class="inline-flex items-center gap-1" style="color: var(--terminal-muted);">
+                  <span style="color: var(--terminal-text); font-weight: 500;">{entry.dividend.symbol}</span>
+                  <span style="color: var(--terminal-dim);">{Calendar.strftime(entry.dividend.ex_date, "%b %d")}</span>
+                  <span style="color: var(--gain);">+{format_euro_decimal(entry.income)}</span>
+                </span>
+              <% end %>
+            </div>
+          <% end %>
         </div>
       <% end %>
-      
-<!-- Holdings Table -->
-      <div class="terminal-card animate-fade-in animate-delay-4">
-        <div class="p-[var(--space-sm)] pb-0">
-          <div class="flex items-center justify-between mb-[var(--space-xs)]">
-            <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
-              Positions
-            </div>
-            <span class="terminal-holdings-count">
-              {length(@positions)} holdings
+
+      <%!-- ═══════════════════════════════════════
+           ZONE 3 — "The Details" (tabbed)
+           ═══════════════════════════════════════ --%>
+
+      <%!-- Tab Strip --%>
+      <div class="tab-strip animate-fade-in animate-delay-3" role="tablist">
+        <button
+          phx-click="switch_tab"
+          phx-value-tab="holdings"
+          class={"tab-strip-btn #{if @active_tab == "holdings", do: "active"}"}
+          role="tab"
+          aria-selected={to_string(@active_tab == "holdings")}
+          aria-controls="panel-holdings"
+        >
+          Holdings
+        </button>
+        <button
+          phx-click="switch_tab"
+          phx-value-tab="income"
+          class={"tab-strip-btn #{if @active_tab == "income", do: "active"}"}
+          role="tab"
+          aria-selected={to_string(@active_tab == "income")}
+          aria-controls="panel-income"
+        >
+          Income
+        </button>
+        <button
+          phx-click="switch_tab"
+          phx-value-tab="summary"
+          class={"tab-strip-btn #{if @active_tab == "summary", do: "active"}"}
+          role="tab"
+          aria-selected={to_string(@active_tab == "summary")}
+          aria-controls="panel-summary"
+        >
+          Summary
+        </button>
+      </div>
+
+      <%!-- ── Tab: Holdings ── --%>
+      <div :if={@active_tab == "holdings"} id="panel-holdings" role="tabpanel" class="animate-fade-in">
+        <%!-- Reconstruction Banner --%>
+        <%= if @is_reconstructed do %>
+          <div class="mb-[var(--space-xs)]" style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-muted); background: var(--terminal-elevated); border: 1px solid var(--terminal-border); border-radius: 8px; padding: 0.375rem 0.5rem; display: flex; align-items: center; gap: 0.375rem;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5" style="flex-shrink: 0; opacity: 0.6;">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+            </svg>
+            <span>
+              Reconstructed from Nordnet transactions
+              <%= if @missing_price_count > 0 do %>
+                — {@missing_price_count} positions with unavailable prices
+              <% end %>
             </span>
           </div>
-        </div>
+        <% end %>
 
-        <div class="overflow-x-auto">
-          <div class="min-w-[780px]">
-            <table class="terminal-table">
-              <thead>
-                <tr>
-                  <th scope="col">Symbol</th>
-                  <th scope="col">Description</th>
-                  <th scope="col">Qty</th>
-                  <th scope="col">Price</th>
-                  <th scope="col">Value</th>
-                  <th scope="col">Cost</th>
-                  <th scope="col">P&L</th>
-                  <th scope="col">% NAV</th>
-                </tr>
-              </thead>
-              <tbody>
-                <%= for pos <- @positions do %>
-                  <tr>
-                    <td>
-                      <.link
-                        navigate={~p"/stocks/#{pos.symbol}"}
-                        class="terminal-symbol hover:underline"
-                      >
-                        {pos.symbol}
-                      </.link>
-                      <%= if Decimal.compare(pos.quantity, Decimal.new("0")) == :lt do %>
-                        <span
-                          style="display: inline-block; background: #ef4444; color: #fff; font-size: 0.45rem; font-weight: 700; padding: 0px 4px; border-radius: 2px; margin-left: 4px; vertical-align: middle; letter-spacing: 0.05em;"
-                          data-testid="short-badge"
-                        >
-                          SHORT
-                        </span>
-                      <% end %>
-                    </td>
-                    <td>
-                      <span class="terminal-description">{pos.name}</span>
-                    </td>
-                    <td class="terminal-number">
-                      <span style="flex-align: left;">{format_integer(pos.quantity)}</span>
-                    </td>
-                    <td class="terminal-number" style="text-align: right;">
-                      <%= if is_nil(pos.price) do %>
-                        <span style="color: #ef4444; opacity: 0.6; font-size: 0.625rem;">
-                          N/A
-                        </span>
-                      <% else %>
-                        {format_decimal(pos.price)}
-                        <span style="color: var(--terminal-dim); font-size: 0.625rem; position: absolute; margin-left: 0.35rem;">
-                          {pos.currency}
-                        </span>
-                      <% end %>
-                    </td>
-                    <td class="terminal-number" style="font-weight: 500;text-align: right;">
-                      <%= if is_nil(pos.value) do %>
-                        <span style="color: #ef4444; opacity: 0.6; font-size: 0.625rem;">
-                          N/A
-                        </span>
-                      <% else %>
-                        {format_decimal(pos.value)}
-                      <% end %>
-                    </td>
-                    <td
-                      class="terminal-number"
-                      style="color: var(--terminal-dim);text-align: right;"
-                    >
-                      {format_decimal(pos.cost_basis)}
-                    </td>
-                    <td class="terminal-number">
-                      <span
-                        class={pnl_badge_class(pos.unrealized_pnl)}
-                        aria-label={"#{if pnl_positive?(pos.unrealized_pnl), do: "Gain", else: "Loss"}: #{format_decimal(pos.unrealized_pnl)}"}
-                      >
-                        <%= if pnl_positive?(pos.unrealized_pnl) do %>
-                          +
-                        <% end %>
-                        {format_decimal(pos.unrealized_pnl)}
-                      </span>
-                    </td>
-                    <td class="terminal-number">
-                      <span style="color: var(--terminal-muted);">
-                        {format_decimal(pos.weight)}%
-                      </span>
-                    </td>
-                  </tr>
-                <% end %>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      
-<!-- Compact Nav (after holdings) -->
-      <div class="mb-[var(--space-xs)] animate-fade-in animate-delay-4">
-        <.nav_bar
-          current_snapshot={@current_snapshot}
-          has_prev={@has_prev}
-          has_next={@has_next}
-          snapshot_position={@snapshot_position}
-          total_snapshots={@total_snapshots}
-          compact
-        />
-      </div>
-      
-<!-- FX Exposure -->
-      <%= if length(@fx_exposure) > 1 do %>
-        <div
-          class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-4"
-          data-testid="fx-exposure"
-        >
-          <div class="terminal-section-label">Currency Exposure</div>
-          <div class="overflow-x-auto mt-[var(--space-xs)]">
-            <table class="terminal-table">
-              <thead>
-                <tr>
-                  <th scope="col">Currency</th>
-                  <th scope="col">Holdings</th>
-                  <th scope="col" style="text-align: right;">Local Value</th>
-                  <th scope="col" style="text-align: right;">EUR Value</th>
-                  <th scope="col" style="text-align: right;">FX Rate</th>
-                  <th scope="col" style="text-align: right;">% Portfolio</th>
-                </tr>
-              </thead>
-              <tbody>
-                <%= for fx <- @fx_exposure do %>
-                  <tr>
-                    <td style="font-weight: 500;">{fx.currency}</td>
-                    <td class="terminal-number">{fx.holdings_count}</td>
-                    <td class="terminal-number" style="text-align: right;">
-                      {format_decimal(fx.local_value)}
-                    </td>
-                    <td class="terminal-number" style="text-align: right;">
-                      {format_euro_decimal(fx.eur_value)}
-                    </td>
-                    <td
-                      class="terminal-number"
-                      style="text-align: right; color: var(--terminal-dim);"
-                    >
-                      {format_decimal(fx.fx_rate)}
-                    </td>
-                    <td class="terminal-number" style="text-align: right;">
-                      {format_decimal(fx.pct)}%
-                    </td>
-                  </tr>
-                <% end %>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      <% end %>
-      
-<!-- Realized P&L -->
-      <div
-        class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-5"
-        data-testid="realized-pnl-card"
-      >
-        <%!-- Header: Title + Year Filter + Net P&L --%>
-        <div class="flex flex-wrap items-center justify-between gap-[var(--space-xs)]">
-          <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
-            Realized P&amp;L
-          </div>
-          <div class="flex items-center gap-1 flex-wrap">
-            <button
-              phx-click="pnl_year"
-              phx-value-year="all"
-              class={"btn btn-xs #{if @pnl_year == nil, do: "btn-primary", else: "btn-outline"}"}
-            >
-              All
-            </button>
-            <%= for y <- @pnl.available_years do %>
-              <button
-                phx-click="pnl_year"
-                phx-value-year={to_string(y)}
-                class={"btn btn-xs #{if @pnl_year == y, do: "btn-primary", else: "btn-outline"}"}
-              >
-                {y}
-              </button>
-            <% end %>
-          </div>
-          <div class="flex items-center gap-[var(--space-xs)]">
-            <div
-              class={"terminal-stat-value #{if pnl_positive?(@pnl.total_pnl), do: "gain", else: "loss"}"}
-              style="font-size: 0.875rem;"
-            >
-              {format_euro_signed(@pnl.total_pnl)}
-            </div>
-            <%= if @pnl.has_unconverted do %>
-              <span
-                class="badge badge-warning badge-xs"
-                title="Some positions have not been converted to EUR. Run mix backfill.sold_pnl_eur"
-              >
-                FX pending
+        <%!-- Holdings Table --%>
+        <div class="terminal-card">
+          <div class="p-[var(--space-sm)] pb-0">
+            <div class="flex items-center justify-between mb-[var(--space-xs)]">
+              <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+                Positions
+              </div>
+              <span class="terminal-holdings-count">
+                {length(@positions)} holdings
               </span>
-            <% end %>
-          </div>
-        </div>
-
-        <%!-- Summary Stats --%>
-        <div
-          class="grid grid-cols-2 sm:grid-cols-4 gap-[var(--space-xs)] mt-[var(--space-sm)]"
-          data-testid="pnl-summary-stats"
-        >
-          <div class="text-center">
-            <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">
-              Gains
-            </div>
-            <div
-              class="gain"
-              style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;"
-            >
-              {format_euro_decimal(@pnl.total_gains)}
-            </div>
-            <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);">
-              {@pnl.win_count} symbols
-            </div>
-          </div>
-          <div class="text-center">
-            <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">
-              Losses
-            </div>
-            <div
-              class="loss"
-              style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;"
-            >
-              {format_euro_decimal(@pnl.total_losses)}
-            </div>
-            <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);">
-              {@pnl.loss_count} symbols
-            </div>
-          </div>
-          <div class="text-center">
-            <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">
-              Win Rate
-            </div>
-            <div style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;">
-              <%= if @pnl.win_count + @pnl.loss_count > 0 do %>
-                {Float.round(@pnl.win_count / (@pnl.win_count + @pnl.loss_count) * 100, 1)}%
-              <% else %>
-                –
-              <% end %>
-            </div>
-          </div>
-          <div class="text-center">
-            <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">
-              Trades
-            </div>
-            <div style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;">
-              {@pnl.total_trades}
-            </div>
-            <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);">
-              {@pnl.symbol_count} symbols
-            </div>
-          </div>
-        </div>
-
-        <%!-- Top Winners & Losers --%>
-        <%= if @pnl.symbol_count > 0 do %>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-[var(--space-xs)] mt-[var(--space-sm)]">
-            <%!-- Top Winners --%>
-            <div>
-              <div style="font-family: var(--font-mono); font-size: 0.625rem; color: #10b981; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; font-weight: 600;">
-                Top Winners
-              </div>
-              <div class="overflow-x-auto">
-                <table class="terminal-table">
-                  <thead>
-                    <tr style="background: rgba(16, 185, 129, 0.08);">
-                      <th scope="col">Symbol</th>
-                      <th scope="col" style="text-align: right;">Trades</th>
-                      <th scope="col" style="text-align: right;">Qty</th>
-                      <th scope="col" style="text-align: right;">P&amp;L</th>
-                      <th scope="col" style="text-align: right;">Period</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <%= for sp <- @pnl.top_winners do %>
-                      <tr>
-                        <td>
-                          <.link
-                            navigate={~p"/stocks/#{sp.symbol}"}
-                            class="terminal-symbol hover:underline"
-                          >
-                            {sp.symbol}
-                          </.link>
-                        </td>
-                        <td
-                          class="terminal-number"
-                          style="text-align: right; color: var(--terminal-dim);"
-                        >
-                          {sp.trades}
-                        </td>
-                        <td class="terminal-number" style="text-align: right;">
-                          {format_integer(sp.total_quantity)}
-                        </td>
-                        <td class="terminal-number" style="text-align: right;">
-                          <span class="terminal-badge-gain">
-                            +{format_euro_decimal(sp.total_pnl)}
-                          </span>
-                        </td>
-                        <td
-                          class="terminal-number"
-                          style="text-align: right; color: var(--terminal-dim); font-size: 0.75rem;"
-                        >
-                          {Calendar.strftime(sp.first_date, "%Y")}&ndash;{Calendar.strftime(
-                            sp.last_date,
-                            "%Y"
-                          )}
-                        </td>
-                      </tr>
-                    <% end %>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <%!-- Top Losers --%>
-            <div>
-              <div style="font-family: var(--font-mono); font-size: 0.625rem; color: #ef4444; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; font-weight: 600;">
-                Top Losers
-              </div>
-              <div class="overflow-x-auto">
-                <table class="terminal-table">
-                  <thead>
-                    <tr style="background: rgba(239, 68, 68, 0.08);">
-                      <th scope="col">Symbol</th>
-                      <th scope="col" style="text-align: right;">Trades</th>
-                      <th scope="col" style="text-align: right;">Qty</th>
-                      <th scope="col" style="text-align: right;">P&amp;L</th>
-                      <th scope="col" style="text-align: right;">Period</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <%= for sp <- @pnl.top_losers do %>
-                      <tr>
-                        <td>
-                          <.link
-                            navigate={~p"/stocks/#{sp.symbol}"}
-                            class="terminal-symbol hover:underline"
-                          >
-                            {sp.symbol}
-                          </.link>
-                        </td>
-                        <td
-                          class="terminal-number"
-                          style="text-align: right; color: var(--terminal-dim);"
-                        >
-                          {sp.trades}
-                        </td>
-                        <td class="terminal-number" style="text-align: right;">
-                          {format_integer(sp.total_quantity)}
-                        </td>
-                        <td class="terminal-number" style="text-align: right;">
-                          <span class="terminal-badge-loss">
-                            {format_euro_decimal(sp.total_pnl)}
-                          </span>
-                        </td>
-                        <td
-                          class="terminal-number"
-                          style="text-align: right; color: var(--terminal-dim); font-size: 0.75rem;"
-                        >
-                          {Calendar.strftime(sp.first_date, "%Y")}&ndash;{Calendar.strftime(
-                            sp.last_date,
-                            "%Y"
-                          )}
-                        </td>
-                      </tr>
-                    <% end %>
-                  </tbody>
-                </table>
-              </div>
             </div>
           </div>
 
-          <%!-- Show All Toggle --%>
-          <div class="mt-[var(--space-sm)] text-center">
-            <button phx-click="pnl_show_all" class="btn btn-xs btn-outline">
-              <%= if @pnl_show_all do %>
-                Hide
-              <% else %>
-                Show all {@pnl.symbol_count} symbols
-              <% end %>
-            </button>
-          </div>
-
-          <%!-- Full Table (when expanded) --%>
-          <%= if @pnl_show_all do %>
-            <div class="overflow-x-auto mt-[var(--space-xs)]">
+          <div class="overflow-x-auto">
+            <div class="min-w-[780px]">
               <table class="terminal-table">
                 <thead>
                   <tr>
                     <th scope="col">Symbol</th>
-                    <th scope="col" style="text-align: right;">Trades</th>
-                    <th scope="col" style="text-align: right;">Qty</th>
-                    <th scope="col" style="text-align: right;">P&amp;L</th>
-                    <th scope="col" style="text-align: right;">Period</th>
+                    <th scope="col">Description</th>
+                    <th scope="col">Qty</th>
+                    <th scope="col">Price</th>
+                    <th scope="col">Value</th>
+                    <th scope="col">Cost</th>
+                    <th scope="col">P&L</th>
+                    <th scope="col">% NAV</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <%= for sp <- @pnl.all_grouped do %>
+                  <%= for pos <- @positions do %>
                     <tr>
                       <td>
-                        <.link
-                          navigate={~p"/stocks/#{sp.symbol}"}
-                          class="terminal-symbol hover:underline"
-                        >
-                          {sp.symbol}
+                        <.link navigate={~p"/stocks/#{pos.symbol}"} class="terminal-symbol hover:underline">
+                          {pos.symbol}
                         </.link>
+                        <%= if Decimal.compare(pos.quantity, Decimal.new("0")) == :lt do %>
+                          <span style="display: inline-block; background: var(--loss); color: #fff; font-size: 0.45rem; font-weight: 700; padding: 0px 4px; border-radius: 3px; margin-left: 4px; vertical-align: middle; letter-spacing: 0.05em;" data-testid="short-badge">SHORT</span>
+                        <% end %>
                       </td>
-                      <td
-                        class="terminal-number"
-                        style="text-align: right; color: var(--terminal-dim);"
-                      >
-                        {sp.trades}
-                      </td>
+                      <td><span class="terminal-description">{pos.name}</span></td>
+                      <td class="terminal-number">{format_integer(pos.quantity)}</td>
                       <td class="terminal-number" style="text-align: right;">
-                        {format_integer(sp.total_quantity)}
+                        <%= if is_nil(pos.price) do %>
+                          <span style="color: var(--loss); opacity: 0.6; font-size: 0.625rem;">N/A</span>
+                        <% else %>
+                          {format_decimal(pos.price)}
+                          <span style="color: var(--terminal-dim); font-size: 0.625rem; position: absolute; margin-left: 0.35rem;">{pos.currency}</span>
+                        <% end %>
                       </td>
-                      <td class="terminal-number" style="text-align: right;">
-                        <span class={pnl_badge_class(sp.total_pnl)}>
-                          <%= if pnl_positive?(sp.total_pnl) do %>
-                            +
-                          <% end %>
-                          {format_euro_decimal(sp.total_pnl)}
+                      <td class="terminal-number" style="font-weight: 500; text-align: right;">
+                        <%= if is_nil(pos.value) do %>
+                          <span style="color: var(--loss); opacity: 0.6; font-size: 0.625rem;">N/A</span>
+                        <% else %>
+                          {format_decimal(pos.value)}
+                        <% end %>
+                      </td>
+                      <td class="terminal-number" style="color: var(--terminal-dim); text-align: right;">
+                        {format_decimal(pos.cost_basis)}
+                      </td>
+                      <td class="terminal-number">
+                        <span
+                          class={pnl_badge_class(pos.unrealized_pnl)}
+                          aria-label={"#{if pnl_positive?(pos.unrealized_pnl), do: "Gain", else: "Loss"}: #{format_decimal(pos.unrealized_pnl)}"}
+                        >
+                          <%= if pnl_positive?(pos.unrealized_pnl) do %>+<% end %>{format_decimal(pos.unrealized_pnl)}
                         </span>
                       </td>
-                      <td
-                        class="terminal-number"
-                        style="text-align: right; color: var(--terminal-dim); font-size: 0.75rem;"
-                      >
-                        {Calendar.strftime(sp.first_date, "%Y")}&ndash;{Calendar.strftime(
-                          sp.last_date,
-                          "%Y"
-                        )}
+                      <td class="terminal-number">
+                        <span style="color: var(--terminal-muted);">{format_decimal(pos.weight)}%</span>
                       </td>
                     </tr>
                   <% end %>
                 </tbody>
               </table>
             </div>
-          <% end %>
+          </div>
+        </div>
+      </div>
+
+      <%!-- ── Tab: Income ── --%>
+      <div :if={@active_tab == "income"} id="panel-income" role="tabpanel" class="animate-fade-in">
+        <%!-- Dividend Cash Flow --%>
+        <%= if length(@cash_flow) > 0 do %>
+          <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]" data-testid="cash-flow">
+            <div class="flex items-center justify-between">
+              <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+                Dividend Cash Flow {Date.utc_today().year}
+              </div>
+              <div style="color: var(--gain); font-family: var(--font-mono); font-size: 0.75rem; font-weight: 500;">
+                {format_euro_decimal(List.last(@cash_flow).cumulative)}
+              </div>
+            </div>
+            <%!-- Mini Bar Chart --%>
+            <div class="mt-[var(--space-xs)]" style="display: flex; align-items: flex-end; gap: 2px; height: 60px;">
+              <% max_income = @cash_flow |> Enum.map(&Decimal.to_float(&1.income)) |> Enum.max() |> max(0.01) %>
+              <%= for entry <- @cash_flow do %>
+                <% bar_h = Decimal.to_float(entry.income) / max_income * 100 %>
+                <div
+                  style={"flex: 1; height: #{max(bar_h, 2)}%; background: var(--chart-dividend); border-radius: 3px 3px 0 0; min-width: 8px;"}
+                  title={"#{entry.month}: #{format_euro_decimal(entry.income)}"}
+                ></div>
+              <% end %>
+            </div>
+            <div class="mt-1" style="display: flex; gap: 2px; font-family: var(--font-mono); font-size: 0.5rem; color: var(--terminal-dim);">
+              <%= for entry <- @cash_flow do %>
+                <div style="flex: 1; text-align: center; min-width: 8px;">
+                  {String.slice(entry.month, 5, 2)}
+                </div>
+              <% end %>
+            </div>
+            <%!-- Cash Flow Table --%>
+            <div class="overflow-x-auto mt-[var(--space-xs)]">
+              <table class="terminal-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Month</th>
+                    <th scope="col" style="text-align: right;">Income</th>
+                    <th scope="col" style="text-align: right;">Cumulative</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <%= for entry <- @cash_flow do %>
+                    <tr>
+                      <td>{entry.month}</td>
+                      <td class="terminal-number" style="text-align: right; color: var(--gain);">
+                        +{format_euro_decimal(entry.income)}
+                      </td>
+                      <td class="terminal-number" style="text-align: right; font-weight: 500;">
+                        {format_euro_decimal(entry.cumulative)}
+                      </td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <% end %>
+
+        <%!-- Recent Dividends (if more detail desired) --%>
+        <%= if length(@recent_dividends) > 0 do %>
+          <div class="terminal-card p-[var(--space-sm)]" data-testid="recent-dividends">
+            <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+              Recent Dividends
+            </div>
+            <div class="mt-[var(--space-xs)]">
+              <%= for entry <- @recent_dividends do %>
+                <div class="terminal-dividend-row">
+                  <span class="terminal-dividend-symbol">{entry.dividend.symbol}</span>
+                  <span class="terminal-dividend-date">{Calendar.strftime(entry.dividend.ex_date, "%Y-%m-%d")}</span>
+                  <span class="terminal-dividend-amount">+{format_euro_decimal(entry.income)}</span>
+                </div>
+              <% end %>
+            </div>
+          </div>
         <% end %>
       </div>
-      
-<!-- Investment Summary -->
-      <%= if @investment_summary do %>
-        <div
-          class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-5"
-          data-testid="investment-summary"
-        >
-          <div class="terminal-section-label">Investment Summary</div>
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)] mt-[var(--space-sm)]">
-            <div class="text-center">
-              <div class="terminal-stat-label">Net Invested</div>
-              <div class="terminal-stat-value" style="font-size: 0.8125rem;">
-                {format_euro_decimal(@investment_summary.net_invested)}
+
+      <%!-- ── Tab: Summary ── --%>
+      <div :if={@active_tab == "summary"} id="panel-summary" role="tabpanel" class="animate-fade-in">
+        <%!-- Investment Summary --%>
+        <%= if @investment_summary do %>
+          <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]" data-testid="investment-summary">
+            <div class="terminal-section-label">Investment Summary</div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)] mt-[var(--space-sm)]">
+              <div class="text-center">
+                <div class="terminal-stat-label">Net Invested</div>
+                <div class="terminal-stat-value" style="font-size: 0.8125rem;">
+                  {format_euro_decimal(@investment_summary.net_invested)}
+                </div>
               </div>
-            </div>
-            <div class="text-center">
-              <div class="terminal-stat-label">Realized P&amp;L</div>
-              <div
-                class={"terminal-stat-value #{if pnl_positive?(@investment_summary.realized_pnl), do: "gain", else: "loss"}"}
-                style="font-size: 0.8125rem;"
-              >
-                {format_euro_signed(@investment_summary.realized_pnl)}
+              <div class="text-center">
+                <div class="terminal-stat-label">Realized P&amp;L</div>
+                <div class={"terminal-stat-value #{if pnl_positive?(@investment_summary.realized_pnl), do: "gain", else: "loss"}"} style="font-size: 0.8125rem;">
+                  {format_euro_signed(@investment_summary.realized_pnl)}
+                </div>
               </div>
-            </div>
-            <div class="text-center">
-              <div class="terminal-stat-label">Unrealized P&amp;L</div>
-              <div
-                class={"terminal-stat-value #{if pnl_positive?(@investment_summary.unrealized_pnl), do: "gain", else: "loss"}"}
-                style="font-size: 0.8125rem;"
-              >
-                {format_euro_signed(@investment_summary.unrealized_pnl)}
+              <div class="text-center">
+                <div class="terminal-stat-label">Unrealized P&amp;L</div>
+                <div class={"terminal-stat-value #{if pnl_positive?(@investment_summary.unrealized_pnl), do: "gain", else: "loss"}"} style="font-size: 0.8125rem;">
+                  {format_euro_signed(@investment_summary.unrealized_pnl)}
+                </div>
               </div>
-            </div>
-            <div class="text-center">
-              <div class="terminal-stat-label">Total Dividends</div>
-              <div class="terminal-stat-value gain" style="font-size: 0.8125rem;">
-                {format_euro_decimal(@investment_summary.total_dividends)}
+              <div class="text-center">
+                <div class="terminal-stat-label">Total Dividends</div>
+                <div class="terminal-stat-value" style="font-size: 0.8125rem; color: var(--chart-dividend);">
+                  {format_euro_decimal(@investment_summary.total_dividends)}
+                </div>
               </div>
-            </div>
-            <div class="text-center">
-              <div class="terminal-stat-label">Total Costs</div>
-              <div class="terminal-stat-value loss" style="font-size: 0.8125rem;">
-                {format_euro_decimal(@investment_summary.total_costs)}
+              <div class="text-center">
+                <div class="terminal-stat-label">Total Costs</div>
+                <div class="terminal-stat-value loss" style="font-size: 0.8125rem;">
+                  {format_euro_decimal(@investment_summary.total_costs)}
+                </div>
               </div>
-            </div>
-            <div class="text-center">
-              <div class="terminal-stat-label" style="font-weight: 600;">Total Return</div>
-              <div
-                class={"terminal-stat-value #{if pnl_positive?(@investment_summary.total_return), do: "gain", else: "loss"}"}
-                style="font-size: 0.875rem; font-weight: 700;"
-              >
-                {format_euro_signed(@investment_summary.total_return)}
+              <div class="text-center">
+                <div class="terminal-stat-label" style="font-weight: 600;">Total Return</div>
+                <div class={"terminal-stat-value #{if pnl_positive?(@investment_summary.total_return), do: "gain", else: "loss"}"} style="font-size: 0.875rem; font-weight: 700;">
+                  {format_euro_signed(@investment_summary.total_return)}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      <% end %>
-      
-<!-- Dividend Cash Flow -->
-      <%= if length(@cash_flow) > 0 do %>
-        <div
-          class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-5"
-          data-testid="cash-flow"
-        >
-          <div class="flex items-center justify-between">
+        <% end %>
+
+        <%!-- Realized P&L --%>
+        <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]" data-testid="realized-pnl-card">
+          <div class="flex flex-wrap items-center justify-between gap-[var(--space-xs)]">
             <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
-              Dividend Cash Flow {Date.utc_today().year}
+              Realized P&amp;L
             </div>
-            <div
-              class="gain"
-              style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: 500;"
-            >
-              {format_euro_decimal(List.last(@cash_flow).cumulative)}
+            <div class="flex items-center gap-1 flex-wrap">
+              <button phx-click="pnl_year" phx-value-year="all" class={"btn btn-xs #{if @pnl_year == nil, do: "btn-primary", else: "btn-outline"}"}>All</button>
+              <%= for y <- @pnl.available_years do %>
+                <button phx-click="pnl_year" phx-value-year={to_string(y)} class={"btn btn-xs #{if @pnl_year == y, do: "btn-primary", else: "btn-outline"}"}>{y}</button>
+              <% end %>
+            </div>
+            <div class="flex items-center gap-[var(--space-xs)]">
+              <div class={"terminal-stat-value #{if pnl_positive?(@pnl.total_pnl), do: "gain", else: "loss"}"} style="font-size: 0.875rem;">
+                {format_euro_signed(@pnl.total_pnl)}
+              </div>
+              <%= if @pnl.has_unconverted do %>
+                <span class="badge badge-warning badge-xs" title="Some positions have not been converted to EUR. Run mix backfill.sold_pnl_eur">FX pending</span>
+              <% end %>
             </div>
           </div>
-          <!-- Mini Bar Chart -->
-          <div
-            class="mt-[var(--space-xs)]"
-            style="display: flex; align-items: flex-end; gap: 2px; height: 60px;"
-          >
-            <% max_income =
-              @cash_flow |> Enum.map(&Decimal.to_float(&1.income)) |> Enum.max() |> max(0.01) %>
-            <%= for entry <- @cash_flow do %>
-              <% bar_h = Decimal.to_float(entry.income) / max_income * 100 %>
-              <div
-                style={"flex: 1; height: #{max(bar_h, 2)}%; background: #10b981; border-radius: 2px 2px 0 0; min-width: 8px;"}
-                title={"#{entry.month}: #{format_euro_decimal(entry.income)}"}
-              >
-              </div>
-            <% end %>
-          </div>
-          <div
-            class="mt-1"
-            style="display: flex; gap: 2px; font-family: var(--font-mono); font-size: 0.5rem; color: var(--terminal-dim);"
-          >
-            <%= for entry <- @cash_flow do %>
-              <div style="flex: 1; text-align: center; min-width: 8px;">
-                {String.slice(entry.month, 5, 2)}
-              </div>
-            <% end %>
-          </div>
-          <!-- Cash Flow Table -->
-          <div class="overflow-x-auto mt-[var(--space-xs)]">
-            <table class="terminal-table">
-              <thead>
-                <tr>
-                  <th scope="col">Month</th>
-                  <th scope="col" style="text-align: right;">Income</th>
-                  <th scope="col" style="text-align: right;">Cumulative</th>
-                </tr>
-              </thead>
-              <tbody>
-                <%= for entry <- @cash_flow do %>
-                  <tr>
-                    <td>{entry.month}</td>
-                    <td class="terminal-number gain" style="text-align: right;">
-                      +{format_euro_decimal(entry.income)}
-                    </td>
-                    <td class="terminal-number" style="text-align: right; font-weight: 500;">
-                      {format_euro_decimal(entry.cumulative)}
-                    </td>
-                  </tr>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-[var(--space-xs)] mt-[var(--space-sm)]" data-testid="pnl-summary-stats">
+            <div class="text-center">
+              <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">Gains</div>
+              <div style="color: var(--gain); font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;">{format_euro_decimal(@pnl.total_gains)}</div>
+              <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);">{@pnl.win_count} symbols</div>
+            </div>
+            <div class="text-center">
+              <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">Losses</div>
+              <div style="color: var(--loss); font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;">{format_euro_decimal(@pnl.total_losses)}</div>
+              <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);">{@pnl.loss_count} symbols</div>
+            </div>
+            <div class="text-center">
+              <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">Win Rate</div>
+              <div style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;">
+                <%= if @pnl.win_count + @pnl.loss_count > 0 do %>
+                  {Float.round(@pnl.win_count / (@pnl.win_count + @pnl.loss_count) * 100, 1)}%
+                <% else %>
+                  –
                 <% end %>
-              </tbody>
-            </table>
+              </div>
+            </div>
+            <div class="text-center">
+              <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); text-transform: uppercase; letter-spacing: 0.05em;">Trades</div>
+              <div style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;">{@pnl.total_trades}</div>
+              <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);">{@pnl.symbol_count} symbols</div>
+            </div>
           </div>
+
+          <%!-- Top Winners & Losers --%>
+          <%= if @pnl.symbol_count > 0 do %>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-[var(--space-xs)] mt-[var(--space-sm)]">
+              <div>
+                <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--gain); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; font-weight: 600;">Top Winners</div>
+                <div class="overflow-x-auto">
+                  <table class="terminal-table">
+                    <thead>
+                      <tr style="background: var(--gain-bg);">
+                        <th scope="col">Symbol</th>
+                        <th scope="col" style="text-align: right;">Trades</th>
+                        <th scope="col" style="text-align: right;">Qty</th>
+                        <th scope="col" style="text-align: right;">P&amp;L</th>
+                        <th scope="col" style="text-align: right;">Period</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <%= for sp <- @pnl.top_winners do %>
+                        <tr>
+                          <td><.link navigate={~p"/stocks/#{sp.symbol}"} class="terminal-symbol hover:underline">{sp.symbol}</.link></td>
+                          <td class="terminal-number" style="text-align: right; color: var(--terminal-dim);">{sp.trades}</td>
+                          <td class="terminal-number" style="text-align: right;">{format_integer(sp.total_quantity)}</td>
+                          <td class="terminal-number" style="text-align: right;"><span class="terminal-badge-gain">+{format_euro_decimal(sp.total_pnl)}</span></td>
+                          <td class="terminal-number" style="text-align: right; color: var(--terminal-dim); font-size: 0.75rem;">{Calendar.strftime(sp.first_date, "%Y")}&ndash;{Calendar.strftime(sp.last_date, "%Y")}</td>
+                        </tr>
+                      <% end %>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div>
+                <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--loss); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; font-weight: 600;">Top Losers</div>
+                <div class="overflow-x-auto">
+                  <table class="terminal-table">
+                    <thead>
+                      <tr style="background: var(--loss-bg);">
+                        <th scope="col">Symbol</th>
+                        <th scope="col" style="text-align: right;">Trades</th>
+                        <th scope="col" style="text-align: right;">Qty</th>
+                        <th scope="col" style="text-align: right;">P&amp;L</th>
+                        <th scope="col" style="text-align: right;">Period</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <%= for sp <- @pnl.top_losers do %>
+                        <tr>
+                          <td><.link navigate={~p"/stocks/#{sp.symbol}"} class="terminal-symbol hover:underline">{sp.symbol}</.link></td>
+                          <td class="terminal-number" style="text-align: right; color: var(--terminal-dim);">{sp.trades}</td>
+                          <td class="terminal-number" style="text-align: right;">{format_integer(sp.total_quantity)}</td>
+                          <td class="terminal-number" style="text-align: right;"><span class="terminal-badge-loss">{format_euro_decimal(sp.total_pnl)}</span></td>
+                          <td class="terminal-number" style="text-align: right; color: var(--terminal-dim); font-size: 0.75rem;">{Calendar.strftime(sp.first_date, "%Y")}&ndash;{Calendar.strftime(sp.last_date, "%Y")}</td>
+                        </tr>
+                      <% end %>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-[var(--space-sm)] text-center">
+              <button phx-click="pnl_show_all" class="btn btn-xs btn-outline">
+                <%= if @pnl_show_all do %>Hide<% else %>Show all {@pnl.symbol_count} symbols<% end %>
+              </button>
+            </div>
+
+            <%= if @pnl_show_all do %>
+              <div class="overflow-x-auto mt-[var(--space-xs)]">
+                <table class="terminal-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Symbol</th>
+                      <th scope="col" style="text-align: right;">Trades</th>
+                      <th scope="col" style="text-align: right;">Qty</th>
+                      <th scope="col" style="text-align: right;">P&amp;L</th>
+                      <th scope="col" style="text-align: right;">Period</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <%= for sp <- @pnl.all_grouped do %>
+                      <tr>
+                        <td><.link navigate={~p"/stocks/#{sp.symbol}"} class="terminal-symbol hover:underline">{sp.symbol}</.link></td>
+                        <td class="terminal-number" style="text-align: right; color: var(--terminal-dim);">{sp.trades}</td>
+                        <td class="terminal-number" style="text-align: right;">{format_integer(sp.total_quantity)}</td>
+                        <td class="terminal-number" style="text-align: right;">
+                          <span class={pnl_badge_class(sp.total_pnl)}>
+                            <%= if pnl_positive?(sp.total_pnl) do %>+<% end %>{format_euro_decimal(sp.total_pnl)}
+                          </span>
+                        </td>
+                        <td class="terminal-number" style="text-align: right; color: var(--terminal-dim); font-size: 0.75rem;">{Calendar.strftime(sp.first_date, "%Y")}&ndash;{Calendar.strftime(sp.last_date, "%Y")}</td>
+                      </tr>
+                    <% end %>
+                  </tbody>
+                </table>
+              </div>
+            <% end %>
+          <% end %>
         </div>
-      <% end %>
-      
-<!-- Footer -->
-      <div
-        class="mt-[var(--space-md)] flex items-center justify-between animate-fade-in animate-delay-5"
-        style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim); letter-spacing: 0.02em;"
-      >
+
+        <%!-- FX Exposure --%>
+        <%= if length(@fx_exposure) > 1 do %>
+          <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]" data-testid="fx-exposure">
+            <div class="terminal-section-label">Currency Exposure</div>
+            <div class="overflow-x-auto mt-[var(--space-xs)]">
+              <table class="terminal-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Currency</th>
+                    <th scope="col">Holdings</th>
+                    <th scope="col" style="text-align: right;">Local Value</th>
+                    <th scope="col" style="text-align: right;">EUR Value</th>
+                    <th scope="col" style="text-align: right;">FX Rate</th>
+                    <th scope="col" style="text-align: right;">% Portfolio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <%= for fx <- @fx_exposure do %>
+                    <tr>
+                      <td style="font-weight: 500;">{fx.currency}</td>
+                      <td class="terminal-number">{fx.holdings_count}</td>
+                      <td class="terminal-number" style="text-align: right;">{format_decimal(fx.local_value)}</td>
+                      <td class="terminal-number" style="text-align: right;">{format_euro_decimal(fx.eur_value)}</td>
+                      <td class="terminal-number" style="text-align: right; color: var(--terminal-dim);">{format_decimal(fx.fx_rate)}</td>
+                      <td class="terminal-number" style="text-align: right;">{format_decimal(fx.pct)}%</td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <% end %>
+
+        <%!-- P&L Waterfall (collapsible) --%>
+        <div class="mb-[var(--space-xs)]">
+          <button phx-click="toggle_waterfall" class="btn btn-xs btn-outline w-full">
+            <%= if @show_waterfall do %>Hide P&amp;L Waterfall<% else %>Show P&amp;L Waterfall<% end %>
+          </button>
+          <%= if @show_waterfall and length(@waterfall_data) > 0 do %>
+            <div class="terminal-chart mt-[var(--space-xs)]">
+              <div class="terminal-chart-header">
+                <div class="terminal-chart-title">P&amp;L Waterfall</div>
+                <div class="terminal-chart-legend" aria-label="Waterfall chart legend" style="justify-content: flex-end;">
+                  <span class="terminal-legend-item"><span class="terminal-legend-line" style="background: var(--gain);"></span> Deposits</span>
+                  <span class="terminal-legend-item"><span class="terminal-legend-line" style="background: var(--chart-dividend);"></span> Dividends</span>
+                  <span class="terminal-legend-item"><span class="terminal-legend-line" style="background: var(--terminal-accent);"></span> Realized P&amp;L</span>
+                  <span class="terminal-legend-item"><span class="terminal-legend-line" style="background: var(--loss);"></span> Costs</span>
+                  <span class="terminal-legend-item"><span class="terminal-legend-line" style="background: var(--chart-cumulative);"></span> Withdrawals</span>
+                  <span class="terminal-legend-item"><span class="terminal-legend-line" style="background: var(--terminal-text);"></span> Cumulative</span>
+                </div>
+              </div>
+              {DividendsomaticWeb.Components.PortfolioChart.render_waterfall_chart(@waterfall_data)}
+            </div>
+          <% end %>
+        </div>
+      </div>
+
+      <%!-- Footer --%>
+      <div class="mt-[var(--space-md)] flex items-center justify-between animate-fade-in animate-delay-5" style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim); letter-spacing: 0.02em;">
         <div aria-hidden="true">
           <span class="terminal-kbd">←</span>
           <span class="terminal-kbd ml-0.5">→</span>
@@ -955,32 +752,17 @@
         </div>
       </div>
     <% else %>
-      <!-- Empty State -->
+      <%!-- Empty State --%>
       <div class="terminal-card">
         <div class="terminal-empty">
           <div class="terminal-empty-icon">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke-width="1.5"
-              stroke="currentColor"
-              class="w-7 h-7"
-              style="color: var(--terminal-muted);"
-              aria-hidden="true"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
-              />
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7" style="color: var(--terminal-muted);" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
             </svg>
           </div>
           <h2>No Portfolio Data</h2>
           <p>Import a CSV file from Interactive Brokers to get started</p>
-          <code class="terminal-code">
-            mix import.csv path/to/file.csv
-          </code>
+          <code class="terminal-code">mix import.csv path/to/file.csv</code>
         </div>
       </div>
     <% end %>
