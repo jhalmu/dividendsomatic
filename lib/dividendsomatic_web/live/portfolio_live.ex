@@ -533,7 +533,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:waterfall_data, [])
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
-    |> assign(:active_tab, "holdings")
+    |> assign(:active_tab, "income")
     |> assign(:is_reconstructed, false)
     |> assign(:missing_price_count, 0)
     |> assign(:pnl, %{
@@ -623,7 +623,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:pnl, %{winners: [], losers: [], total_realized: Decimal.new("0")})
     |> assign(:investment_summary, nil)
     |> assign(:summary_loaded, false)
-    |> assign_new(:active_tab, fn -> "holdings" end)
+    |> assign_new(:active_tab, fn -> "income" end)
     |> assign_freshness_and_source(snapshot, positions)
     |> maybe_load_summary()
   end

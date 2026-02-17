@@ -61,10 +61,19 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.22.0 (Gmail API + Multi-Type Flex Import)
-**Status:** Full dividend pipeline, Gmail auto-import, 547 tests, 0 credo issues
+**Version:** 0.23.0 (Dashboard Redesign — Nordic Warmth + ApexCharts)
+**Status:** Full dividend pipeline, Gmail auto-import, redesigned dashboard, 547 tests, 0 credo issues
 
-**Latest session (2026-02-17 night):**
+**Latest session (2026-02-17 late night):**
+- **Dashboard redesign** — "Nordic Warmth" palette replacing terminal aesthetic
+- **ApexCharts** — interactive portfolio area chart + dividend bar+line chart
+- **Three-zone layout** — The Day (sticky nav), The Journey (charts), The Details (tabs)
+- **Lazy assigns** — Summary tab data deferred until activation
+- **Dark/light toggle** — theme switcher in branding bar
+- **Holdings promoted** — always visible above charts, removed from tabs
+- 547 tests, 0 failures, 0 credo issues
+
+**Previous session (2026-02-17 night):**
 - **Gmail module rewrite** — handles all 4 IBKR Flex CSV types (Activity, Dividend, Trades, Actions)
 - **IntegrityChecker** — `run_all_from_string/1` for Gmail-downloaded CSV data
 - **OAuth2** — configured, published to production (no 7-day token expiry)
@@ -129,7 +138,8 @@ mix ecto.reset              # Drop + create + migrate
 - Fear & Greed Index (365 days history)
 - Costs system, FX exposure, sold positions (grouped), data gaps analysis
 - Rule of 72 calculator, dividend analytics
-- Custom SVG charts with era-aware gap rendering + chart transitions
+- ApexCharts interactive charts (portfolio area + dividend bar/line) with smooth animations
+- Dark/light mode toggle with Nordic Warmth palette
 - P&L Waterfall chart (deposits, dividends, costs, realized P&L by month)
 - Investment summary card (deposits, P&L, dividends, costs, total return)
 - Enhanced navigation: week/month/year jumps, date picker, chart presets

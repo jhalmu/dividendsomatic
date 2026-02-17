@@ -324,6 +324,136 @@
         </div>
       </div>
 
+      <%!-- Holdings --%>
+      <%!-- Reconstruction Banner --%>
+      <%= if @is_reconstructed do %>
+        <div
+          class="mb-[var(--space-xs)]"
+          style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-muted); background: var(--terminal-elevated); border: 1px solid var(--terminal-border); border-radius: 8px; padding: 0.375rem 0.5rem; display: flex; align-items: center; gap: 0.375rem;"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="1.5"
+            stroke="currentColor"
+            class="w-3.5 h-3.5"
+            style="flex-shrink: 0; opacity: 0.6;"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z"
+            />
+          </svg>
+          <span>
+            Reconstructed from Nordnet transactions
+            <%= if @missing_price_count > 0 do %>
+              — {@missing_price_count} positions with unavailable prices
+            <% end %>
+          </span>
+        </div>
+      <% end %>
+
+      <div class="terminal-card mb-[var(--space-xs)] animate-fade-in animate-delay-2">
+        <div class="p-[var(--space-sm)] pb-0">
+          <div class="flex items-center justify-between mb-[var(--space-xs)]">
+            <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+              Positions
+            </div>
+            <span class="terminal-holdings-count">
+              {length(@positions)} holdings
+            </span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <div class="min-w-[780px]">
+            <table class="terminal-table">
+              <thead>
+                <tr>
+                  <th scope="col">Symbol</th>
+                  <th scope="col">Description</th>
+                  <th scope="col">Qty</th>
+                  <th scope="col">Price</th>
+                  <th scope="col">Value</th>
+                  <th scope="col">Cost</th>
+                  <th scope="col">P&L</th>
+                  <th scope="col">% NAV</th>
+                </tr>
+              </thead>
+              <tbody>
+                <%= for pos <- @positions do %>
+                  <tr>
+                    <td>
+                      <.link
+                        navigate={~p"/stocks/#{pos.symbol}"}
+                        class="terminal-symbol hover:underline"
+                      >
+                        {pos.symbol}
+                      </.link>
+                      <%= if Decimal.compare(pos.quantity, Decimal.new("0")) == :lt do %>
+                        <span
+                          style="display: inline-block; background: var(--loss); color: #fff; font-size: 0.45rem; font-weight: 700; padding: 0px 4px; border-radius: 3px; margin-left: 4px; vertical-align: middle; letter-spacing: 0.05em;"
+                          data-testid="short-badge"
+                        >
+                          SHORT
+                        </span>
+                      <% end %>
+                    </td>
+                    <td><span class="terminal-description">{pos.name}</span></td>
+                    <td class="terminal-number">{format_integer(pos.quantity)}</td>
+                    <td class="terminal-number" style="text-align: right;">
+                      <%= if is_nil(pos.price) do %>
+                        <span style="color: var(--loss); opacity: 0.6; font-size: 0.625rem;">
+                          N/A
+                        </span>
+                      <% else %>
+                        {format_decimal(pos.price)}
+                        <span style="color: var(--terminal-dim); font-size: 0.625rem; position: absolute; margin-left: 0.35rem;">
+                          {pos.currency}
+                        </span>
+                      <% end %>
+                    </td>
+                    <td class="terminal-number" style="font-weight: 500; text-align: right;">
+                      <%= if is_nil(pos.value) do %>
+                        <span style="color: var(--loss); opacity: 0.6; font-size: 0.625rem;">
+                          N/A
+                        </span>
+                      <% else %>
+                        {format_decimal(pos.value)}
+                      <% end %>
+                    </td>
+                    <td
+                      class="terminal-number"
+                      style="color: var(--terminal-dim); text-align: right;"
+                    >
+                      {format_decimal(pos.cost_basis)}
+                    </td>
+                    <td class="terminal-number">
+                      <span
+                        class={pnl_badge_class(pos.unrealized_pnl)}
+                        aria-label={"#{if pnl_positive?(pos.unrealized_pnl), do: "Gain", else: "Loss"}: #{format_decimal(pos.unrealized_pnl)}"}
+                      >
+                        <%= if pnl_positive?(pos.unrealized_pnl) do %>
+                          +
+                        <% end %>
+                        {format_decimal(pos.unrealized_pnl)}
+                      </span>
+                    </td>
+                    <td class="terminal-number">
+                      <span style="color: var(--terminal-muted);">
+                        {format_decimal(pos.weight)}%
+                      </span>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <%!-- ═══════════════════════════════════════
            ZONE 2 — "The Journey" (charts)
            ═══════════════════════════════════════ --%>
@@ -488,16 +618,6 @@
       <div class="tab-strip animate-fade-in animate-delay-3" role="tablist">
         <button
           phx-click="switch_tab"
-          phx-value-tab="holdings"
-          class={"tab-strip-btn #{if @active_tab == "holdings", do: "active"}"}
-          role="tab"
-          aria-selected={to_string(@active_tab == "holdings")}
-          aria-controls="panel-holdings"
-        >
-          Holdings
-        </button>
-        <button
-          phx-click="switch_tab"
           phx-value-tab="income"
           class={"tab-strip-btn #{if @active_tab == "income", do: "active"}"}
           role="tab"
@@ -516,144 +636,6 @@
         >
           Summary
         </button>
-      </div>
-
-      <%!-- ── Tab: Holdings ── --%>
-      <div
-        :if={@active_tab == "holdings"}
-        id="panel-holdings"
-        role="tabpanel"
-        class="animate-fade-in"
-      >
-        <%!-- Reconstruction Banner --%>
-        <%= if @is_reconstructed do %>
-          <div
-            class="mb-[var(--space-xs)]"
-            style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-muted); background: var(--terminal-elevated); border: 1px solid var(--terminal-border); border-radius: 8px; padding: 0.375rem 0.5rem; display: flex; align-items: center; gap: 0.375rem;"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke-width="1.5"
-              stroke="currentColor"
-              class="w-3.5 h-3.5"
-              style="flex-shrink: 0; opacity: 0.6;"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z"
-              />
-            </svg>
-            <span>
-              Reconstructed from Nordnet transactions
-              <%= if @missing_price_count > 0 do %>
-                — {@missing_price_count} positions with unavailable prices
-              <% end %>
-            </span>
-          </div>
-        <% end %>
-
-        <%!-- Holdings Table --%>
-        <div class="terminal-card">
-          <div class="p-[var(--space-sm)] pb-0">
-            <div class="flex items-center justify-between mb-[var(--space-xs)]">
-              <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
-                Positions
-              </div>
-              <span class="terminal-holdings-count">
-                {length(@positions)} holdings
-              </span>
-            </div>
-          </div>
-
-          <div class="overflow-x-auto">
-            <div class="min-w-[780px]">
-              <table class="terminal-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Symbol</th>
-                    <th scope="col">Description</th>
-                    <th scope="col">Qty</th>
-                    <th scope="col">Price</th>
-                    <th scope="col">Value</th>
-                    <th scope="col">Cost</th>
-                    <th scope="col">P&L</th>
-                    <th scope="col">% NAV</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <%= for pos <- @positions do %>
-                    <tr>
-                      <td>
-                        <.link
-                          navigate={~p"/stocks/#{pos.symbol}"}
-                          class="terminal-symbol hover:underline"
-                        >
-                          {pos.symbol}
-                        </.link>
-                        <%= if Decimal.compare(pos.quantity, Decimal.new("0")) == :lt do %>
-                          <span
-                            style="display: inline-block; background: var(--loss); color: #fff; font-size: 0.45rem; font-weight: 700; padding: 0px 4px; border-radius: 3px; margin-left: 4px; vertical-align: middle; letter-spacing: 0.05em;"
-                            data-testid="short-badge"
-                          >
-                            SHORT
-                          </span>
-                        <% end %>
-                      </td>
-                      <td><span class="terminal-description">{pos.name}</span></td>
-                      <td class="terminal-number">{format_integer(pos.quantity)}</td>
-                      <td class="terminal-number" style="text-align: right;">
-                        <%= if is_nil(pos.price) do %>
-                          <span style="color: var(--loss); opacity: 0.6; font-size: 0.625rem;">
-                            N/A
-                          </span>
-                        <% else %>
-                          {format_decimal(pos.price)}
-                          <span style="color: var(--terminal-dim); font-size: 0.625rem; position: absolute; margin-left: 0.35rem;">
-                            {pos.currency}
-                          </span>
-                        <% end %>
-                      </td>
-                      <td class="terminal-number" style="font-weight: 500; text-align: right;">
-                        <%= if is_nil(pos.value) do %>
-                          <span style="color: var(--loss); opacity: 0.6; font-size: 0.625rem;">
-                            N/A
-                          </span>
-                        <% else %>
-                          {format_decimal(pos.value)}
-                        <% end %>
-                      </td>
-                      <td
-                        class="terminal-number"
-                        style="color: var(--terminal-dim); text-align: right;"
-                      >
-                        {format_decimal(pos.cost_basis)}
-                      </td>
-                      <td class="terminal-number">
-                        <span
-                          class={pnl_badge_class(pos.unrealized_pnl)}
-                          aria-label={"#{if pnl_positive?(pos.unrealized_pnl), do: "Gain", else: "Loss"}: #{format_decimal(pos.unrealized_pnl)}"}
-                        >
-                          <%= if pnl_positive?(pos.unrealized_pnl) do %>
-                            +
-                          <% end %>
-                          {format_decimal(pos.unrealized_pnl)}
-                        </span>
-                      </td>
-                      <td class="terminal-number">
-                        <span style="color: var(--terminal-muted);">
-                          {format_decimal(pos.weight)}%
-                        </span>
-                      </td>
-                    </tr>
-                  <% end %>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
       </div>
 
       <%!-- ── Tab: Income ── --%>

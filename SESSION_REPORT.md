@@ -1,3 +1,54 @@
+# Session Report — 2026-02-17 (Late Night)
+
+## Dashboard Redesign — "Nordic Warmth" + ApexCharts
+
+### Context
+The dashboard had grown organically with a terminal/hacker aesthetic (scanlines, green-on-black). The user designed a "Photo Album" concept — warm, organic, approachable — with interactive charts and a focused layout. Full 4-phase redesign implemented.
+
+### Changes Made
+
+#### Phase 1: Visual Foundation
+- **Nordic Warmth palette** — warm stone colors (oklch values) replacing cold terminal greens
+- **DaisyUI themes** — dark (default) + light mode with warm tones
+- **Three-zone layout**: The Day (sticky date nav + stats), The Journey (charts), The Details (tabs)
+- **Tab navigation** — Holdings/Income/Summary with lazy-loaded content
+- Removed scanline overlay and grid texture
+- Updated all pages: portfolio, stock detail, data gaps
+
+#### Phase 2: ApexCharts Integration
+- **Installed** `apexcharts` npm package
+- **New:** `assets/js/hooks/apex_chart_hook.js` — generic LiveView ↔ ApexCharts hook
+- **New:** `assets/js/chart_configs/portfolio.js` — area chart (value + cost basis, gradient fill, datetime axis)
+- **New:** `assets/js/chart_configs/dividend.js` — bar+line (monthly + cumulative, dual y-axis)
+- **Server-side config builders** — `build_portfolio_apex_config/1`, `build_dividend_apex_config/1`
+- **Data serialization** — `serialize_portfolio_chart/2`, `serialize_dividend_chart/1`
+- **push_event** updates on chart range change
+- Removed old ChartAnimation/ChartTransition hooks
+
+#### Phase 3: Lazy Assigns
+- Summary tab data (P&L, FX exposure, investment summary) deferred until tab activation
+- `maybe_load_summary/1` auto-loads when navigating while already on Summary tab
+
+#### Phase 4: Polish
+- **Dark/light mode toggle** button in branding bar
+- Holdings section moved above Portfolio Performance chart (always visible, not in tabs)
+- Tab strip reduced to Income + Summary
+
+### Files Summary
+
+| Action | Count | Files |
+|--------|-------|-------|
+| Modified | 8 | app.css, app.js, portfolio_live.ex, portfolio_live.html.heex, root.html.heex, stock_live.html.heex, data_gaps_live.html.heex, portfolio_live_test.exs |
+| New | 3 | apex_chart_hook.js, chart_configs/portfolio.js, chart_configs/dividend.js |
+| Modified | 2 | package.json, package-lock.json |
+
+### Quality
+- 547 tests, 0 failures, 0 credo issues
+- 0 compilation warnings
+- Code formatted
+
+---
+
 # Session Report — 2026-02-17 (Night)
 
 ## Gmail API Integration + Multi-Type Flex Import
