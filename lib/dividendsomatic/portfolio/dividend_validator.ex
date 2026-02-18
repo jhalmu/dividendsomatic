@@ -41,6 +41,8 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
       invalid_currencies(dividends),
       isin_currency_mismatches(dividends),
       suspicious_amounts(dividends),
+      inconsistent_amounts_per_stock(dividends),
+      mixed_amount_types_per_stock(dividends),
       cross_source_duplicates()
     ]
 
@@ -98,13 +100,13 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
   end
 
   @doc """
-  Flags per-share amounts that seem unreasonably high.
+  Flags per-share amounts that seem unreasonably high (>$50/share).
   """
   def suspicious_amounts(dividends) do
     dividends
     |> Enum.filter(fn d ->
       d.amount_type == "per_share" and
-        Decimal.compare(d.amount, Decimal.new("1000")) == :gt
+        Decimal.compare(d.amount, Decimal.new("50")) == :gt
     end)
     |> Enum.map(fn d ->
       %{
@@ -115,6 +117,73 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
         detail: "Per-share amount #{d.amount} #{d.currency} seems high"
       }
     end)
+  end
+
+  @doc """
+  Flags stocks where per_share amounts vary >10x from the median, indicating
+  possible misclassified total_net amounts.
+  """
+  def inconsistent_amounts_per_stock(dividends) do
+    dividends
+    |> Enum.filter(&(&1.amount_type == "per_share"))
+    |> Enum.group_by(fn d -> d.isin || "symbol:#{d.symbol}" end)
+    |> Enum.flat_map(fn {_key, group} -> find_outliers(group) end)
+  end
+
+  defp find_outliers(group) when length(group) < 2, do: []
+
+  defp find_outliers(group) do
+    amounts = Enum.map(group, fn d -> Decimal.to_float(d.amount) end) |> Enum.sort()
+    median = Enum.at(amounts, div(length(amounts), 2))
+
+    group
+    |> Enum.filter(fn d ->
+      val = Decimal.to_float(d.amount)
+      median > 0 && (val / median > 10 || median / val > 10)
+    end)
+    |> Enum.map(fn d ->
+      %{
+        severity: :warning,
+        type: :inconsistent_amount,
+        symbol: d.symbol,
+        isin: d.isin,
+        ex_date: d.ex_date,
+        detail: "Per-share amount #{d.amount} varies >10x from median for this stock"
+      }
+    end)
+  end
+
+  @doc """
+  Flags stocks that have both per_share and total_net records, which requires
+  the UI to handle both types correctly.
+  """
+  def mixed_amount_types_per_stock(dividends) do
+    dividends
+    |> Enum.group_by(fn d -> d.isin || "symbol:#{d.symbol}" end)
+    |> Enum.flat_map(fn {_key, group} ->
+      types = group |> Enum.map(& &1.amount_type) |> Enum.uniq()
+
+      if "per_share" in types and "total_net" in types do
+        sample = hd(group)
+
+        [
+          %{
+            severity: :info,
+            type: :mixed_amount_types,
+            symbol: sample.symbol,
+            isin: sample.isin,
+            detail:
+              "Stock has both per_share (#{count_type(group, "per_share")}) and total_net (#{count_type(group, "total_net")}) records"
+          }
+        ]
+      else
+        []
+      end
+    end)
+  end
+
+  defp count_type(group, type) do
+    Enum.count(group, &(&1.amount_type == type))
   end
 
   @doc """

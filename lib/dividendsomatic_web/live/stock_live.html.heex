@@ -632,7 +632,17 @@
                     </span>
                   </td>
                   <td class="terminal-number">
-                    {format_decimal(entry.dividend.amount)}
+                    <%= if entry.dividend.amount_type == "total_net" do %>
+                      <%= if entry.dividend.gross_rate do %>
+                        {format_decimal(entry.dividend.gross_rate)}
+                      <% else %>
+                        <span style="color: var(--terminal-dim); font-size: 0.625rem;">
+                          Total
+                        </span>
+                      <% end %>
+                    <% else %>
+                      {format_decimal(entry.dividend.amount)}
+                    <% end %>
                   </td>
                   <td class="terminal-number gain" style="text-align: right; font-weight: 500;">
                     +{format_euro_decimal(entry.income)}

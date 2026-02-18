@@ -183,7 +183,7 @@ defmodule DividendsomaticWeb.StockLive do
       Decimal.new("0")
     else
       Enum.reduce(recent, Decimal.new("0"), fn entry, acc ->
-        Decimal.add(acc, entry.dividend.amount || Decimal.new("0"))
+        Decimal.add(acc, per_share_amount(entry.dividend))
       end)
     end
   end
@@ -228,7 +228,7 @@ defmodule DividendsomaticWeb.StockLive do
       |> Enum.map(fn {year, entries} ->
         total =
           Enum.reduce(entries, Decimal.new("0"), fn e, acc ->
-            Decimal.add(acc, e.dividend.amount || Decimal.new("0"))
+            Decimal.add(acc, per_share_amount(e.dividend))
           end)
 
         {year, total}
@@ -444,7 +444,7 @@ defmodule DividendsomaticWeb.StockLive do
 
     # Per-share amounts for bar heights
     amounts =
-      Enum.map(sorted, fn e -> Decimal.to_float(e.dividend.amount || Decimal.new("0")) end)
+      Enum.map(sorted, fn e -> Decimal.to_float(per_share_amount(e.dividend)) end)
 
     a_max = Enum.max(amounts) * 1.15
     a_max = max(a_max, 0.01)
@@ -464,7 +464,7 @@ defmodule DividendsomaticWeb.StockLive do
       sorted
       |> Enum.with_index()
       |> Enum.map_join("\n", fn {e, i} ->
-        amt = Decimal.to_float(e.dividend.amount || Decimal.new("0"))
+        amt = Decimal.to_float(per_share_amount(e.dividend))
         cx = x_fn.(i)
         bx = cx - bar_w / 2
         bar_h = max(amt / a_max * main_h, 1)
@@ -686,6 +686,27 @@ defmodule DividendsomaticWeb.StockLive do
     end)
   end
 
+  # Extract per-share value regardless of amount_type
+  defp per_share_amount(dividend) do
+    amount = dividend.amount || Decimal.new("0")
+
+    if dividend.amount_type == "total_net" do
+      cond do
+        dividend.gross_rate && Decimal.compare(dividend.gross_rate, Decimal.new("0")) == :gt ->
+          dividend.gross_rate
+
+        dividend.quantity_at_record &&
+            Decimal.compare(dividend.quantity_at_record, Decimal.new("0")) == :gt ->
+          Decimal.div(amount, dividend.quantity_at_record)
+
+        true ->
+          Decimal.new("0")
+      end
+    else
+      amount
+    end
+  end
+
   defp compute_dividends_with_income(dividends, holdings) do
     holdings_data =
       Enum.map(holdings, fn h ->
@@ -699,23 +720,29 @@ defmodule DividendsomaticWeb.StockLive do
   end
 
   defp compute_single_dividend_income(dividend, holdings_data) do
-    matching =
-      holdings_data
-      |> Enum.filter(fn {_date, symbol, _qty, _fx} -> symbol == dividend.symbol end)
-      |> Enum.min_by(
-        fn {date, _, _, _} -> abs(Date.diff(date, dividend.ex_date)) end,
-        fn -> nil end
-      )
+    amount = dividend.amount || Decimal.new("0")
 
-    case matching do
-      {_date, _symbol, quantity, fx_rate} ->
-        qty = quantity || Decimal.new("0")
-        fx = fx_rate || Decimal.new("1")
-        amount = dividend.amount || Decimal.new("0")
-        Decimal.mult(Decimal.mult(amount, qty), fx)
+    # For total_net amounts, the value is already the total payment
+    if dividend.amount_type == "total_net" do
+      amount
+    else
+      matching =
+        holdings_data
+        |> Enum.filter(fn {_date, symbol, _qty, _fx} -> symbol == dividend.symbol end)
+        |> Enum.min_by(
+          fn {date, _, _, _} -> abs(Date.diff(date, dividend.ex_date)) end,
+          fn -> nil end
+        )
 
-      nil ->
-        Decimal.new("0")
+      case matching do
+        {_date, _symbol, quantity, fx_rate} ->
+          qty = quantity || Decimal.new("0")
+          fx = fx_rate || Decimal.new("1")
+          Decimal.mult(Decimal.mult(amount, qty), fx)
+
+        nil ->
+          Decimal.new("0")
+      end
     end
   end
 
