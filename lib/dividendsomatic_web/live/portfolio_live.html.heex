@@ -209,15 +209,6 @@
               />
             </svg>
           </button>
-
-          <%!-- Fear & Greed pill --%>
-          <%= if @fear_greed do %>
-            <div class="hidden sm:block ml-2">
-              {DividendsomaticWeb.Components.PortfolioChart.render_fear_greed_gauge(@fear_greed,
-                id_suffix: "nav"
-              )}
-            </div>
-          <% end %>
         </div>
 
         <%!-- Mobile quick-jump (visible on small screens) --%>
@@ -284,43 +275,61 @@
 
       <%!-- Snapshot Stats --%>
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-[var(--space-xs)] mb-[var(--space-md)] animate-fade-in animate-delay-1">
+        <%!-- Card 1: Combined P&L + Dividends --%>
+        <div class={"terminal-stat terminal-stat-accent #{if !pnl_positive?(@total_pnl), do: "negative"}"}>
+          <div class="terminal-stat-label">Unrealized P&amp;L</div>
+          <div class={"terminal-stat-value #{if pnl_positive?(@total_pnl), do: "gain", else: "loss"}"}>
+            {format_euro_signed(@total_pnl)}
+          </div>
+          <div
+            class="mt-[var(--space-xs)]"
+            style="border-top: 1px solid var(--terminal-border); padding-top: var(--space-xs);"
+          >
+            <div class="terminal-stat-label">Dividends {@dividend_year}</div>
+            <div class="terminal-stat-value" style="color: var(--chart-dividend);">
+              {format_euro_decimal(@dividend_total)}
+            </div>
+          </div>
+        </div>
+
+        <%!-- Card 2: Portfolio Value --%>
         <div class="terminal-stat">
           <div class="terminal-stat-label">Portfolio Value</div>
           <div class="terminal-stat-value">
             {format_euro(@total_value)}
           </div>
-          <%= if length(@sparkline_values) > 1 do %>
-            <div class="mt-[var(--space-xs)]">
-              {DividendsomaticWeb.Components.PortfolioChart.render_sparkline(@sparkline_values)}
-            </div>
-          <% end %>
-        </div>
-
-        <div class={"terminal-stat terminal-stat-accent #{if !pnl_positive?(@total_pnl), do: "negative"}"}>
-          <div class="terminal-stat-label">Unrealized P&L</div>
-          <div class={"terminal-stat-value #{if pnl_positive?(@total_pnl), do: "gain", else: "loss"}"}>
-            {format_euro_signed(@total_pnl)}
+          <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);">
+            Costs: {format_euro_decimal(@costs_this_year)}
           </div>
         </div>
 
-        <div class="terminal-stat">
-          <div class="terminal-stat-label">Dividends {@dividend_year}</div>
-          <div class="terminal-stat-value" style="color: var(--chart-dividend);">
-            {format_euro_decimal(@dividend_total)}
+        <%!-- Card 3: Realized {@dividend_year} --%>
+        <div class={"terminal-stat #{if pnl_positive?(@total_return), do: "", else: "negative"}"}>
+          <div class="terminal-stat-label">Realized {@dividend_year}</div>
+          <div class={"terminal-stat-value #{if pnl_positive?(@total_return), do: "gain", else: "loss"}"}>
+            {format_euro_signed(@total_return)}
           </div>
-          <%= if @projected_dividends do %>
-            <div
-              class="mt-[var(--space-inline)]"
-              style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);"
-            >
-              Proj. {format_euro_decimal(@projected_dividends)}/yr
-            </div>
-          <% end %>
+          <div
+            class="mt-[var(--space-xs)]"
+            style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);"
+          >
+            <div>P&amp;L: {format_euro_signed(@realized_pnl_total)}</div>
+            <div>Dividends: {format_euro_decimal(@dividend_total)}</div>
+          </div>
         </div>
 
+        <%!-- Card 4: F&G Gauge / Holdings fallback --%>
         <div class="terminal-stat">
-          <div class="terminal-stat-label">Holdings</div>
-          <div class="terminal-stat-value">{length(@positions)}</div>
+          <%= if @fear_greed do %>
+            <div class="flex items-center justify-center">
+              {DividendsomaticWeb.Components.PortfolioChart.render_fear_greed_gauge(@fear_greed,
+                id_suffix: "stat"
+              )}
+            </div>
+          <% else %>
+            <div class="terminal-stat-label">Holdings</div>
+            <div class="terminal-stat-value">{length(@positions)}</div>
+          <% end %>
         </div>
       </div>
 
@@ -368,7 +377,7 @@
         </div>
 
         <div class="overflow-x-auto">
-          <div class="min-w-[780px]">
+          <div class="min-w-[1100px]">
             <table class="terminal-table">
               <thead>
                 <tr>
@@ -380,6 +389,10 @@
                   <th scope="col">Cost</th>
                   <th scope="col">P&L</th>
                   <th scope="col">% NAV</th>
+                  <th scope="col">Est. Monthly</th>
+                  <th scope="col">Est. Annual</th>
+                  <th scope="col">Yield</th>
+                  <th scope="col">Est. Rem.</th>
                 </tr>
               </thead>
               <tbody>
@@ -445,6 +458,130 @@
                       <span style="color: var(--terminal-muted);">
                         {format_decimal(pos.weight)}%
                       </span>
+                    </td>
+                    <% sym_div = @per_symbol_dividends[pos.symbol] %>
+                    <td class="terminal-number" style="text-align: right;">
+                      <%= if sym_div && Decimal.compare(sym_div.est_monthly, Decimal.new("0")) == :gt do %>
+                        <span style="color: var(--gain);">
+                          {format_decimal(sym_div.est_monthly)}
+                        </span>
+                        <%= if sym_div.payment_frequency == :monthly do %>
+                          <span
+                            style="display: inline-block; background: var(--terminal-muted); color: var(--terminal-bg); font-size: 0.45rem; font-weight: 700; padding: 0px 3px; border-radius: 3px; margin-left: 3px; vertical-align: middle; letter-spacing: 0.05em;"
+                            title="Monthly dividend payer"
+                          >
+                            M
+                          </span>
+                        <% end %>
+                      <% else %>
+                        <span style="color: var(--terminal-dim); opacity: 0.4;">-</span>
+                      <% end %>
+                    </td>
+                    <td class="terminal-number" style="text-align: right;">
+                      <%= if sym_div && Decimal.compare(sym_div.projected_annual, Decimal.new("0")) == :gt do %>
+                        <span style="color: var(--terminal-dim);">
+                          {format_decimal(sym_div.projected_annual)}
+                        </span>
+                      <% else %>
+                        <span style="color: var(--terminal-dim); opacity: 0.4;">-</span>
+                      <% end %>
+                    </td>
+                    <td class="terminal-number" style="text-align: right;">
+                      <%= if sym_div && sym_div.yield_on_cost do %>
+                        <span style="color: var(--gain);">
+                          {Decimal.to_string(sym_div.yield_on_cost)}%
+                        </span>
+                      <% else %>
+                        <span style="color: var(--terminal-dim); opacity: 0.4;">-</span>
+                      <% end %>
+                    </td>
+                    <td class="terminal-number" style="text-align: right;">
+                      <%= if sym_div && Decimal.compare(sym_div.est_remaining, Decimal.new("0")) == :gt do %>
+                        <span style="color: var(--terminal-muted);">
+                          {format_decimal(sym_div.est_remaining)}
+                        </span>
+                      <% else %>
+                        <span style="color: var(--terminal-dim); opacity: 0.4;">-</span>
+                      <% end %>
+                    </td>
+                  </tr>
+                <% end %>
+                <%!-- Dividend totals row --%>
+                <%= if map_size(@per_symbol_dividends) > 0 do %>
+                  <tr style="border-top: 1px solid var(--terminal-muted);">
+                    <td
+                      colspan="8"
+                      class="terminal-number"
+                      style="text-align: right; font-weight: 600; color: var(--terminal-muted); font-size: 0.625rem; letter-spacing: 0.05em;"
+                    >
+                      DIVIDENDS
+                    </td>
+                    <td class="terminal-number" style="text-align: right; font-weight: 600;">
+                      <span style="color: var(--gain);">
+                        {format_decimal(
+                          @dividend_summary_totals[:est_monthly] || Decimal.new("0")
+                        )}
+                      </span>
+                    </td>
+                    <td class="terminal-number" style="text-align: right; font-weight: 600;">
+                      <span style="color: var(--terminal-dim);">
+                        {format_decimal(
+                          @dividend_summary_totals[:projected_annual] || Decimal.new("0")
+                        )}
+                      </span>
+                    </td>
+                    <td></td>
+                    <td class="terminal-number" style="text-align: right; font-weight: 600;">
+                      <span style="color: var(--terminal-muted);">
+                        {format_decimal(
+                          @dividend_summary_totals[:est_remaining] || Decimal.new("0")
+                        )}
+                      </span>
+                    </td>
+                  </tr>
+                  <%!-- Monthly payers subtotal --%>
+                  <%= if (@dividend_summary_totals[:monthly_payers_count] || 0) > 0 do %>
+                    <tr>
+                      <td
+                        colspan="8"
+                        class="terminal-number"
+                        style="text-align: right; color: var(--terminal-dim); font-size: 0.5625rem; letter-spacing: 0.05em;"
+                      >
+                        MONTHLY PAYERS
+                      </td>
+                      <td class="terminal-number" style="text-align: right;">
+                        <span style="color: var(--terminal-muted);">
+                          {format_decimal(
+                            @dividend_summary_totals[:monthly_payers_est_monthly] ||
+                              Decimal.new("0")
+                          )}
+                        </span>
+                      </td>
+                      <td class="terminal-number" style="text-align: right;">
+                        <span style="color: var(--terminal-dim);">
+                          {format_decimal(
+                            @dividend_summary_totals[:monthly_payers_annual] || Decimal.new("0")
+                          )}
+                        </span>
+                      </td>
+                      <td></td>
+                      <td class="terminal-number" style="text-align: right;">
+                        <span style="color: var(--terminal-dim);">
+                          {format_decimal(
+                            @dividend_summary_totals[:monthly_payers_remaining] ||
+                              Decimal.new("0")
+                          )}
+                        </span>
+                      </td>
+                    </tr>
+                  <% end %>
+                  <%!-- Info note --%>
+                  <tr>
+                    <td
+                      colspan="12"
+                      style="text-align: right; font-family: var(--font-mono); font-size: 0.5rem; color: var(--terminal-dim); opacity: 0.6; padding-top: 2px;"
+                    >
+                      EUR gross (before WHT) &middot; FX at position rate
                     </td>
                   </tr>
                 <% end %>

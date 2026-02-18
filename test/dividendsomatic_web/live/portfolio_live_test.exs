@@ -200,15 +200,18 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       assert html =~ "Portfolio Value"
       assert html =~ "Unrealized P&amp;L"
       assert html =~ "Dividends #{Date.utc_today().year}"
-      assert html =~ "Holdings"
+      assert html =~ "Realized #{Date.utc_today().year}"
+      # F&G gauge replaces Holdings stat when available; otherwise "Holdings" shows
+      assert html =~ "Holdings" or html =~ "fear-greed"
     end
 
-    test "should show projected dividends", %{conn: conn} do
+    test "should show realized year card with sub-lines", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
       {:ok, _view, html} = live(conn, ~p"/")
 
-      assert html =~ "Proj."
+      assert html =~ "Realized #{Date.utc_today().year}"
+      assert html =~ "Dividends:"
     end
   end
 

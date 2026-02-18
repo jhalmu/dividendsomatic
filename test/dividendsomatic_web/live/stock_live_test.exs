@@ -244,7 +244,9 @@ defmodule DividendsomaticWeb.StockLiveTest do
     end
   end
 
-  describe "dividend analytics calculations" do
+  describe "dividend analytics calculations (delegated to DividendAnalytics)" do
+    alias Dividendsomatic.Portfolio.DividendAnalytics
+
     test "should detect quarterly frequency" do
       divs = [
         %{
@@ -265,7 +267,7 @@ defmodule DividendsomaticWeb.StockLiveTest do
         }
       ]
 
-      assert DividendsomaticWeb.StockLive.detect_dividend_frequency(divs) == "quarterly"
+      assert DividendAnalytics.detect_dividend_frequency(divs) == "quarterly"
     end
 
     test "should detect annual frequency" do
@@ -280,7 +282,7 @@ defmodule DividendsomaticWeb.StockLiveTest do
         }
       ]
 
-      assert DividendsomaticWeb.StockLive.detect_dividend_frequency(divs) == "annual"
+      assert DividendAnalytics.detect_dividend_frequency(divs) == "annual"
     end
 
     test "should detect semi-annual frequency" do
@@ -295,7 +297,7 @@ defmodule DividendsomaticWeb.StockLiveTest do
         }
       ]
 
-      assert DividendsomaticWeb.StockLive.detect_dividend_frequency(divs) == "semi-annual"
+      assert DividendAnalytics.detect_dividend_frequency(divs) == "semi-annual"
     end
 
     test "should return unknown for single dividend" do
@@ -306,42 +308,47 @@ defmodule DividendsomaticWeb.StockLiveTest do
         }
       ]
 
-      assert DividendsomaticWeb.StockLive.detect_dividend_frequency(divs) == "unknown"
+      assert DividendAnalytics.detect_dividend_frequency(divs) == "unknown"
     end
   end
 
-  describe "rule of 72 pure function" do
+  describe "rule of 72 pure function (delegated to DividendAnalytics)" do
+    alias Dividendsomatic.Portfolio.DividendAnalytics
+
     test "should compute correct doubling time at 8%" do
-      result = DividendsomaticWeb.StockLive.compute_rule72(8.0)
+      result = DividendAnalytics.compute_rule72(8.0)
 
       assert result.rate == 8.0
       assert result.approx_years == 9.0
       assert result.exact_years == 9.0
+      assert result.rule_variant == "R72"
       assert length(result.milestones) == 5
       assert hd(result.milestones).multiplier == 1
       assert List.last(result.milestones).multiplier == 16
     end
 
     test "should compute correct doubling time at 4%" do
-      result = DividendsomaticWeb.StockLive.compute_rule72(4.0)
+      result = DividendAnalytics.compute_rule72(4.0)
 
       assert result.rate == 4.0
-      assert result.approx_years == 18.0
+      # Adjusted rule: numerator = 72 + round((4-8)/3) = 72 + (-1) = 71
+      assert result.approx_years == 17.8
       assert result.exact_years == 17.7
+      assert result.rule_variant == "R71"
     end
 
     test "should compute correct doubling time at 12%" do
-      result = DividendsomaticWeb.StockLive.compute_rule72(12.0)
+      result = DividendAnalytics.compute_rule72(12.0)
 
       assert result.rate == 12.0
-      assert result.approx_years == 6.0
+      # Adjusted rule: numerator = 72 + round((12-8)/3) = 72 + 1 = 73
+      assert result.approx_years == 6.1
       assert result.exact_years == 6.1
+      assert result.rule_variant == "R73"
     end
 
-    test "should fallback to 8% for invalid rate" do
-      result = DividendsomaticWeb.StockLive.compute_rule72(-5)
-
-      assert result.rate == 8.0
+    test "should return nil for invalid rate" do
+      assert DividendAnalytics.compute_rule72(-5) == nil
     end
   end
 

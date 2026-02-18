@@ -4,6 +4,7 @@ defmodule DividendsomaticWeb.StockLive do
   import DividendsomaticWeb.Helpers.FormatHelpers
 
   alias Dividendsomatic.{Portfolio, Stocks}
+  alias Dividendsomatic.Portfolio.DividendAnalytics
   alias Dividendsomatic.Stocks.SymbolMapper
 
   @impl true
@@ -134,11 +135,11 @@ defmodule DividendsomaticWeb.StockLive do
   defp compute_dividend_analytics([], _quote_data, _holding_stats), do: nil
 
   defp compute_dividend_analytics(dividends_with_income, quote_data, holding_stats) do
-    frequency = detect_dividend_frequency(dividends_with_income)
-    annual_per_share = compute_annual_dividend_per_share(dividends_with_income)
-    yield = compute_dividend_yield(annual_per_share, quote_data)
+    frequency = DividendAnalytics.detect_dividend_frequency(dividends_with_income)
+    annual_per_share = DividendAnalytics.compute_annual_dividend_per_share(dividends_with_income)
+    yield = DividendAnalytics.compute_dividend_yield(annual_per_share, quote_data)
     growth_rate = compute_dividend_growth_rate(dividends_with_income)
-    yield_on_cost = compute_yield_on_cost(annual_per_share, holding_stats)
+    yield_on_cost = DividendAnalytics.compute_yield_on_cost(annual_per_share, holding_stats)
 
     %{
       frequency: frequency,
@@ -147,80 +148,6 @@ defmodule DividendsomaticWeb.StockLive do
       yield_on_cost: yield_on_cost,
       growth_rate: growth_rate
     }
-  end
-
-  @doc false
-  def detect_dividend_frequency(dividends_with_income) when length(dividends_with_income) < 2,
-    do: "unknown"
-
-  def detect_dividend_frequency(dividends_with_income) do
-    dates =
-      dividends_with_income
-      |> Enum.map(& &1.dividend.ex_date)
-      |> Enum.sort(Date)
-
-    gaps =
-      dates
-      |> Enum.chunk_every(2, 1, :discard)
-      |> Enum.map(fn [a, b] -> Date.diff(b, a) end)
-
-    avg_gap = Enum.sum(gaps) / length(gaps)
-
-    cond do
-      avg_gap < 50 -> "monthly"
-      avg_gap < 120 -> "quarterly"
-      avg_gap < 220 -> "semi-annual"
-      avg_gap < 420 -> "annual"
-      true -> "irregular"
-    end
-  end
-
-  defp compute_annual_dividend_per_share(dividends_with_income) do
-    # Use last 12 months of dividends to compute trailing annual per-share
-    cutoff = Date.add(Date.utc_today(), -365)
-
-    recent =
-      Enum.filter(dividends_with_income, fn entry ->
-        Date.compare(entry.dividend.ex_date, cutoff) != :lt
-      end)
-
-    if recent == [] do
-      Decimal.new("0")
-    else
-      Enum.reduce(recent, Decimal.new("0"), fn entry, acc ->
-        Decimal.add(acc, per_share_amount(entry.dividend))
-      end)
-    end
-  end
-
-  defp compute_dividend_yield(_annual_per_share, nil), do: nil
-
-  defp compute_dividend_yield(annual_per_share, quote_data) do
-    price = quote_data.current_price
-
-    if price && Decimal.compare(price, Decimal.new("0")) == :gt do
-      annual_per_share
-      |> Decimal.div(price)
-      |> Decimal.mult(Decimal.new("100"))
-      |> Decimal.round(2)
-    else
-      nil
-    end
-  end
-
-  defp compute_yield_on_cost(_annual_per_share, nil), do: nil
-
-  defp compute_yield_on_cost(annual_per_share, holding_stats) do
-    avg_cost = holding_stats.avg_cost
-
-    if avg_cost && Decimal.compare(avg_cost, Decimal.new("0")) == :gt do
-      annual_per_share
-      |> Decimal.div(avg_cost)
-      |> Decimal.mult(Decimal.new("100"))
-      |> Decimal.round(2)
-    else
-      nil
-    end
   end
 
   defp compute_dividend_growth_rate(dividends_with_income) when length(dividends_with_income) < 2,
@@ -397,30 +324,7 @@ defmodule DividendsomaticWeb.StockLive do
 
   # --- Rule of 72 ---
 
-  @doc false
-  def compute_rule72(rate) when is_number(rate) and rate > 0 do
-    # Exact formula: ln(2) / ln(1 + r/100)
-    exact_years = :math.log(2) / :math.log(1 + rate / 100)
-    # Rule of 72 approximation
-    approx_years = 72 / rate
-
-    # Build doubling milestones (1x, 2x, 4x, 8x, 16x)
-    milestones =
-      for n <- 0..4 do
-        multiplier = :math.pow(2, n)
-        years = exact_years * n
-        %{multiplier: round(multiplier), years: Float.round(years, 1)}
-      end
-
-    %{
-      rate: Float.round(rate + 0.0, 2),
-      exact_years: Float.round(exact_years, 1),
-      approx_years: Float.round(approx_years, 1),
-      milestones: milestones
-    }
-  end
-
-  def compute_rule72(_), do: compute_rule72(8.0)
+  defdelegate compute_rule72(rate), to: DividendAnalytics
 
   # --- Dividend Chart ---
 
@@ -691,26 +595,7 @@ defmodule DividendsomaticWeb.StockLive do
     end)
   end
 
-  # Extract per-share value regardless of amount_type
-  defp per_share_amount(dividend) do
-    amount = dividend.amount || Decimal.new("0")
-
-    if dividend.amount_type == "total_net" do
-      cond do
-        dividend.gross_rate && Decimal.compare(dividend.gross_rate, Decimal.new("0")) == :gt ->
-          dividend.gross_rate
-
-        dividend.quantity_at_record &&
-            Decimal.compare(dividend.quantity_at_record, Decimal.new("0")) == :gt ->
-          Decimal.div(amount, dividend.quantity_at_record)
-
-        true ->
-          Decimal.new("0")
-      end
-    else
-      amount
-    end
-  end
+  defp per_share_amount(dividend), do: DividendAnalytics.per_share_amount(dividend)
 
   defp compute_dividends_with_income(dividends, holdings) do
     holdings_data =

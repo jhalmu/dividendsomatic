@@ -525,6 +525,9 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:recent_dividends, [])
     |> assign(:dividend_by_month, [])
     |> assign(:sparkline_values, [])
+    |> assign(:costs_this_year, Decimal.new("0"))
+    |> assign(:realized_pnl_total, Decimal.new("0"))
+    |> assign(:total_return, Decimal.new("0"))
     |> assign(:fear_greed, nil)
     |> assign(:fx_exposure, [])
     |> assign(:cash_flow, [])
@@ -534,6 +537,8 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
     |> assign(:active_tab, "income")
+    |> assign(:per_symbol_dividends, %{})
+    |> assign(:dividend_summary_totals, %{})
     |> assign(:is_reconstructed, false)
     |> assign(:missing_price_count, 0)
     |> assign(:pnl, %{
@@ -581,7 +586,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
         _ -> nil
       end
 
-    dividend_dashboard = Portfolio.compute_dividend_dashboard(year, chart_date_range)
+    dividend_dashboard = Portfolio.compute_dividend_dashboard(year, chart_date_range, positions)
 
     chart_available_years =
       all_chart_data
@@ -612,7 +617,14 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:projected_dividends, dividend_dashboard.projected_annual)
     |> assign(:recent_dividends, dividend_dashboard.recent_with_income)
     |> assign(:dividend_by_month, dividend_dashboard.by_month_full_range)
+    |> assign(:per_symbol_dividends, dividend_dashboard.per_symbol)
+    |> assign(
+      :dividend_summary_totals,
+      compute_dividend_summary_totals(dividend_dashboard.per_symbol)
+    )
     |> assign(:sparkline_values, sparkline_values)
+    |> assign(:costs_this_year, Portfolio.total_costs_for_year(year))
+    |> assign_realized_and_total_return(year, dividend_dashboard.total_for_year)
     |> assign(:fear_greed, get_fear_greed_for_snapshot(socket, snapshot))
     |> assign(:fx_exposure, [])
     |> assign(:cash_flow, dividend_dashboard.cash_flow_summary)
@@ -637,6 +649,44 @@ defmodule DividendsomaticWeb.PortfolioLive do
   end
 
   defp maybe_load_summary(socket), do: socket
+
+  defp compute_dividend_summary_totals(per_symbol) when map_size(per_symbol) == 0, do: %{}
+
+  defp compute_dividend_summary_totals(per_symbol) do
+    zero = Decimal.new("0")
+
+    monthly_payers =
+      Enum.filter(per_symbol, fn {_sym, data} -> data.payment_frequency == :monthly end)
+
+    {monthly_sum, proj_sum, remaining_sum} =
+      Enum.reduce(per_symbol, {zero, zero, zero}, fn {_sym, data},
+                                                     {monthly_acc, proj_acc, rem_acc} ->
+        {
+          Decimal.add(monthly_acc, data.est_monthly || zero),
+          Decimal.add(proj_acc, data.projected_annual || zero),
+          Decimal.add(rem_acc, data.est_remaining || zero)
+        }
+      end)
+
+    {mp_monthly, mp_annual, mp_remaining} =
+      Enum.reduce(monthly_payers, {zero, zero, zero}, fn {_sym, data}, {m_acc, a_acc, r_acc} ->
+        {
+          Decimal.add(m_acc, data.est_monthly || zero),
+          Decimal.add(a_acc, data.projected_annual || zero),
+          Decimal.add(r_acc, data.est_remaining || zero)
+        }
+      end)
+
+    %{
+      est_monthly: monthly_sum,
+      projected_annual: proj_sum,
+      est_remaining: remaining_sum,
+      monthly_payers_est_monthly: mp_monthly,
+      monthly_payers_annual: mp_annual,
+      monthly_payers_remaining: mp_remaining,
+      monthly_payers_count: length(monthly_payers)
+    }
+  end
 
   defp assign_chart_range(socket) do
     all = socket.assigns.all_chart_data
@@ -694,6 +744,15 @@ defmodule DividendsomaticWeb.PortfolioLive do
     socket
     |> assign(:is_reconstructed, is_reconstructed)
     |> assign(:missing_price_count, missing)
+  end
+
+  defp assign_realized_and_total_return(socket, year, dividend_total) do
+    realized = Portfolio.total_realized_pnl(year)
+    total_return = Decimal.add(realized, dividend_total)
+
+    socket
+    |> assign(:realized_pnl_total, realized)
+    |> assign(:total_return, total_return)
   end
 
   defp assign_pnl_summary(socket) do

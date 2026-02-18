@@ -11,6 +11,7 @@ defmodule Dividendsomatic.Portfolio do
     Cost,
     CsvParser,
     Dividend,
+    DividendAnalytics,
     PortfolioSnapshot,
     Position,
     SoldPosition
@@ -676,7 +677,7 @@ defmodule Dividendsomatic.Portfolio do
   @doc """
   Computes all dividend-related data in one pass.
   """
-  def compute_dividend_dashboard(year, chart_date_range) do
+  def compute_dividend_dashboard(year, chart_date_range, positions \\ []) do
     today = Date.utc_today()
     year_start = Date.new!(year, 1, 1)
     year_end = if year == today.year, do: today, else: Date.new!(year, 12, 31)
@@ -689,13 +690,16 @@ defmodule Dividendsomatic.Portfolio do
     year_by_month = compute_by_month(year_dividends, positions_map)
     total_for_year = sum_monthly_totals(year_by_month)
 
+    per_symbol = compute_per_symbol_dividends(positions, all_dividends, positions_map)
+
     %{
       total_for_year: total_for_year,
       projected_annual: compute_projected_annual(year, today, year_start, total_for_year),
       recent_with_income: compute_recent_with_income(year_dividends, positions_map),
       cash_flow_summary: compute_cash_flow(year, today.year, year_by_month),
       by_month_full_range:
-        compute_chart_range_months(chart_date_range, all_dividends, positions_map, year_by_month)
+        compute_chart_range_months(chart_date_range, all_dividends, positions_map, year_by_month),
+      per_symbol: per_symbol
     }
   end
 
@@ -785,6 +789,135 @@ defmodule Dividendsomatic.Portfolio do
       %{month: month, total: Enum.reduce(incomes, Decimal.new("0"), &Decimal.add/2)}
     end)
     |> Enum.sort_by(& &1.month)
+  end
+
+  defp compute_per_symbol_dividends([], _all_dividends, _positions_map), do: %{}
+
+  defp compute_per_symbol_dividends(positions, all_dividends, positions_map) do
+    current_symbols = MapSet.new(positions, & &1.symbol)
+
+    divs_by_symbol =
+      all_dividends
+      |> Enum.filter(fn d -> MapSet.member?(current_symbols, d.symbol) end)
+      |> Enum.group_by(& &1.symbol)
+
+    pos_map = Map.new(positions, fn p -> {p.symbol, p} end)
+
+    Map.new(divs_by_symbol, fn {symbol, divs} ->
+      pos = Map.get(pos_map, symbol)
+      divs_with_income = build_divs_with_income(divs, positions_map)
+      {symbol, build_symbol_dividend_data(divs_with_income, divs, pos)}
+    end)
+  end
+
+  defp build_divs_with_income(divs, positions_map) do
+    Enum.map(divs, fn div ->
+      %{dividend: div, income: compute_dividend_income(div, positions_map)}
+    end)
+  end
+
+  defp build_symbol_dividend_data(divs_with_income, raw_divs, pos) do
+    annual_per_share = DividendAnalytics.compute_annual_dividend_per_share(divs_with_income)
+    yield_on_cost = symbol_yield_on_cost(annual_per_share, pos)
+    projected_annual = symbol_projected_annual(annual_per_share, pos)
+    ytd_paid = symbol_ytd_paid(divs_with_income)
+
+    %{
+      est_monthly: symbol_est_monthly(projected_annual),
+      annual_per_share: annual_per_share,
+      projected_annual: projected_annual,
+      est_remaining: symbol_est_remaining(projected_annual, ytd_paid),
+      yield_on_cost: yield_on_cost,
+      rule72: symbol_rule72(yield_on_cost),
+      payment_frequency: detect_payment_frequency(raw_divs)
+    }
+  end
+
+  defp detect_payment_frequency(divs) when length(divs) < 3, do: :unknown
+
+  defp detect_payment_frequency(divs) do
+    divs
+    |> Enum.sort_by(& &1.ex_date, Date)
+    |> Enum.map(& &1.ex_date)
+    |> avg_date_interval()
+    |> interval_to_frequency()
+  end
+
+  defp avg_date_interval(dates) do
+    intervals =
+      dates
+      |> Enum.chunk_every(2, 1, :discard)
+      |> Enum.map(fn [a, b] -> Date.diff(b, a) end)
+
+    if intervals == [], do: 0, else: Enum.sum(intervals) / length(intervals)
+  end
+
+  defp interval_to_frequency(avg) when avg > 0 and avg < 45, do: :monthly
+  defp interval_to_frequency(avg) when avg < 120, do: :quarterly
+  defp interval_to_frequency(avg) when avg < 270, do: :semi_annual
+  defp interval_to_frequency(avg) when avg >= 270, do: :annual
+  defp interval_to_frequency(_), do: :unknown
+
+  defp symbol_est_monthly(projected_annual) do
+    projected_annual
+    |> Decimal.div(Decimal.new(12))
+    |> Decimal.round(2)
+  end
+
+  defp symbol_ytd_paid(divs_with_income) do
+    today = Date.utc_today()
+    year_start = Date.new!(today.year, 1, 1)
+
+    divs_with_income
+    |> Enum.filter(fn e ->
+      Date.compare(e.dividend.ex_date, year_start) != :lt and
+        Date.compare(e.dividend.ex_date, today) != :gt
+    end)
+    |> Enum.reduce(Decimal.new("0"), fn e, acc -> Decimal.add(acc, e.income) end)
+  end
+
+  defp symbol_est_remaining(projected_annual, ytd_paid) do
+    Decimal.sub(projected_annual, ytd_paid)
+    |> Decimal.max(Decimal.new("0"))
+    |> Decimal.round(2)
+  end
+
+  defp symbol_yield_on_cost(_annual_per_share, nil), do: nil
+
+  defp symbol_yield_on_cost(annual_per_share, pos) do
+    avg_cost = pos.cost_price
+
+    if avg_cost && Decimal.compare(avg_cost, Decimal.new("0")) == :gt do
+      annual_per_share
+      |> Decimal.div(avg_cost)
+      |> Decimal.mult(Decimal.new("100"))
+      |> Decimal.round(2)
+    else
+      nil
+    end
+  end
+
+  defp symbol_projected_annual(_annual_per_share, nil), do: Decimal.new("0")
+
+  defp symbol_projected_annual(annual_per_share, pos) do
+    qty = pos.quantity || Decimal.new("0")
+
+    if Decimal.compare(qty, Decimal.new("0")) == :gt do
+      fx = pos.fx_rate || Decimal.new("1")
+      annual_per_share |> Decimal.mult(qty) |> Decimal.mult(fx)
+    else
+      Decimal.new("0")
+    end
+  end
+
+  defp symbol_rule72(nil), do: nil
+
+  defp symbol_rule72(yield_on_cost) do
+    if Decimal.compare(yield_on_cost, Decimal.new("0")) == :gt do
+      DividendAnalytics.compute_rule72(Decimal.to_float(yield_on_cost))
+    else
+      nil
+    end
   end
 
   ## FX Exposure
@@ -915,6 +1048,13 @@ defmodule Dividendsomatic.Portfolio do
 
   def total_realized_pnl do
     SoldPosition
+    |> select([s], sum(fragment("COALESCE(?, ?)", s.realized_pnl_eur, s.realized_pnl)))
+    |> Repo.one() || Decimal.new("0")
+  end
+
+  def total_realized_pnl(year) when is_integer(year) do
+    SoldPosition
+    |> where([s], fragment("EXTRACT(YEAR FROM ?)::integer = ?", s.sale_date, ^year))
     |> select([s], sum(fragment("COALESCE(?, ?)", s.realized_pnl_eur, s.realized_pnl)))
     |> Repo.one() || Decimal.new("0")
   end
@@ -1211,6 +1351,20 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   ## Costs
+
+  @doc """
+  Returns total costs for a specific year.
+  """
+  def total_costs_for_year(year) do
+    year_start = Date.new!(year, 1, 1)
+
+    year_end =
+      if year == Date.utc_today().year, do: Date.utc_today(), else: Date.new!(year, 12, 31)
+
+    Cost
+    |> where([c], c.date >= ^year_start and c.date <= ^year_end)
+    |> Repo.aggregate(:sum, :amount) || Decimal.new("0")
+  end
 
   def create_cost(attrs) do
     %Cost{}

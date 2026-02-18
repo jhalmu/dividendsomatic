@@ -1,3 +1,60 @@
+# Session Report — 2026-02-18 (Late Night)
+
+## Stat Cards Rearrange, DividendAnalytics Extraction, Per-Symbol Dividends
+
+### Context
+Rearranged the top stat cards on the portfolio dashboard. Extracted shared dividend analytics functions into a dedicated module (`DividendAnalytics`) and moved per-symbol dividend computations from `StockLive` into the `Portfolio` context so both the portfolio dashboard and stock detail page can use them.
+
+### Changes Made
+
+#### Stat Card Layout (portfolio_live.html.heex, portfolio_live.ex)
+New 4-card layout:
+1. **Unrealized P&L + Dividends** — unrealized P&L with dividends below (restored original)
+2. **Portfolio Value** — main value with costs subtitle, sparkline removed
+3. **Realized {year}** — realized P&L + dividends for the snapshot year (same period), with sub-lines
+4. **F&G Gauge** — unchanged
+
+Removed projected dividends line (`Proj. XX €/yr`) from Card 1 — noisy early in the year. Per-symbol projections still in holdings table.
+
+#### New: `Portfolio.total_realized_pnl/1` (portfolio.ex)
+Year-filtered version of `total_realized_pnl/0` — filters sold positions by `sale_date` year to match dividend period.
+
+#### DividendAnalytics Module (dividend_analytics.ex) — NEW FILE
+Extracted shared functions from `StockLive`:
+- `compute_annual_dividend_per_share/1`
+- `detect_dividend_frequency/1`
+- `compute_dividend_yield/2`
+- `compute_yield_on_cost/2`
+
+Both `StockLive` and `Portfolio` context now delegate to this module.
+
+#### Per-Symbol Dividends in Portfolio Context (portfolio.ex)
+- `compute_dividend_dashboard/3` now accepts positions and returns `per_symbol` map
+- Moved per-symbol computation (est_monthly, projected_annual, yield_on_cost, payment_frequency, rule72) from StockLive into Portfolio context
+- Holdings table dividend columns (Est. Monthly, Est. Annual, Yield, Est. Rem.) now computed server-side
+
+### Validation Summary (6,167 records)
+- 107 issues: 20 info, 87 warning
+- 8 missing_fx_conversion, 8 mixed_amount_types, 12 isin_currency_mismatch, 79 inconsistent_amount
+
+### Files Changed
+
+| Action | File |
+|--------|------|
+| New | `lib/dividendsomatic/portfolio/dividend_analytics.ex` — shared dividend analytics |
+| New | `test/dividendsomatic/portfolio/dividend_analytics_test.exs` — tests |
+| Modified | `lib/dividendsomatic/portfolio.ex` — per-symbol dividends, `total_realized_pnl/1` |
+| Modified | `lib/dividendsomatic_web/live/portfolio_live.ex` — realized/total_return assigns |
+| Modified | `lib/dividendsomatic_web/live/portfolio_live.html.heex` — stat card rearrange |
+| Modified | `lib/dividendsomatic_web/live/stock_live.ex` — delegates to DividendAnalytics |
+| Modified | `test/dividendsomatic_web/live/portfolio_live_test.exs` — updated stat card assertions |
+| Modified | `test/dividendsomatic_web/live/stock_live_test.exs` — updated for refactor |
+
+### Quality
+- 626 tests, 0 failures, 0 credo issues
+
+---
+
 # Session Report — 2026-02-18 (Night)
 
 ## Yahoo Finance Provider, UI Polish, Chart Rounding

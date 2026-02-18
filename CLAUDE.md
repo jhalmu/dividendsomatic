@@ -114,6 +114,9 @@ lib/mix/tasks/
 
 ## Claude Behavioral Rules
 
+### Server Management
+- **Never** start, stop, or restart the Phoenix server (`mix phx.server`). The user manages the server themselves.
+
 ### Session Start
 1. Read MEMO.md for latest session notes
 2. Check GitHub issues: `gh issue list`

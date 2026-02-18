@@ -65,10 +65,18 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.27.0 (Yahoo Finance Profiles + UI Polish)
-**Status:** Full dividend pipeline, Gmail auto-import, Deep Space dashboard, automated validation, Yahoo Finance profiles, 601 tests, 0 credo issues
+**Version:** 0.28.0 (Stat Cards + DividendAnalytics)
+**Status:** Full dividend pipeline, Gmail auto-import, Deep Space dashboard, automated validation, Yahoo Finance profiles, 626 tests, 0 credo issues
 
-**Latest session (2026-02-18 night):**
+**Latest session (2026-02-18 late night):**
+- **Stat card rearrange** — Unrealized P&L + Dividends | Portfolio Value + Costs | Realized {year} | F&G
+- **DividendAnalytics module** — extracted shared functions from StockLive into `Portfolio.DividendAnalytics`
+- **Per-symbol dividends** — moved from StockLive into Portfolio context (holdings table columns)
+- **`total_realized_pnl/1`** — year-filtered realized P&L for same-period card
+- Removed projected dividends from stat card (noisy early in year)
+- 626 tests, 0 failures, 0 credo issues
+
+**Previous session (2026-02-18 night):**
 - **Yahoo Finance profile provider** — cookie+crumb+quoteSummary for sector/industry data
 - **Finnish stock profiles** — fallback chain: Finnhub → Yahoo → holdings data, with profile merging
 - **Collapsible sections** — Dividends Received + Previous Positions with totals in headers
