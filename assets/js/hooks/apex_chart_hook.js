@@ -1,8 +1,44 @@
 import ApexCharts from "apexcharts"
 
+function addFormatters(config) {
+  const fmt = (val) =>
+    val != null
+      ? val.toLocaleString("fi-FI", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        }) + " €"
+      : ""
+
+  const fmtTwo = (val) =>
+    val != null
+      ? val.toLocaleString("fi-FI", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }) + " €"
+      : ""
+
+  // Y-axis label formatter
+  if (Array.isArray(config.yaxis)) {
+    config.yaxis.forEach((axis) => {
+      axis.labels = axis.labels || {}
+      axis.labels.formatter = fmt
+    })
+  } else if (config.yaxis) {
+    config.yaxis.labels = config.yaxis.labels || {}
+    config.yaxis.labels.formatter = fmt
+  }
+
+  // Tooltip value formatter (show 2 decimals)
+  config.tooltip = config.tooltip || {}
+  config.tooltip.y = config.tooltip.y || {}
+  config.tooltip.y.formatter = fmtTwo
+
+  return config
+}
+
 const ApexChartHook = {
   mounted() {
-    const config = JSON.parse(this.el.dataset.chartConfig)
+    const config = addFormatters(JSON.parse(this.el.dataset.chartConfig))
     this.chart = new ApexCharts(this.el, config)
     this.chart.render()
 
@@ -13,7 +49,7 @@ const ApexChartHook = {
   },
   updated() {
     if (!this.chart) {
-      const config = JSON.parse(this.el.dataset.chartConfig)
+      const config = addFormatters(JSON.parse(this.el.dataset.chartConfig))
       this.chart = new ApexCharts(this.el, config)
       this.chart.render()
     }

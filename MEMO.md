@@ -65,10 +65,20 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.26.0 (FX Currency Conversion Fix)
-**Status:** Full dividend pipeline, Gmail auto-import, Deep Space dashboard, automated validation, 601 tests, 0 credo issues
+**Version:** 0.27.0 (Yahoo Finance Profiles + UI Polish)
+**Status:** Full dividend pipeline, Gmail auto-import, Deep Space dashboard, automated validation, Yahoo Finance profiles, 601 tests, 0 credo issues
 
-**Latest session (2026-02-18 evening):**
+**Latest session (2026-02-18 night):**
+- **Yahoo Finance profile provider** — cookie+crumb+quoteSummary for sector/industry data
+- **Finnish stock profiles** — fallback chain: Finnhub → Yahoo → holdings data, with profile merging
+- **Collapsible sections** — Dividends Received + Previous Positions with totals in headers
+- **Company Info in header** — removed separate card, merged into price header
+- **Chart rounding** — ApexCharts formatters (fi-FI locale), data rounded at serialization
+- **Removed Recent Dividends** — duplicate of dividend history chart
+- **Deleted 56 duplicate total_net records** — cross-source per_share/total_net duplicates
+- 601 tests, 0 failures, 0 credo issues
+
+**Previous session (2026-02-18 evening):**
 - **FX currency conversion fix** — smart resolution: dividend fx_rate → position fx_rate (if currencies match) → fallback
 - **Backfilled 63 total_net dividends** with fx_rate from position data (71→8 remaining)
 - **Shares + Div Currency columns** in Dividends Received table

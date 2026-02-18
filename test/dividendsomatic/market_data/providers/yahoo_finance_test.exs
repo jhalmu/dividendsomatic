@@ -31,8 +31,16 @@ defmodule Dividendsomatic.MarketData.Providers.YahooFinanceTest do
   end
 
   describe "get_company_profile/1" do
-    test "should return not_supported" do
-      assert {:error, :not_supported} = YahooFinance.get_company_profile("AAPL")
+    test "should return profile with sector and industry" do
+      case YahooFinance.get_company_profile("AAPL") do
+        {:ok, profile} ->
+          assert profile[:sector] != nil
+          assert profile[:industry] != nil
+
+        {:error, _reason} ->
+          # May fail in CI/test without network access
+          :ok
+      end
     end
   end
 

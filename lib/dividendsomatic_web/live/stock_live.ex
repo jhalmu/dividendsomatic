@@ -4,14 +4,19 @@ defmodule DividendsomaticWeb.StockLive do
   import DividendsomaticWeb.Helpers.FormatHelpers
 
   alias Dividendsomatic.{Portfolio, Stocks}
+  alias Dividendsomatic.Stocks.SymbolMapper
 
   @impl true
   def mount(%{"symbol" => symbol}, _session, socket) do
     holdings = Portfolio.list_holdings_by_symbol(symbol)
     all_dividends = Portfolio.list_dividends_by_symbol(symbol)
-    company_profile = get_company_profile(symbol)
-    quote_data = get_stock_quote(symbol)
-    financial_metrics = get_financial_metrics(symbol)
+    api_symbol = resolve_api_symbol(symbol, holdings)
+
+    company_profile =
+      merge_profile(get_company_profile(api_symbol), profile_from_holdings(holdings))
+
+    quote_data = get_stock_quote(api_symbol)
+    financial_metrics = get_financial_metrics(api_symbol)
     isin = get_isin(holdings)
 
     company_note =
@@ -1138,6 +1143,93 @@ defmodule DividendsomaticWeb.StockLive do
 
   # --- External Data ---
 
+  defp resolve_api_symbol(symbol, holdings) do
+    case holdings do
+      [h | _] ->
+        # Try ISIN-based resolution first (uses symbol_mappings cache + exchange suffix)
+        case SymbolMapper.resolve(h.isin) do
+          {:ok, finnhub_symbol} -> finnhub_symbol
+          _ -> apply_exchange_suffix(symbol, h.exchange)
+        end
+
+      _ ->
+        symbol
+    end
+  end
+
+  defp apply_exchange_suffix(symbol, nil), do: symbol
+
+  defp apply_exchange_suffix(symbol, exchange) do
+    suffix = Map.get(SymbolMapper.exchange_suffix_map(), exchange, "")
+    symbol <> suffix
+  end
+
+  @exchange_names %{
+    "HEX" => "Helsinki",
+    "SFB" => "Stockholm",
+    "OSE" => "Oslo",
+    "CSE" => "Copenhagen",
+    "TSE" => "Toronto",
+    "FWB" => "Frankfurt",
+    "FWB2" => "Frankfurt",
+    "IBIS" => "Xetra",
+    "LSE" => "London",
+    "NYSE" => "NYSE",
+    "NASDAQ" => "NASDAQ",
+    "ARCA" => "NYSE Arca",
+    "AMEX" => "NYSE American"
+  }
+
+  @isin_country %{
+    "FI" => "FI",
+    "SE" => "SE",
+    "NO" => "NO",
+    "DK" => "DK",
+    "US" => "US",
+    "CA" => "CA",
+    "GB" => "GB",
+    "IE" => "IE",
+    "DE" => "DE",
+    "FR" => "FR",
+    "NL" => "NL",
+    "LU" => "LU"
+  }
+
+  # Merge API profile with holdings fallback — fill nil fields from holdings
+  defp merge_profile(nil, nil), do: nil
+  defp merge_profile(nil, fallback), do: fallback
+  defp merge_profile(profile, nil), do: profile
+
+  defp merge_profile(profile, fallback) do
+    # Convert struct to map if needed
+    profile_map = if is_struct(profile), do: Map.from_struct(profile), else: profile
+    fallback_map = if is_struct(fallback), do: Map.from_struct(fallback), else: fallback
+
+    Map.merge(fallback_map, profile_map, fn _k, fallback_v, profile_v ->
+      if is_nil(profile_v), do: fallback_v, else: profile_v
+    end)
+  end
+
+  defp profile_from_holdings([]), do: nil
+
+  defp profile_from_holdings([h | _]) do
+    country =
+      if h.isin && String.length(h.isin) >= 2 do
+        prefix = String.slice(h.isin, 0, 2)
+        Map.get(@isin_country, prefix)
+      end
+
+    %{
+      name: h.name,
+      country: country,
+      currency: h.currency,
+      exchange: Map.get(@exchange_names, h.exchange, h.exchange),
+      industry: nil,
+      ipo_date: nil,
+      market_cap: nil
+    }
+  end
+
   defp get_company_profile(symbol) do
     case Stocks.get_company_profile(symbol) do
       {:ok, profile} -> profile
@@ -1221,11 +1313,10 @@ defmodule DividendsomaticWeb.StockLive do
     Enum.reject(links, &is_nil/1)
   end
 
-  defp get_exchange(holdings, company_profile) do
-    cond do
-      company_profile && company_profile.exchange -> company_profile.exchange
-      holdings != [] -> hd(holdings).exchange
-      true -> nil
+  defp get_exchange(holdings, _company_profile) do
+    case holdings do
+      [h | _] -> h.exchange
+      _ -> nil
     end
   end
 

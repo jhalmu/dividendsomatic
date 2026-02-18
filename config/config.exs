@@ -91,6 +91,7 @@ config :dividendsomatic, :market_data,
     ],
     profile: [
       Dividendsomatic.MarketData.Providers.Finnhub,
+      Dividendsomatic.MarketData.Providers.YahooFinance,
       Dividendsomatic.MarketData.Providers.Eodhd
     ],
     metrics: [

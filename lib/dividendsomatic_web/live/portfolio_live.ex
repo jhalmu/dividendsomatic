@@ -723,13 +723,13 @@ defmodule DividendsomaticWeb.PortfolioLive do
     value_series =
       Enum.map(chart_data, fn point ->
         ts = date_to_unix_ms(point.date)
-        [ts, point.value_float]
+        [ts, Float.round(point.value_float, 0)]
       end)
 
     cost_series =
       Enum.map(chart_data, fn point ->
         ts = date_to_unix_ms(point.date)
-        [ts, point.cost_basis_float]
+        [ts, Float.round(point.cost_basis_float, 0)]
       end)
 
     annotations = %{
@@ -767,13 +767,13 @@ defmodule DividendsomaticWeb.PortfolioLive do
 
     monthly_data =
       Enum.map(dividend_by_month, fn m ->
-        Decimal.to_float(m.total)
+        Float.round(Decimal.to_float(m.total), 2)
       end)
 
     # Compute cumulative from monthly totals
     cumulative_data =
       dividend_by_month
-      |> Enum.scan(0.0, fn m, acc -> acc + Decimal.to_float(m.total) end)
+      |> Enum.scan(0.0, fn m, acc -> Float.round(acc + Decimal.to_float(m.total), 2) end)
 
     %{
       series: [

@@ -586,27 +586,6 @@
             data-chart-config={Jason.encode!(build_dividend_apex_config(div_json))}
           >
           </div>
-          <%= if length(@recent_dividends) > 0 do %>
-            <div
-              class="flex items-center gap-[var(--space-xs)] flex-wrap p-[var(--space-xs)]"
-              style="font-family: var(--font-mono); font-size: 0.625rem;"
-            >
-              <span style="color: var(--terminal-dim); font-size: 0.5625rem; text-transform: uppercase; letter-spacing: 0.05em;">
-                Recent
-              </span>
-              <%= for entry <- @recent_dividends do %>
-                <span class="inline-flex items-center gap-1" style="color: var(--terminal-muted);">
-                  <span style="color: var(--terminal-text); font-weight: 500;">
-                    {entry.dividend.symbol}
-                  </span>
-                  <span style="color: var(--terminal-dim);">
-                    {Calendar.strftime(entry.dividend.ex_date, "%b %d")}
-                  </span>
-                  <span style="color: var(--gain);">+{format_euro_decimal(entry.income)}</span>
-                </span>
-              <% end %>
-            </div>
-          <% end %>
         </div>
       <% end %>
 
@@ -704,28 +683,6 @@
                   <% end %>
                 </tbody>
               </table>
-            </div>
-          </div>
-        <% end %>
-
-        <%!-- Recent Dividends (if more detail desired) --%>
-        <%= if length(@recent_dividends) > 0 do %>
-          <div class="terminal-card p-[var(--space-sm)]" data-testid="recent-dividends">
-            <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
-              Recent Dividends
-            </div>
-            <div class="mt-[var(--space-xs)]">
-              <%= for entry <- @recent_dividends do %>
-                <div class="terminal-dividend-row">
-                  <span class="terminal-dividend-symbol">{entry.dividend.symbol}</span>
-                  <span class="terminal-dividend-date">
-                    {Calendar.strftime(entry.dividend.ex_date, "%Y-%m-%d")}
-                  </span>
-                  <span class="terminal-dividend-amount">
-                    +{format_euro_decimal(entry.income)}
-                  </span>
-                </div>
-              <% end %>
             </div>
           </div>
         <% end %>

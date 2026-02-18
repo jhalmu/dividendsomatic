@@ -8,7 +8,7 @@ description: Use when data looks wrong, after imports, during EOD, or when inves
 ## Quick Commands
 
 ```bash
-mix validate.data              # Run all 6 checks
+mix validate.data              # Run all 7 checks
 mix validate.data --suggest    # Suggest threshold adjustments
 mix validate.data --export     # Export timestamped snapshot + latest
 mix validate.data --compare    # Compare current vs latest snapshot
@@ -16,7 +16,7 @@ mix check.all                  # Validation + gap analysis in one pass
 mix report.gaps                # Data gap analysis only
 ```
 
-## The 6 Checks
+## The 7 Checks
 
 ### 1. Invalid Currencies (`invalid_currencies`)
 - **Severity**: warning
@@ -50,6 +50,12 @@ mix report.gaps                # Data gap analysis only
 - **What**: Same ISIN+date appears in multiple records
 - **Triage**: Different sources (ibkr vs yfinance) may both have the dividend. Keep the more detailed one (usually ibkr)
 
+### 7. Missing FX Conversion (`missing_fx_conversion`)
+- **Severity**: warning
+- **What**: `total_net` dividend in non-EUR currency has nil or 1.0 `fx_rate`
+- **Triage**: Income will be inflated (e.g., 400 SEK treated as 400 EUR). Backfill fx_rate from matching position data or correct manually
+- **Fix script**: `priv/scripts/backfill_fx_rate.exs` — matches position fx_rate where dividend currency == position currency
+
 ## Currency Threshold Reference
 
 | Currency | Threshold | ~USD Equivalent |
@@ -69,6 +75,29 @@ mix report.gaps                # Data gap analysis only
 | SEK      | 550       | $50             |
 | DKK      | 350       | $50             |
 | TWD      | 1600      | $50             |
+
+## Cross-Source Duplicate Pattern: per_share vs total_net
+
+When a stock has both Yahoo (per_share, uses ex-date) and IBKR (total_net, uses pay-date) records, the same dividend can appear twice with different dates (±30 days apart). This causes **double-counting in income calculations**.
+
+### How to detect
+```elixir
+# For each total_net record, check if a per_share exists within ±30 days
+for t <- total_net_records,
+    Enum.any?(per_share_records, fn p -> abs(Date.diff(p.ex_date, t.ex_date)) <= 30 end),
+    do: t  # these are duplicates
+```
+
+### Resolution
+- **Delete the total_net** when a matching per_share exists (per_share is preferred — has per-share rate, works with quantity for income calc)
+- **Keep total_net** when no per_share exists (stocks only in IBKR, no Yahoo data)
+- **Fix script**: `priv/scripts/delete_duplicate_total_net.exs`
+
+### Known affected stocks (historical)
+ORC (15), AGNC (12), HRZN (8), PFLT (5), SAR (3), CSWC (2), MVO (2), plus 9 others with 1 each. Total: 56 duplicates removed Feb 2026.
+
+### Prevention
+The `mixed_amount_types_per_stock` check (info severity) flags stocks with both types. When investigating, use the ±30 day overlap test above to determine if duplicates exist.
 
 ## Discovering New Patterns
 

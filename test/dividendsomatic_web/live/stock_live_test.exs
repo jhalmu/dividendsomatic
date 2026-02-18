@@ -216,7 +216,7 @@ defmodule DividendsomaticWeb.StockLiveTest do
 
       # 0.50 * 1000 * 1.0 = 500.00 EUR
       assert html =~ "500"
-      assert html =~ "Total:"
+      assert html =~ "Dividends Received"
     end
 
     test "should show dividend analytics section", %{conn: conn} do
@@ -532,7 +532,7 @@ defmodule DividendsomaticWeb.StockLiveTest do
       now = DateTime.truncate(DateTime.utc_now(), :second)
 
       Dividendsomatic.Repo.insert!(%Dividendsomatic.Stocks.StockMetric{
-        symbol: "KESKOB",
+        symbol: "KESKOB.HE",
         pe_ratio: Decimal.new("15.20"),
         roe: Decimal.new("22.50"),
         net_margin: Decimal.new("8.30"),
@@ -558,7 +558,7 @@ defmodule DividendsomaticWeb.StockLiveTest do
       now = DateTime.truncate(DateTime.utc_now(), :second)
 
       Dividendsomatic.Repo.insert!(%Dividendsomatic.Stocks.StockMetric{
-        symbol: "KESKOB",
+        symbol: "KESKOB.HE",
         pe_ratio: Decimal.new("15.20"),
         fetched_at: now
       })
@@ -574,7 +574,7 @@ defmodule DividendsomaticWeb.StockLiveTest do
       today = DateTime.utc_now() |> DateTime.truncate(:second)
 
       Dividendsomatic.Repo.insert!(%Dividendsomatic.Stocks.StockMetric{
-        symbol: "KESKOB",
+        symbol: "KESKOB.HE",
         pe_ratio: Decimal.new("15.20"),
         fetched_at: today
       })

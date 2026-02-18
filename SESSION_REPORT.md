@@ -1,3 +1,67 @@
+# Session Report — 2026-02-18 (Night)
+
+## Yahoo Finance Provider, UI Polish, Chart Rounding
+
+### Context
+Finnish stocks (KESKOB, NESTE, SAMPO, AKTIA) had no company profiles because Finnhub free tier returns 403 for Helsinki Exchange. Also polished the stock detail page (collapsible sections, company info in header) and main page (chart number rounding, removed redundant Recent Dividends).
+
+### Changes Made
+
+#### Yahoo Finance Profile Provider (`yahoo_finance.ex`)
+- Implemented cookie+crumb+quoteSummary API flow for sector/industry data
+- `fc.yahoo.com` → extract Set-Cookie → `v1/test/getcrumb` → `v10/finance/quoteSummary?modules=assetProfile`
+- Returns sector, industry, country, website
+- Added to provider chain: Finnhub → Yahoo → Eodhd (`config.exs`)
+- Extracted `extract_cookie/1` + `fetch_crumb/1` helpers (Credo nesting fix)
+
+#### Finnish Stock Profile Fallback (`stock_live.ex`)
+- `resolve_api_symbol/2` — resolves portfolio symbols (KESKOB) to API symbols (KESKOB.HE) via SymbolMapper
+- `profile_from_holdings/1` — builds basic profile from IBKR position data (name, exchange, currency, country from ISIN)
+- `merge_profile/2` — combines API profile with holdings fallback, preferring non-nil API values
+- `upsert_profile` now preserves existing non-nil DB values when updating with partial API data (`stocks.ex`)
+
+#### Stock Detail Page UI (`stock_live.html.heex`)
+- **Collapsible sections** — Dividends Received and Previous Positions wrapped in `<details>` with totals in summary line
+- **Section reorder** — Dividends Received → Previous Positions → Investment Notes → External Links
+- **Company Info in header** — market_cap, currency, IPO date moved to header metadata; separate card removed
+- **Previous Positions P&L** — total realized P&L in collapsed heading with gain/loss colors
+
+#### Main Page (`portfolio_live.html.heex`, `portfolio_live.ex`, `apex_chart_hook.js`)
+- **Removed Recent Dividends** — both inline summary and separate card (duplicated dividend history chart info)
+- **Chart number rounding** — portfolio values rounded to integers, dividend values to 2 decimals
+- **ApexCharts formatters** — y-axis shows rounded integers with € suffix, tooltips show 2 decimal places (fi-FI locale)
+
+#### Data Cleanup
+- Deleted 56 duplicate total_net dividend records via `priv/scripts/delete_duplicate_total_net.exs`
+- Updated `.claude/skills/data-integrity.md` with cross-source duplicate knowledge + check #7
+
+### Validation Summary (6,167 records)
+- 107 issues: 20 info, 87 warning
+- 8 missing_fx_conversion, 8 mixed_amount_types, 12 isin_currency_mismatch, 79 inconsistent_amount
+- 0 invalid currencies, 0 suspicious amounts, 0 cross-source duplicates
+
+### Files Changed
+
+| Action | File |
+|--------|------|
+| Modified | `lib/dividendsomatic/market_data/providers/yahoo_finance.ex` — profile fetching via cookie+crumb API |
+| Modified | `lib/dividendsomatic/stocks.ex` — nil-safe upsert, `merge_non_nil` helper |
+| Modified | `lib/dividendsomatic_web/live/stock_live.ex` — API symbol resolution, profile merging, holdings fallback |
+| Modified | `lib/dividendsomatic_web/live/stock_live.html.heex` — collapsible sections, company info in header |
+| Modified | `lib/dividendsomatic_web/live/portfolio_live.ex` — chart data rounding |
+| Modified | `lib/dividendsomatic_web/live/portfolio_live.html.heex` — removed Recent Dividends sections |
+| Modified | `assets/js/hooks/apex_chart_hook.js` — number formatters for axes and tooltips |
+| Modified | `config/config.exs` — Yahoo in profile provider chain |
+| Modified | `.claude/skills/data-integrity.md` — check #7, cross-source duplicates |
+| Modified | `test/*/yahoo_finance_test.exs` — updated profile test |
+| Modified | `test/*/stock_live_test.exs` — updated for KESKOB.HE + collapsible sections |
+| New | `priv/scripts/delete_duplicate_total_net.exs` — one-time cleanup script |
+
+### Quality
+- 601 tests, 0 failures, 0 credo issues
+
+---
+
 # Session Report — 2026-02-18 (Evening)
 
 ## Fix Dividend FX Currency Conversion + Backfill

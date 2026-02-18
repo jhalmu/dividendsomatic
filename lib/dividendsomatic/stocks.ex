@@ -208,10 +208,21 @@ defmodule Dividendsomatic.Stocks do
         |> Repo.insert()
 
       existing ->
+        merged = merge_non_nil(attrs, existing)
+
         existing
-        |> CompanyProfile.changeset(attrs)
+        |> CompanyProfile.changeset(merged)
         |> Repo.update()
     end
+  end
+
+  # Don't overwrite existing non-nil values with nil from partial API responses
+  defp merge_non_nil(attrs, existing) do
+    Enum.reduce(attrs, %{}, fn {k, v}, acc ->
+      if is_nil(v) and not is_nil(Map.get(existing, k)),
+        do: acc,
+        else: Map.put(acc, k, v)
+    end)
   end
 
   defp upsert_metrics(symbol, data) do
