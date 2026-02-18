@@ -58,6 +58,21 @@ defmodule Dividendsomatic.Portfolio.DividendValidatorTest do
       div = build_dividend("TEST", nil, ~D[2024-01-01], "1.00", "USD")
       assert DividendValidator.isin_currency_mismatches([div]) == []
     end
+
+    test "should accept IE ISIN with USD currency" do
+      div = build_dividend("CRH", "IE0001827041", ~D[2024-01-01], "1.00", "USD")
+      assert DividendValidator.isin_currency_mismatches([div]) == []
+    end
+
+    test "should accept IE ISIN with EUR currency" do
+      div = build_dividend("KERRY", "IE0004906560", ~D[2024-01-01], "1.00", "EUR")
+      assert DividendValidator.isin_currency_mismatches([div]) == []
+    end
+
+    test "should skip unknown country prefixes not in map" do
+      div = build_dividend("TEST", "XX1234567890", ~D[2024-01-01], "1.00", "BRL")
+      assert DividendValidator.isin_currency_mismatches([div]) == []
+    end
   end
 
   describe "suspicious_amounts/1" do
@@ -99,6 +114,27 @@ defmodule Dividendsomatic.Portfolio.DividendValidatorTest do
     test "should not flag normal JPY amount under 7500" do
       div = build_dividend("8031.T", nil, ~D[2024-01-01], "55.00", "JPY")
       assert DividendValidator.suspicious_amounts([div]) == []
+    end
+
+    test "should not flag SEK amount at 549 (under 550 threshold)" do
+      div = build_dividend("TEST", nil, ~D[2024-01-01], "549.00", "SEK")
+      assert DividendValidator.suspicious_amounts([div]) == []
+    end
+
+    test "should flag SEK amount at 551 (over 550 threshold)" do
+      div = build_dividend("TEST", nil, ~D[2024-01-01], "551.00", "SEK")
+      issues = DividendValidator.suspicious_amounts([div])
+      assert length(issues) == 1
+      assert hd(issues).type == :suspicious_amount
+    end
+
+    test "should use default threshold of 50 for unknown currency" do
+      div = build_dividend("TEST", nil, ~D[2024-01-01], "51.00", "BRL")
+      issues = DividendValidator.suspicious_amounts([div])
+      assert length(issues) == 1
+
+      div_under = build_dividend("TEST", nil, ~D[2024-01-01], "49.00", "BRL")
+      assert DividendValidator.suspicious_amounts([div_under]) == []
     end
   end
 
@@ -153,6 +189,27 @@ defmodule Dividendsomatic.Portfolio.DividendValidatorTest do
 
       assert DividendValidator.inconsistent_amounts_per_stock(divs) == []
     end
+
+    test "should fall back to symbol key when ISIN is nil" do
+      divs = [
+        build_dividend("MYSTERY", nil, ~D[2024-01-01], "0.10", "USD"),
+        build_dividend("MYSTERY", nil, ~D[2024-02-01], "0.10", "USD"),
+        build_dividend("MYSTERY", nil, ~D[2024-03-01], "50.00", "USD")
+      ]
+
+      issues = DividendValidator.inconsistent_amounts_per_stock(divs)
+      assert length(issues) == 1
+      assert hd(issues).type == :inconsistent_amount
+    end
+
+    test "should not flag when all amounts are zero (median=0 guard)" do
+      divs = [
+        build_dividend("ZERO", nil, ~D[2024-01-01], "0.001", "USD"),
+        build_dividend("ZERO", nil, ~D[2024-02-01], "0.001", "USD")
+      ]
+
+      assert DividendValidator.inconsistent_amounts_per_stock(divs) == []
+    end
   end
 
   describe "mixed_amount_types_per_stock/1" do
@@ -197,6 +254,32 @@ defmodule Dividendsomatic.Portfolio.DividendValidatorTest do
       assert :inconsistent_amount in types
       assert :suspicious_amount in types
     end
+
+    test "should count all severity types in by_severity map" do
+      # Insert data that triggers :warning (suspicious_amount) and :info (mixed_amount_types)
+      insert_dividend("BIG", "US9999999999", ~D[2024-01-15], "100.00", "USD", "ibkr",
+        amount_type: "per_share"
+      )
+
+      insert_dividend("BIG", "US9999999999", ~D[2024-02-15], "500.00", "USD", "ibkr",
+        amount_type: "total_net"
+      )
+
+      report = DividendValidator.validate()
+      assert is_map(report.by_severity)
+      assert report.by_severity[:warning] >= 1
+      assert report.by_severity[:info] >= 1
+    end
+
+    test "should return issues grouped correctly with multiple check types" do
+      # suspicious_amount + isin_currency_mismatch
+      insert_dividend("WEIRDUS", "US1234567890", ~D[2024-01-15], "200.00", "EUR")
+
+      report = DividendValidator.validate()
+      types = Enum.map(report.issues, & &1.type)
+      assert :suspicious_amount in types or :isin_currency_mismatch in types
+      assert report.issue_count == length(report.issues)
+    end
   end
 
   describe "cross_source_duplicates/0" do
@@ -212,6 +295,14 @@ defmodule Dividendsomatic.Portfolio.DividendValidatorTest do
     test "should not flag unique ISIN+date combinations" do
       insert_dividend("AAPL", "US0378331005", ~D[2024-01-15], "0.24", "USD")
       insert_dividend("AAPL", "US0378331005", ~D[2024-04-15], "0.25", "USD")
+
+      dupes = DividendValidator.cross_source_duplicates()
+      assert dupes == []
+    end
+
+    test "should not flag records where ISIN is nil" do
+      insert_dividend("MYSTERY", nil, ~D[2024-01-15], "1.00", "USD", "ibkr")
+      insert_dividend("MYSTERY2", nil, ~D[2024-01-15], "1.00", "USD", "yfinance")
 
       dupes = DividendValidator.cross_source_duplicates()
       assert dupes == []
@@ -252,6 +343,55 @@ defmodule Dividendsomatic.Portfolio.DividendValidatorTest do
     end
   end
 
+  describe "missing_fx_conversion/1" do
+    test "should flag total_net non-EUR dividend with nil fx_rate" do
+      div =
+        build_dividend("TELIA1", "SE0000667925", ~D[2024-08-03], "400.00", "SEK",
+          amount_type: "total_net"
+        )
+
+      issues = DividendValidator.missing_fx_conversion([div])
+      assert length(issues) == 1
+      assert hd(issues).type == :missing_fx_conversion
+      assert hd(issues).severity == :warning
+    end
+
+    test "should flag total_net non-EUR dividend with fx_rate of 1.0" do
+      div =
+        build_dividend("TELIA1", "SE0000667925", ~D[2024-08-03], "400.00", "SEK",
+          amount_type: "total_net",
+          fx_rate: "1"
+        )
+
+      issues = DividendValidator.missing_fx_conversion([div])
+      assert length(issues) == 1
+    end
+
+    test "should not flag total_net EUR dividend" do
+      div =
+        build_dividend("KESKOB", "FI0009000202", ~D[2024-04-15], "150.00", "EUR",
+          amount_type: "total_net"
+        )
+
+      assert DividendValidator.missing_fx_conversion([div]) == []
+    end
+
+    test "should not flag total_net non-EUR dividend with valid fx_rate" do
+      div =
+        build_dividend("TELIA1", "SE0000667925", ~D[2024-08-03], "400.00", "SEK",
+          amount_type: "total_net",
+          fx_rate: "0.094"
+        )
+
+      assert DividendValidator.missing_fx_conversion([div]) == []
+    end
+
+    test "should not flag per_share dividends regardless of fx_rate" do
+      div = build_dividend("AAPL", "US0378331005", ~D[2024-01-15], "0.24", "USD")
+      assert DividendValidator.missing_fx_conversion([div]) == []
+    end
+  end
+
   defp build_dividend(symbol, isin, ex_date, amount, currency, opts \\ []) do
     %Dividend{
       symbol: symbol,
@@ -260,6 +400,7 @@ defmodule Dividendsomatic.Portfolio.DividendValidatorTest do
       amount: Decimal.new(amount),
       currency: currency,
       amount_type: Keyword.get(opts, :amount_type, "per_share"),
+      fx_rate: opts |> Keyword.get(:fx_rate) |> maybe_decimal(),
       gross_rate: opts |> Keyword.get(:gross_rate) |> maybe_decimal(),
       net_amount: opts |> Keyword.get(:net_amount) |> maybe_decimal(),
       quantity_at_record: opts |> Keyword.get(:quantity_at_record) |> maybe_decimal()

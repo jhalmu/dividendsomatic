@@ -43,6 +43,7 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
       suspicious_amounts(dividends),
       inconsistent_amounts_per_stock(dividends),
       mixed_amount_types_per_stock(dividends),
+      missing_fx_conversion(dividends),
       cross_source_duplicates()
     ]
 
@@ -207,6 +208,29 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
 
   defp count_type(group, type) do
     Enum.count(group, &(&1.amount_type == type))
+  end
+
+  @doc """
+  Flags total_net dividends in non-EUR currencies where fx_rate is missing or 1.0,
+  which would produce inflated income (native amount treated as EUR).
+  """
+  def missing_fx_conversion(dividends) do
+    dividends
+    |> Enum.filter(fn d ->
+      d.amount_type == "total_net" and d.currency != "EUR" and
+        (is_nil(d.fx_rate) or Decimal.equal?(d.fx_rate, Decimal.new("1")))
+    end)
+    |> Enum.map(fn d ->
+      %{
+        severity: :warning,
+        type: :missing_fx_conversion,
+        symbol: d.symbol,
+        isin: d.isin,
+        ex_date: d.ex_date,
+        detail:
+          "total_net #{d.currency} dividend without fx_rate — income will be inflated (~#{d.currency} treated as EUR)"
+      }
+    end)
   end
 
   @doc """

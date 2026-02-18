@@ -179,62 +179,6 @@
       </div>
     <% end %>
     
-<!-- Previous Positions (Sold) -->
-    <%= if length(@sold_for_symbol) > 0 do %>
-      <div
-        class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-1"
-        data-testid="sold-positions"
-      >
-        <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
-          Previous Positions ({length(@sold_for_symbol)} sold)
-        </div>
-        <div class="overflow-x-auto mt-[var(--space-xs)]">
-          <table class="terminal-table">
-            <thead>
-              <tr>
-                <th scope="col">Qty</th>
-                <th scope="col" style="text-align: right;">Buy</th>
-                <th scope="col" style="text-align: right;">Sell</th>
-                <th scope="col" style="text-align: right;">P&L</th>
-                <th scope="col">Date</th>
-                <th scope="col">Held</th>
-              </tr>
-            </thead>
-            <tbody>
-              <%= for sp <- @sold_for_symbol do %>
-                <tr>
-                  <td class="terminal-number">{format_integer(sp.quantity)}</td>
-                  <td
-                    class="terminal-number"
-                    style="text-align: right; color: var(--terminal-dim);"
-                  >
-                    {format_decimal(sp.purchase_price)}
-                  </td>
-                  <td class="terminal-number" style="text-align: right;">
-                    {format_decimal(sp.sale_price)}
-                  </td>
-                  <td class="terminal-number" style="text-align: right;">
-                    <span class={pnl_badge_class(sp.realized_pnl)}>
-                      <%= if pnl_positive?(sp.realized_pnl) do %>
-                        +
-                      <% end %>
-                      {format_euro_decimal(sp.realized_pnl)}
-                    </span>
-                  </td>
-                  <td style="color: var(--terminal-dim); font-size: 0.625rem;">
-                    {Date.to_string(sp.sale_date)}
-                  </td>
-                  <td class="terminal-number" style="color: var(--terminal-dim);">
-                    {Date.diff(sp.sale_date, sp.purchase_date)}d
-                  </td>
-                </tr>
-              <% end %>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    <% end %>
-    
 <!-- Shares Over Time -->
     <%= if length(@price_chart_data) > 1 do %>
       <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-2">
@@ -619,8 +563,9 @@
               <tr>
                 <th scope="col">Date</th>
                 <th scope="col">Per Share</th>
+                <th scope="col" class="terminal-number">Shares</th>
                 <th scope="col" style="text-align: right;">Income</th>
-                <th scope="col">Currency</th>
+                <th scope="col">Div Currency</th>
               </tr>
             </thead>
             <tbody>
@@ -644,13 +589,36 @@
                       {format_decimal(entry.dividend.amount)}
                     <% end %>
                   </td>
+                  <td class="terminal-number">
+                    <%= if entry[:matched_quantity] && Decimal.compare(entry.matched_quantity, 0) == :gt do %>
+                      {format_decimal(entry.matched_quantity)}
+                    <% else %>
+                      <span style="color: var(--terminal-dim);">—</span>
+                    <% end %>
+                  </td>
                   <td class="terminal-number gain" style="text-align: right; font-weight: 500;">
-                    +{format_euro_decimal(entry.income)}
+                    <%= if entry[:fx_uncertain] do %>
+                      <span
+                        style="color: var(--terminal-dim);"
+                        title="Missing FX rate — amount in original currency, not EUR"
+                      >
+                        ~{format_decimal(entry.income)}
+                        <span style="font-size: 0.5rem;">?</span>
+                      </span>
+                    <% else %>
+                      +{format_euro_decimal(entry.income)}
+                    <% end %>
                   </td>
                   <td>
-                    <span style="color: var(--terminal-dim); font-size: 0.625rem;">
-                      {entry.dividend.currency}
-                    </span>
+                    <%= if entry.dividend.currency != "EUR" do %>
+                      <span style="color: var(--terminal-accent); font-size: 0.625rem;">
+                        {entry.dividend.currency}
+                      </span>
+                    <% else %>
+                      <span style="color: var(--terminal-dim); font-size: 0.625rem;">
+                        {entry.dividend.currency}
+                      </span>
+                    <% end %>
                   </td>
                 </tr>
               <% end %>
@@ -705,6 +673,77 @@
           >{note_markdown(@company_note)}</textarea>
         </div>
       </div>
+    <% end %>
+    
+<!-- Previous Positions (Sold) — Collapsible -->
+    <%= if length(@sold_for_symbol) > 0 do %>
+      <details
+        class="terminal-card mb-[var(--space-xs)] animate-fade-in animate-delay-5"
+        data-testid="sold-positions"
+      >
+        <summary class="terminal-details-summary">
+          <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+            Previous Positions ({length(@sold_for_symbol)} sold)
+          </div>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="2"
+            stroke="currentColor"
+            class="chevron-icon"
+            aria-hidden="true"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+          </svg>
+        </summary>
+        <div class="px-[var(--space-sm)] pb-[var(--space-sm)]">
+          <div class="overflow-x-auto">
+            <table class="terminal-table">
+              <thead>
+                <tr>
+                  <th scope="col">Qty</th>
+                  <th scope="col" style="text-align: right;">Buy</th>
+                  <th scope="col" style="text-align: right;">Sell</th>
+                  <th scope="col" style="text-align: right;">P&L</th>
+                  <th scope="col">Date</th>
+                  <th scope="col">Held</th>
+                </tr>
+              </thead>
+              <tbody>
+                <%= for sp <- @sold_for_symbol do %>
+                  <tr>
+                    <td class="terminal-number">{format_integer(sp.quantity)}</td>
+                    <td
+                      class="terminal-number"
+                      style="text-align: right; color: var(--terminal-dim);"
+                    >
+                      {format_decimal(sp.purchase_price)}
+                    </td>
+                    <td class="terminal-number" style="text-align: right;">
+                      {format_decimal(sp.sale_price)}
+                    </td>
+                    <td class="terminal-number" style="text-align: right;">
+                      <span class={pnl_badge_class(sp.realized_pnl)}>
+                        <%= if pnl_positive?(sp.realized_pnl) do %>
+                          +
+                        <% end %>
+                        {format_euro_decimal(sp.realized_pnl)}
+                      </span>
+                    </td>
+                    <td style="color: var(--terminal-dim); font-size: 0.625rem;">
+                      {Date.to_string(sp.sale_date)}
+                    </td>
+                    <td class="terminal-number" style="color: var(--terminal-dim);">
+                      {Date.diff(sp.sale_date, sp.purchase_date)}d
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
     <% end %>
     
 <!-- External Links -->

@@ -270,7 +270,7 @@ defmodule Dividendsomatic.PortfolioTest do
         |> Dividendsomatic.Repo.insert()
 
       # USD stock with fx_rate 0.92
-      insert_test_holding(snapshot.id, Date.new!(today.year, 1, 10), "AAPL", 50, "0.92")
+      insert_test_holding(snapshot.id, Date.new!(today.year, 1, 10), "AAPL", 50, "0.92", "USD")
 
       {:ok, _} =
         Portfolio.create_dividend(%{
@@ -283,6 +283,45 @@ defmodule Dividendsomatic.PortfolioTest do
       [entry] = Portfolio.list_dividends_with_income()
       # 1.00 * 50 * 0.92 = 46.00
       assert Decimal.equal?(entry.income, Decimal.new("46.00"))
+    end
+
+    test "should apply fx_rate to total_net dividend income" do
+      today = Date.utc_today()
+
+      # SEK total_net of 400 with fx_rate 0.094 → income ~37.60 EUR
+      {:ok, _} =
+        Portfolio.create_dividend(%{
+          symbol: "TELIA1",
+          ex_date: Date.new!(today.year, 1, 15),
+          amount: Decimal.new("400.00"),
+          currency: "SEK",
+          amount_type: "total_net",
+          fx_rate: Decimal.new("0.094")
+        })
+
+      [entry] = Portfolio.list_dividends_with_income()
+      assert entry.dividend.symbol == "TELIA1"
+      # 400.00 * 0.094 = 37.600
+      assert Decimal.equal?(entry.income, Decimal.new("37.600"))
+    end
+
+    test "should treat total_net with no fx_rate as base currency" do
+      today = Date.utc_today()
+
+      # EUR total_net with nil fx_rate → income = amount (fx defaults to 1)
+      {:ok, _} =
+        Portfolio.create_dividend(%{
+          symbol: "KESKOB",
+          ex_date: Date.new!(today.year, 1, 15),
+          amount: Decimal.new("150.00"),
+          currency: "EUR",
+          amount_type: "total_net"
+        })
+
+      [entry] = Portfolio.list_dividends_with_income()
+      assert entry.dividend.symbol == "KESKOB"
+      # 150.00 * 1 = 150.00
+      assert Decimal.equal?(entry.income, Decimal.new("150.00"))
     end
   end
 
@@ -697,13 +736,13 @@ defmodule Dividendsomatic.PortfolioTest do
     end
   end
 
-  defp insert_test_holding(snapshot_id, date, symbol, qty, fx_rate) do
+  defp insert_test_holding(snapshot_id, date, symbol, qty, fx_rate, currency \\ "EUR") do
     %Portfolio.Position{}
     |> Portfolio.Position.changeset(%{
       portfolio_snapshot_id: snapshot_id,
       date: date,
       symbol: symbol,
-      currency: "EUR",
+      currency: currency,
       quantity: qty,
       price: "10",
       value: "1000",

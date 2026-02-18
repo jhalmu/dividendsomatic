@@ -521,7 +521,7 @@ defmodule Dividendsomatic.Portfolio do
     (lookback_snapshot ++ range_snapshots)
     |> Enum.flat_map(fn snapshot ->
       Enum.map(snapshot.positions, fn p ->
-        {snapshot.date, p.symbol, p.quantity, p.fx_rate}
+        {snapshot.date, p.symbol, p.quantity, p.fx_rate, p.currency}
       end)
     end)
   end
@@ -529,37 +529,51 @@ defmodule Dividendsomatic.Portfolio do
   defp compute_dividend_income(dividend, positions_data) do
     amount = dividend.amount || Decimal.new("0")
 
-    # For total_net amounts, the value is already the total payment
+    # Find matching position for fx_rate and quantity
+    matching = find_matching_position(dividend, positions_data)
+
+    {matched_qty, holding_fx, holding_currency} =
+      case matching do
+        {_date, _symbol, quantity, fx_rate, currency} ->
+          {quantity || Decimal.new("0"), fx_rate || Decimal.new("1"), currency}
+
+        nil ->
+          {Decimal.new("0"), Decimal.new("1"), nil}
+      end
+
+    div_currency = Map.get(dividend, :currency)
+    fx = resolve_fx_rate(dividend, div_currency, holding_fx, holding_currency)
+
     if Map.get(dividend, :amount_type) == "total_net" do
-      amount
+      Decimal.mult(amount, fx)
     else
-      compute_per_share_income(dividend, positions_data, amount)
+      Decimal.mult(Decimal.mult(amount, matched_qty), fx)
     end
   end
 
-  defp compute_per_share_income(dividend, positions_data, amount) do
-    # Only consider positions matching symbol and within -7..+45 days of ex_date
-    matching =
-      Enum.filter(positions_data, fn {date, symbol, _qty, _fx} ->
-        if symbol == dividend.symbol do
-          diff = Date.diff(dividend.ex_date, date)
-          diff >= -7 and diff <= 45
-        end
-      end)
-      |> Enum.min_by(
-        fn {date, _, _, _} -> abs(Date.diff(date, dividend.ex_date)) end,
-        fn -> nil end
-      )
-
-    case matching do
-      {_date, _symbol, quantity, fx_rate} ->
-        qty = quantity || Decimal.new("0")
-        fx = fx_rate || Decimal.new("1")
-        Decimal.mult(Decimal.mult(amount, qty), fx)
-
-      nil ->
-        Decimal.new("0")
+  # Prefer dividend's own fx_rate; fall back to position fx_rate only if currencies match.
+  # Returns 0 for unknown cross-currency cases to avoid inflating totals.
+  defp resolve_fx_rate(dividend, div_currency, holding_fx, holding_currency) do
+    cond do
+      Map.get(dividend, :fx_rate) != nil -> Map.get(dividend, :fx_rate)
+      div_currency == "EUR" -> Decimal.new("1")
+      div_currency == holding_currency -> holding_fx
+      true -> Decimal.new("0")
     end
+  end
+
+  defp find_matching_position(dividend, positions_data) do
+    # Only consider positions matching symbol and within -7..+45 days of ex_date
+    Enum.filter(positions_data, fn {date, symbol, _qty, _fx, _cur} ->
+      if symbol == dividend.symbol do
+        diff = Date.diff(dividend.ex_date, date)
+        diff >= -7 and diff <= 45
+      end
+    end)
+    |> Enum.min_by(
+      fn {date, _, _, _, _} -> abs(Date.diff(date, dividend.ex_date)) end,
+      fn -> nil end
+    )
   end
 
   @doc """

@@ -65,10 +65,18 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.25.0 (Validator Automation + Skill)
-**Status:** Full dividend pipeline, Gmail auto-import, Deep Space dashboard, automated validation, 563 tests, 0 credo issues
+**Version:** 0.26.0 (FX Currency Conversion Fix)
+**Status:** Full dividend pipeline, Gmail auto-import, Deep Space dashboard, automated validation, 601 tests, 0 credo issues
 
-**Latest session (2026-02-18):**
+**Latest session (2026-02-18 evening):**
+- **FX currency conversion fix** — smart resolution: dividend fx_rate → position fx_rate (if currencies match) → fallback
+- **Backfilled 63 total_net dividends** with fx_rate from position data (71→8 remaining)
+- **Shares + Div Currency columns** in Dividends Received table
+- **FX uncertainty UI** — cross-currency mismatches shown as `~amount?` and excluded from totals
+- **`missing_fx_conversion` validator** — flags total_net non-EUR without fx_rate
+- 601 tests, 0 failures, 0 credo issues
+
+**Previous session (2026-02-18):**
 - **DividendValidator automation** — post-import hook in DataImportWorker, EOD workflow step
 - **`mix check.all`** — unified integrity check (validation + gap analysis)
 - **Timestamped snapshots** — `--export` writes timestamped + latest, `--compare` shows trends

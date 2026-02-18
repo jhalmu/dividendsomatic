@@ -530,7 +530,7 @@ defmodule DividendsomaticWeb.StockLive do
       ~s[<text x="#{label_x}" y="#{last_y - 6}" fill="#f97316" font-size="8" font-weight="600" text-anchor="#{anchor}">#{format_chart_val(last_cum)}</text>]
 
     Phoenix.HTML.raw("""
-    <svg width="#{w}" height="#{round(total_h)}" viewBox="0 0 #{w} #{round(total_h)}" xmlns="http://www.w3.org/2000/svg" style="font-family: 'JetBrains Mono', monospace;">
+    <svg width="100%" viewBox="0 0 #{w} #{round(total_h)}" xmlns="http://www.w3.org/2000/svg" style="font-family: 'JetBrains Mono', monospace;">
       #{grid}
       #{bars}
       #{line}
@@ -710,45 +710,68 @@ defmodule DividendsomaticWeb.StockLive do
   defp compute_dividends_with_income(dividends, holdings) do
     holdings_data =
       Enum.map(holdings, fn h ->
-        {h.date, h.symbol, h.quantity, h.fx_rate}
+        {h.date, h.symbol, h.quantity, h.fx_rate, h.currency}
       end)
 
     Enum.map(dividends, fn div ->
-      income = compute_single_dividend_income(div, holdings_data)
-      %{dividend: div, income: income}
+      {income, matched_qty, fx_uncertain} =
+        compute_single_dividend_income(div, holdings_data)
+
+      %{
+        dividend: div,
+        income: income,
+        matched_quantity: matched_qty,
+        fx_uncertain: fx_uncertain
+      }
     end)
   end
 
   defp compute_single_dividend_income(dividend, holdings_data) do
     amount = dividend.amount || Decimal.new("0")
 
-    # For total_net amounts, the value is already the total payment
-    if dividend.amount_type == "total_net" do
-      amount
-    else
-      matching =
-        holdings_data
-        |> Enum.filter(fn {_date, symbol, _qty, _fx} -> symbol == dividend.symbol end)
-        |> Enum.min_by(
-          fn {date, _, _, _} -> abs(Date.diff(date, dividend.ex_date)) end,
-          fn -> nil end
-        )
+    matching =
+      holdings_data
+      |> Enum.filter(fn {_date, symbol, _qty, _fx, _cur} -> symbol == dividend.symbol end)
+      |> Enum.min_by(
+        fn {date, _, _, _, _} -> abs(Date.diff(date, dividend.ex_date)) end,
+        fn -> nil end
+      )
 
+    {matched_qty, holding_fx, holding_currency} =
       case matching do
-        {_date, _symbol, quantity, fx_rate} ->
-          qty = quantity || Decimal.new("0")
-          fx = fx_rate || Decimal.new("1")
-          Decimal.mult(Decimal.mult(amount, qty), fx)
+        {_date, _symbol, quantity, fx_rate, currency} ->
+          {quantity || Decimal.new("0"), fx_rate || Decimal.new("1"), currency}
 
         nil ->
-          Decimal.new("0")
+          {Decimal.new("0"), Decimal.new("1"), nil}
       end
+
+    {fx, fx_uncertain} = resolve_dividend_fx(dividend, holding_fx, holding_currency)
+
+    if dividend.amount_type == "total_net" do
+      {Decimal.mult(amount, fx), matched_qty, fx_uncertain}
+    else
+      {Decimal.mult(Decimal.mult(amount, matched_qty), fx), matched_qty, fx_uncertain}
+    end
+  end
+
+  # Prefer dividend's own fx_rate; fall back to position fx_rate only if currencies match
+  defp resolve_dividend_fx(dividend, holding_fx, holding_currency) do
+    cond do
+      dividend.fx_rate != nil -> {dividend.fx_rate, false}
+      dividend.currency == "EUR" -> {Decimal.new("1"), false}
+      dividend.currency == holding_currency -> {holding_fx, false}
+      true -> {Decimal.new("1"), true}
     end
   end
 
   defp sum_dividend_income(dividends_with_income) do
     Enum.reduce(dividends_with_income, Decimal.new("0"), fn entry, acc ->
-      Decimal.add(acc, entry.income)
+      if entry[:fx_uncertain] do
+        acc
+      else
+        Decimal.add(acc, entry.income)
+      end
     end)
   end
 
@@ -779,16 +802,19 @@ defmodule DividendsomaticWeb.StockLive do
     y_range = max(y_hi - y_lo, 0.01)
     y_fn = fn v -> mt + main_h - (v - y_lo) / y_range * main_h end
 
+    price_lo = Enum.min(prices)
+    price_hi = Enum.max(prices)
+
     area = svg_area(chart_data, x_fn, y_fn, chart_bottom, n)
     line = svg_price_line(chart_data, x_fn, y_fn)
     cost_basis_line = svg_cost_basis_line(chart_data, x_fn, y_fn)
-    x_labels = svg_x_labels(chart_data, x_fn, chart_bottom + 15, n)
-    y_labels = svg_y_labels(mt, main_h, y_lo, y_range)
-    grid = svg_grid(mt, main_h)
+    x_labels = svg_price_x_labels(chart_data, x_fn, chart_bottom + 15, n)
+    y_labels = svg_price_y_labels(mt, main_h, y_lo, y_range, price_lo, price_hi)
+    grid = svg_price_grid(mt, main_h)
     annotation = svg_price_annotation(chart_data, x_fn, y_fn, n, w)
 
     Phoenix.HTML.raw("""
-    <svg width="#{w}" height="#{round(total_h)}" viewBox="0 0 #{w} #{round(total_h)}" xmlns="http://www.w3.org/2000/svg" style="font-family: 'JetBrains Mono', monospace;">
+    <svg width="100%" viewBox="0 0 #{w} #{round(total_h)}" xmlns="http://www.w3.org/2000/svg" style="font-family: 'JetBrains Mono', monospace;">
       #{grid}
       #{area}
       #{line}
@@ -800,15 +826,77 @@ defmodule DividendsomaticWeb.StockLive do
     """)
   end
 
-  defp svg_grid(mt, main_h) do
+  # Price chart: more grid lines (7 divisions)
+  defp svg_price_grid(mt, main_h) do
     ml = 62
     pw = 900 - 62 - 20
+    steps = 7
 
-    for i <- 0..4 do
-      gy = r(mt + main_h - i / 4 * main_h)
+    for i <- 0..steps do
+      gy = r(mt + main_h - i / steps * main_h)
 
       ~s[<line x1="#{ml}" y1="#{gy}" x2="#{ml + pw}" y2="#{gy}" stroke="#1e293b" stroke-width="1"/>]
     end
+    |> Enum.join("\n")
+  end
+
+  # Price chart: more Y labels (7 divisions) + hi/lo markers
+  defp svg_price_y_labels(mt, main_h, y_lo, y_range, price_lo, price_hi) do
+    ml = 62
+    steps = 7
+
+    grid_labels =
+      for i <- 0..steps do
+        gy = r(mt + main_h - i / steps * main_h + 3)
+        val = y_lo + i / steps * y_range
+
+        ~s[<text x="#{ml - 8}" y="#{gy}" fill="#475569" font-size="8" text-anchor="end">#{format_chart_val(val)}</text>]
+      end
+
+    # Add explicit lo/hi labels if they don't overlap with grid lines
+    y_fn = fn v -> mt + main_h - (v - y_lo) / y_range * main_h end
+    lo_y = r(y_fn.(price_lo) + 3)
+    hi_y = r(y_fn.(price_hi) + 3)
+
+    # Check if lo/hi are far enough from nearest grid line to avoid overlap
+    grid_ys = for i <- 0..steps, do: mt + main_h - i / steps * main_h
+    min_gap = 8
+
+    lo_label =
+      if Enum.all?(grid_ys, fn gy -> abs(y_fn.(price_lo) - gy) > min_gap end) do
+        ~s[<text x="#{ml - 8}" y="#{lo_y}" fill="#ef4444" font-size="7" font-weight="600" text-anchor="end">#{format_chart_val(price_lo)}</text>]
+      else
+        ""
+      end
+
+    hi_label =
+      if Enum.all?(grid_ys, fn gy -> abs(y_fn.(price_hi) - gy) > min_gap end) do
+        ~s[<text x="#{ml - 8}" y="#{hi_y}" fill="#10b981" font-size="7" font-weight="600" text-anchor="end">#{format_chart_val(price_hi)}</text>]
+      else
+        ""
+      end
+
+    Enum.join(grid_labels ++ [lo_label, hi_label], "\n")
+  end
+
+  # Price chart: more X labels with dd Mmm 'yy format
+  defp svg_price_x_labels(chart_data, x_fn, label_y, n) do
+    count = min(10, n)
+    step = max(div(n - 1, count), 1)
+
+    for i <- 0..count, idx = min(i * step, n - 1), reduce: [] do
+      acc ->
+        point = Enum.at(chart_data, idx)
+        lx = r(x_fn.(idx))
+        date_str = Calendar.strftime(point.date, "%d %b '%y")
+
+        [
+          ~s[<text x="#{lx}" y="#{r(label_y)}" fill="#475569" font-size="7" text-anchor="middle">#{date_str}</text>]
+          | acc
+        ]
+    end
+    |> Enum.reverse()
+    |> Enum.uniq()
     |> Enum.join("\n")
   end
 
@@ -882,18 +970,6 @@ defmodule DividendsomaticWeb.StockLive do
     |> Enum.join("\n")
   end
 
-  defp svg_y_labels(mt, main_h, y_lo, y_range) do
-    ml = 62
-
-    for i <- 0..4 do
-      gy = r(mt + main_h - i / 4 * main_h + 3)
-      val = y_lo + i / 4 * y_range
-
-      ~s[<text x="#{ml - 8}" y="#{gy}" fill="#475569" font-size="8" text-anchor="end">#{format_chart_val(val)}</text>]
-    end
-    |> Enum.join("\n")
-  end
-
   defp svg_price_annotation(chart_data, x_fn, y_fn, n, w) do
     last = List.last(chart_data)
     lx = r(x_fn.(n - 1))
@@ -950,7 +1026,7 @@ defmodule DividendsomaticWeb.StockLive do
       ~s[<text x="#{label_x}" y="#{last_y - 6}" fill="#60a5fa" font-size="8" font-weight="600" text-anchor="#{anchor}">#{round(last.quantity)}</text>]
 
     Phoenix.HTML.raw("""
-    <svg width="#{w}" height="#{round(total_h)}" viewBox="0 0 #{w} #{round(total_h)}" xmlns="http://www.w3.org/2000/svg" style="font-family: 'JetBrains Mono', monospace;">
+    <svg width="100%" viewBox="0 0 #{w} #{round(total_h)}" xmlns="http://www.w3.org/2000/svg" style="font-family: 'JetBrains Mono', monospace;">
       #{grid}
       #{bars}
       #{x_labels}

@@ -118,4 +118,121 @@ defmodule Dividendsomatic.Portfolio.IntegrityCheckerTest do
       assert String.contains?(result.message, "2026-02-13")
     end
   end
+
+  describe "run_all_from_string/1" do
+    test "should run checks from CSV string" do
+      csv_string = build_minimal_actions_csv()
+      result = IntegrityChecker.run_all_from_string(csv_string)
+
+      assert {:ok, checks} = result
+      assert is_list(checks)
+      assert length(checks) == 4
+      check_names = Enum.map(checks, & &1.name)
+      assert "Dividend Reconciliation" in check_names
+      assert "Trade Reconciliation" in check_names
+      assert "Missing ISINs" in check_names
+      assert "Summary Totals" in check_names
+    end
+
+    test "should return error for empty CSV string" do
+      assert {:error, :empty_csv} = IntegrityChecker.run_all_from_string("")
+    end
+  end
+
+  describe "edge cases" do
+    test "should handle empty transactions list in actions data" do
+      empty_data = %{
+        transactions: [],
+        summary: %{
+          from_date: ~D[2026-02-09],
+          to_date: ~D[2026-02-13],
+          starting_cash: Decimal.new("-100000"),
+          dividends: Decimal.new("0"),
+          commissions: Decimal.new("0"),
+          ending_cash: Decimal.new("-100000")
+        }
+      }
+
+      result = IntegrityChecker.reconcile_dividends(empty_data)
+      assert result.status == :warn
+      assert String.contains?(result.message, "0 records")
+
+      trade_result = IntegrityChecker.reconcile_trades(empty_data)
+      assert trade_result.status == :warn
+    end
+
+    test "should return :warn when trade count diff is exactly 2 (boundary)" do
+      # Build data with 2 trades in CSV, 0 in DB → diff = 2
+      data_with_2_trades = %{
+        transactions: [
+          %{
+            activity_code: "BUY",
+            activity_description: "Buy",
+            symbol: "AAPL",
+            isin: "US0378331005",
+            currency: "USD",
+            date: ~D[2026-01-10],
+            settle_date: ~D[2026-01-12],
+            amount: Decimal.new("-5000"),
+            debit: Decimal.new("-5000"),
+            credit: nil,
+            trade_quantity: Decimal.new("25"),
+            trade_price: Decimal.new("200"),
+            trade_id: "T1",
+            transaction_id: "TX1",
+            buy_sell: "BUY",
+            fx_rate: Decimal.new("1")
+          },
+          %{
+            activity_code: "BUY",
+            activity_description: "Buy",
+            symbol: "MSFT",
+            isin: "US5949181045",
+            currency: "USD",
+            date: ~D[2026-01-11],
+            settle_date: ~D[2026-01-13],
+            amount: Decimal.new("-3000"),
+            debit: Decimal.new("-3000"),
+            credit: nil,
+            trade_quantity: Decimal.new("10"),
+            trade_price: Decimal.new("300"),
+            trade_id: "T2",
+            transaction_id: "TX2",
+            buy_sell: "BUY",
+            fx_rate: Decimal.new("1")
+          }
+        ],
+        summary: %{
+          from_date: ~D[2026-01-09],
+          to_date: ~D[2026-01-13]
+        }
+      }
+
+      result = IntegrityChecker.reconcile_trades(data_with_2_trades)
+      assert result.status == :warn
+      assert String.contains?(result.message, "diff: 2")
+    end
+
+    test "should return :warn when missing ISIN count is exactly 3 (boundary)" do
+      data = %{
+        transactions: [
+          %{isin: "XX0000000001", symbol: "SYM1", activity_code: "DIV"},
+          %{isin: "XX0000000002", symbol: "SYM2", activity_code: "DIV"},
+          %{isin: "XX0000000003", symbol: "SYM3", activity_code: "DIV"}
+        ]
+      }
+
+      result = IntegrityChecker.find_missing_isins(data)
+      assert result.status == :warn
+      assert String.contains?(result.message, "3 not in DB")
+    end
+  end
+
+  # Builds a minimal valid Actions CSV string for run_all_from_string/1 testing
+  defp build_minimal_actions_csv do
+    """
+    ActivityCode,ActivityDescription,Symbol,ISIN,CurrencyPrimary,Date,SettleDate,Amount,Debit,Credit,TradeQuantity,TradePrice,TradeID,TransactionID,Buy/Sell,FXRateToBase
+    DIV,Dividend,AAPL,US0378331005,USD,2026-02-10,2026-02-10,100.00,,100.00,,,,,1
+    """
+  end
 end

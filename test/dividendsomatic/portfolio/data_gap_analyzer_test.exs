@@ -74,9 +74,102 @@ defmodule Dividendsomatic.Portfolio.DataGapAnalyzerTest do
     end
   end
 
+  describe "analyze_snapshot_gaps/0 boundary" do
+    test "should not detect exactly 7-day gap (boundary: >7 required)" do
+      insert_snapshot(~D[2024-01-01])
+      insert_snapshot(~D[2024-01-08])
+
+      gaps = DataGapAnalyzer.analyze_snapshot_gaps()
+      assert gaps == []
+    end
+
+    test "should detect 8-day gap" do
+      insert_snapshot(~D[2024-01-01])
+      insert_snapshot(~D[2024-01-09])
+
+      gaps = DataGapAnalyzer.analyze_snapshot_gaps()
+      assert length(gaps) == 1
+      assert hd(gaps).days == 8
+    end
+  end
+
+  describe "analyze_dividend_gaps/0 edge cases" do
+    test "should detect multiple gaps for same stock" do
+      insert_dividend("AAPL", "US0378331005", ~D[2020-01-15], "0.77")
+      insert_dividend("AAPL", "US0378331005", ~D[2022-06-15], "0.23")
+      insert_dividend("AAPL", "US0378331005", ~D[2024-11-15], "0.25")
+
+      gaps = DataGapAnalyzer.analyze_dividend_gaps()
+      assert length(gaps) == 1
+      aapl = hd(gaps)
+      assert length(aapl.gaps) == 2
+    end
+
+    test "should handle single-dividend stocks (no gaps possible)" do
+      insert_dividend("ONLY", "US9999999999", ~D[2024-01-15], "1.00")
+
+      gaps = DataGapAnalyzer.analyze_dividend_gaps()
+      assert gaps == []
+    end
+  end
+
   describe "missing_by_year_chunks/0" do
     test "should return empty list with no data" do
       assert DataGapAnalyzer.missing_by_year_chunks() == []
+    end
+
+    test "should return chunks when data exists across multiple years" do
+      insert_snapshot(~D[2022-01-15])
+      insert_snapshot(~D[2024-06-15])
+
+      chunks = DataGapAnalyzer.missing_by_year_chunks()
+      assert length(chunks) >= 2
+      assert hd(chunks).from == ~D[2022-01-15]
+      # Each chunk should have expected fields
+      assert is_number(hd(chunks).coverage_pct)
+      assert is_integer(hd(chunks).snapshot_count)
+    end
+  end
+
+  describe "summary/0" do
+    test "should return correct date ranges when data exists" do
+      insert_snapshot(~D[2024-01-15])
+      insert_snapshot(~D[2024-06-15])
+      insert_dividend("MSFT", "US5949181045", ~D[2024-03-15], "0.75")
+
+      summary = DataGapAnalyzer.summary()
+      assert summary.dividend_count == 1
+      assert summary.snapshot_count == 2
+      assert summary.dividend_range.min == ~D[2024-03-15]
+      assert summary.dividend_range.max == ~D[2024-03-15]
+      assert summary.snapshot_range.min == ~D[2024-01-15]
+      assert summary.snapshot_range.max == ~D[2024-06-15]
+    end
+  end
+
+  describe "analyze/0 with populated data" do
+    test "should build chunks from snapshot data spanning >1 year" do
+      insert_snapshot(~D[2022-06-01])
+      insert_snapshot(~D[2023-12-01])
+
+      report = DataGapAnalyzer.analyze()
+      assert report.chunks != []
+      first_chunk = hd(report.chunks)
+      assert first_chunk.calendar_days <= 364
+    end
+
+    test "should calculate coverage_pct correctly" do
+      # Insert 5 snapshots spread across a single chunk
+      for i <- 0..4 do
+        insert_snapshot(Date.add(~D[2024-01-01], i * 7))
+      end
+
+      report = DataGapAnalyzer.analyze()
+      assert report.chunks != []
+      first_chunk = hd(report.chunks)
+      assert first_chunk.snapshot_count == 5
+      assert first_chunk.coverage_pct > 0
+      assert first_chunk.coverage_pct < 100
     end
   end
 

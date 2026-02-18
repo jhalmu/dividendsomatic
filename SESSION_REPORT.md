@@ -1,3 +1,73 @@
+# Session Report — 2026-02-18 (Evening)
+
+## Fix Dividend FX Currency Conversion + Backfill
+
+### Context
+Telia (SE ISIN, SEK dividends) showed +400€ for a 0.50 SEK per-share dividend — a ~10x inflation. The original plan targeted `total_net` amounts not applying `fx_rate`, but investigation revealed a deeper issue: the income calculation blindly used the position's `fx_rate` even when dividend currency != position currency (e.g. SEK dividend on EUR-listed FWB position with fx_rate=1.0).
+
+### Root Cause (Expanded)
+- **`total_net` path**: returned raw `amount` without any fx_rate conversion
+- **`per_share` path**: used position fx_rate for currency conversion, but this only works when dividend currency matches position currency. For cross-currency cases (SEK dividend on EUR position), the position fx_rate (1.0) is for EUR→EUR, not SEK→EUR
+- **Data gap**: most dividend records had `fx_rate: nil` — the field existed but was only populated for recent IBKR Flex imports
+
+### Changes Made
+
+#### Smart FX Resolution (`portfolio.ex` + `stock_live.ex`)
+New `resolve_fx_rate` / `resolve_dividend_fx` with cascading logic:
+1. Dividend's own `fx_rate` → use it (IBKR Flex records)
+2. Dividend is EUR → fx = 1.0
+3. Dividend currency matches position currency → use position's fx_rate (most USD/CAD/SEK stocks)
+4. Cross-currency mismatch → fx = 0 in totals (portfolio.ex), marked `fx_uncertain` in UI (stock_live.ex)
+
+Position tuples expanded from `{date, symbol, qty, fx_rate}` to `{date, symbol, qty, fx_rate, currency}`.
+
+#### Shares Column + FX Uncertainty in UI (`stock_live.html.heex`)
+- **Shares** column shows matched holding quantity from portfolio snapshots
+- **Div Currency** column highlights non-EUR currencies with accent color
+- Uncertain FX entries shown as `~400.0?` (dimmed) instead of `+400,00 €`, excluded from total
+
+#### `missing_fx_conversion` Validator (`dividend_validator.ex`)
+New validation added to `validate/0` pipeline — flags `total_net` non-EUR dividends where `fx_rate` is nil or 1.0.
+
+#### FX Rate Backfill (`priv/scripts/backfill_fx_rate.exs`)
+One-time script to populate `fx_rate` on 71 total_net dividends from matching position data:
+- **63 updated** (USD→EUR ~0.84, CAD→EUR ~0.62, SEK→EUR ~0.089)
+- **8 skipped** (NCZ, ACP, ECC, ORCC, AQN, NEP — old sold positions, no position history)
+
+#### Tests
+- 2 new tests in `portfolio_test.exs`: total_net with fx_rate, total_net without fx_rate
+- 5 new tests in `dividend_validator_test.exs`: missing_fx_conversion scenarios
+- Updated `insert_test_holding` helper to accept currency parameter
+- Fixed AAPL test: position currency changed from EUR to USD to match dividend currency
+
+### Validation Summary (6,223 records)
+- 118 issues: 30 info, 88 warning
+- 9 missing_fx_conversion (down from 71), 19 mixed_amount_types, 11 isin_currency_mismatch, 79 inconsistent_amount
+- 0 invalid currencies, 0 suspicious amounts, 0 cross-source duplicates
+
+### Files Changed
+
+| Action | File |
+|--------|------|
+| Modified | `lib/dividendsomatic/portfolio.ex` — smart FX resolution, position currency in tuples |
+| Modified | `lib/dividendsomatic_web/live/stock_live.ex` — smart FX, fx_uncertain flag, matched_quantity |
+| Modified | `lib/dividendsomatic_web/live/stock_live.html.heex` — Shares + Div Currency columns, FX uncertainty UI |
+| Modified | `lib/dividendsomatic/portfolio/dividend_validator.ex` — missing_fx_conversion check |
+| Modified | `test/dividendsomatic/portfolio_test.exs` — total_net tests, currency param |
+| Modified | `test/dividendsomatic/portfolio/dividend_validator_test.exs` — missing_fx_conversion tests |
+| New | `priv/scripts/backfill_fx_rate.exs` — one-time FX rate backfill |
+
+### Remaining Edge Cases
+- 8 total_net dividends without position data (old sold positions)
+- BHP GBp/GBP mismatch (pence vs pounds — needs unit conversion)
+- Telia SEK per_share on EUR position (needs SEK→EUR rate from external source)
+- ~64 per_share cross-currency dividends (NOK/SEK/CAD/HKD on EUR positions)
+
+### Quality
+- 601 tests, 0 failures, 0 credo issues
+
+---
+
 # Session Report — 2026-02-18
 
 ## DividendValidator Automation, Learning & Skill
