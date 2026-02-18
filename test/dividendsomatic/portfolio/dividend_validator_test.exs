@@ -61,27 +61,43 @@ defmodule Dividendsomatic.Portfolio.DividendValidatorTest do
   end
 
   describe "suspicious_amounts/1" do
-    test "should flag per-share amount of 281.77 (> 50)" do
+    test "should flag USD per-share amount over 50" do
       div = build_dividend("AGNC", "US00123Q1040", ~D[2024-01-01], "281.77", "USD")
       issues = DividendValidator.suspicious_amounts([div])
       assert length(issues) == 1
       assert hd(issues).type == :suspicious_amount
     end
 
-    test "should not flag normal amount of 45.00 (< 50)" do
+    test "should not flag USD amount under 50" do
       div = build_dividend("TEST", nil, ~D[2024-01-01], "45.00", "USD")
       assert DividendValidator.suspicious_amounts([div]) == []
     end
 
-    test "should not flag total_net amounts over 50" do
+    test "should not flag total_net amounts" do
       div =
         build_dividend("TEST", nil, ~D[2024-01-01], "5000.00", "USD", amount_type: "total_net")
 
       assert DividendValidator.suspicious_amounts([div]) == []
     end
 
-    test "should not flag normal per-share amounts" do
-      div = build_dividend("TEST", nil, ~D[2024-01-01], "2.50", "USD")
+    test "should not flag normal GBp amount under 4000" do
+      div = build_dividend("BHP", nil, ~D[2024-01-01], "151.46", "GBp")
+      assert DividendValidator.suspicious_amounts([div]) == []
+    end
+
+    test "should flag GBp amount over 4000" do
+      div = build_dividend("TEST", nil, ~D[2024-01-01], "5000.00", "GBp")
+      issues = DividendValidator.suspicious_amounts([div])
+      assert length(issues) == 1
+    end
+
+    test "should not flag normal NOK amount under 550" do
+      div = build_dividend("FROo", nil, ~D[2024-01-01], "236.60", "NOK")
+      assert DividendValidator.suspicious_amounts([div]) == []
+    end
+
+    test "should not flag normal JPY amount under 7500" do
+      div = build_dividend("8031.T", nil, ~D[2024-01-01], "55.00", "JPY")
       assert DividendValidator.suspicious_amounts([div]) == []
     end
   end
@@ -199,6 +215,40 @@ defmodule Dividendsomatic.Portfolio.DividendValidatorTest do
 
       dupes = DividendValidator.cross_source_duplicates()
       assert dupes == []
+    end
+  end
+
+  describe "suggest_threshold_adjustments/0" do
+    test "should suggest threshold when currency has 3+ flags" do
+      # Insert per_share amounts above USD threshold of 50
+      insert_dividend("BDC1", "US1111111111", ~D[2024-01-15], "60.00", "USD")
+      insert_dividend("BDC2", "US2222222222", ~D[2024-02-15], "75.00", "USD")
+      insert_dividend("BDC3", "US3333333333", ~D[2024-03-15], "90.00", "USD")
+
+      suggestions = DividendValidator.suggest_threshold_adjustments()
+      assert length(suggestions) == 1
+
+      suggestion = hd(suggestions)
+      assert suggestion.currency == "USD"
+      assert suggestion.current_threshold == "50"
+      assert suggestion.flagged_count == 3
+      # p95 of [60, 75, 90] ≈ 90, * 1.2 = 108
+      assert String.to_integer(suggestion.suggested_threshold) >= 100
+    end
+
+    test "should ignore currencies with fewer than 3 flags" do
+      insert_dividend("BDC1", "US1111111111", ~D[2024-01-15], "60.00", "USD")
+      insert_dividend("BDC2", "US2222222222", ~D[2024-02-15], "75.00", "USD")
+
+      suggestions = DividendValidator.suggest_threshold_adjustments()
+      assert suggestions == []
+    end
+
+    test "should return empty list when no flags exist" do
+      insert_dividend("AAPL", "US0378331005", ~D[2024-01-15], "0.24", "USD")
+
+      suggestions = DividendValidator.suggest_threshold_adjustments()
+      assert suggestions == []
     end
   end
 

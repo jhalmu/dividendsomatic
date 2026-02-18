@@ -121,11 +121,12 @@ lib/mix/tasks/
 ### EOD Workflow
 When user says **"EOD"**: Execute immediately without confirmation:
 1. Run `mix test.all`
-2. Sync GitHub issues (`gh issue list/close/comment`)
-3. Update SESSION_REPORT.md
-4. Commit & push
+2. Run `mix validate.data` — include validation summary in SESSION_REPORT.md
+3. Sync GitHub issues (`gh issue list/close/comment`)
+4. Update SESSION_REPORT.md
+5. Commit & push
 
-Commands allowed without asking: `git`, `gh`, `mix test`, `mix format`, `mix credo`
+Commands allowed without asking: `git`, `gh`, `mix test`, `mix format`, `mix credo`, `mix validate.data`, `mix check.all`
 
 ### Commit Message Format
 ```

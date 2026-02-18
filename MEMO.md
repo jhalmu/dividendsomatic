@@ -38,6 +38,10 @@ mix import.flex_trades path.csv      # Import Flex trades CSV (14-col)
 mix check.integrity path.csv         # Check integrity vs Actions.csv
 mix report.gaps                      # 364-day gap analysis
 mix validate.data                    # Dividend data validation
+mix validate.data --suggest          # Suggest threshold adjustments
+mix validate.data --export           # Export timestamped snapshot
+mix validate.data --compare          # Compare vs latest snapshot
+mix check.all                        # Unified integrity check
 mix check.sqlite                     # Check SQLite for unique data
 
 # Historical data
@@ -61,10 +65,18 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.24.0 (Dashboard Redesign — Deep Space)
-**Status:** Full dividend pipeline, Gmail auto-import, Deep Space dashboard, 547 tests, 0 credo issues
+**Version:** 0.25.0 (Validator Automation + Skill)
+**Status:** Full dividend pipeline, Gmail auto-import, Deep Space dashboard, automated validation, 563 tests, 0 credo issues
 
-**Latest session (2026-02-17 late night, cont.):**
+**Latest session (2026-02-18):**
+- **DividendValidator automation** — post-import hook in DataImportWorker, EOD workflow step
+- **`mix check.all`** — unified integrity check (validation + gap analysis)
+- **Timestamped snapshots** — `--export` writes timestamped + latest, `--compare` shows trends
+- **Threshold suggestions** — `--suggest` flag, 95th percentile analysis per currency
+- **Claude skill** — `.claude/skills/data-integrity.md` for triage workflows
+- 563 tests, 0 failures, 0 credo issues
+
+**Previous session (2026-02-17 late night, cont.):**
 - **Deep Space design** — ultra-deep bg (#06080D), glass-morphism cards, noise grain texture
 - **Typography** — Instrument Sans + IBM Plex Mono (replacing DM Sans + JetBrains Mono)
 - **Luminous colors** — sky #5EADF7, emerald #34D399, amber #FBBF24

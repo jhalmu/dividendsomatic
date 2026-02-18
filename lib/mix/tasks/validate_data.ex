@@ -5,13 +5,17 @@ defmodule Mix.Tasks.Validate.Data do
   ## Usage
 
       mix validate.data              # Run all validations
-      mix validate.data --export     # Export to data_revisited/validation_report.json
+      mix validate.data --export     # Export timestamped snapshot + latest
+      mix validate.data --compare    # Compare current vs latest snapshot
+      mix validate.data --suggest    # Suggest threshold adjustments
   """
   use Mix.Task
 
   alias Dividendsomatic.Portfolio.DividendValidator
 
   @shortdoc "Validate dividend data integrity"
+
+  @export_dir "data_revisited"
 
   @impl true
   def run(args) do
@@ -41,9 +45,9 @@ defmodule Mix.Tasks.Validate.Data do
       Mix.shell().info("\nNo issues found!")
     end
 
-    if "--export" in args do
-      export_report(report)
-    end
+    if "--export" in args, do: export_report(report)
+    if "--compare" in args, do: compare_with_latest(report)
+    if "--suggest" in args, do: print_suggestions()
   end
 
   defp print_issue_group({type, items}) do
@@ -62,10 +66,95 @@ defmodule Mix.Tasks.Validate.Data do
   end
 
   defp export_report(report) do
-    dir = "data_revisited"
-    File.mkdir_p!(dir)
+    File.mkdir_p!(@export_dir)
 
-    serialized = %{
+    serialized = serialize_report(report)
+    json = Jason.encode!(serialized, pretty: true)
+
+    # Write timestamped file
+    timestamp = DateTime.utc_now() |> DateTime.to_iso8601(:basic) |> String.slice(0, 15)
+    timestamped_path = Path.join(@export_dir, "validation_#{timestamp}.json")
+    File.write!(timestamped_path, json)
+
+    # Overwrite latest
+    latest_path = Path.join(@export_dir, "validation_latest.json")
+    File.write!(latest_path, json)
+
+    Mix.shell().info("\nExported to #{timestamped_path}")
+    Mix.shell().info("Updated #{latest_path}")
+  end
+
+  defp compare_with_latest(current_report) do
+    latest_path = Path.join(@export_dir, "validation_latest.json")
+
+    case File.read(latest_path) do
+      {:ok, contents} ->
+        previous = Jason.decode!(contents)
+        print_comparison(current_report, previous)
+
+      {:error, :enoent} ->
+        Mix.shell().info("\nNo previous snapshot found. Run --export first.")
+    end
+  end
+
+  defp print_comparison(current, previous) do
+    prev_count = previous["issue_count"]
+    curr_count = current.issue_count
+    prev_checked = previous["total_checked"]
+    curr_checked = current.total_checked
+
+    Mix.shell().info("\n=== Comparison vs Latest Snapshot ===")
+
+    Mix.shell().info(
+      "  Records:  #{prev_checked} → #{curr_checked} (#{diff_str(curr_checked - prev_checked)})"
+    )
+
+    Mix.shell().info(
+      "  Issues:   #{prev_count} → #{curr_count} (#{diff_str(curr_count - prev_count)})"
+    )
+
+    prev_severity = previous["by_severity"] || %{}
+    curr_severity = Map.new(current.by_severity, fn {k, v} -> {Atom.to_string(k), v} end)
+
+    all_keys = Map.keys(prev_severity) ++ Map.keys(curr_severity)
+
+    all_keys
+    |> Enum.uniq()
+    |> Enum.sort()
+    |> Enum.each(fn key ->
+      prev = Map.get(prev_severity, key, 0)
+      curr = Map.get(curr_severity, key, 0)
+      Mix.shell().info("    #{key}: #{prev} → #{curr} (#{diff_str(curr - prev)})")
+    end)
+
+    if previous["timestamp"] do
+      Mix.shell().info("  Snapshot from: #{previous["timestamp"]}")
+    end
+  end
+
+  defp diff_str(0), do: "no change"
+  defp diff_str(n) when n > 0, do: "+#{n}"
+  defp diff_str(n), do: "#{n}"
+
+  defp print_suggestions do
+    suggestions = DividendValidator.suggest_threshold_adjustments()
+
+    if suggestions == [] do
+      Mix.shell().info("\nNo threshold adjustments suggested.")
+    else
+      Mix.shell().info("\n=== Threshold Suggestions ===")
+
+      Enum.each(suggestions, fn s ->
+        Mix.shell().info(
+          "  #{s.currency}: current=#{s.current_threshold}, suggested=#{s.suggested_threshold} (#{s.flagged_count} flags)"
+        )
+      end)
+    end
+  end
+
+  defp serialize_report(report) do
+    %{
+      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
       total_checked: report.total_checked,
       issue_count: report.issue_count,
       by_severity: Map.new(report.by_severity, fn {k, v} -> {Atom.to_string(k), v} end),
@@ -80,10 +169,5 @@ defmodule Mix.Tasks.Validate.Data do
           end)
         end)
     }
-
-    json = Jason.encode!(serialized, pretty: true)
-    path = Path.join(dir, "validation_report.json")
-    File.write!(path, json)
-    Mix.shell().info("\nExported validation report to #{path}")
   end
 end

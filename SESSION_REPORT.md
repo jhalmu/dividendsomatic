@@ -1,3 +1,65 @@
+# Session Report — 2026-02-18
+
+## DividendValidator Automation, Learning & Skill
+
+### Context
+The DividendValidator had 6 checks and worked well, but was only invoked manually via `mix validate.data`. This session automated it (post-import, EOD), added threshold discovery, trend tracking, and a Claude skill for data integrity triage.
+
+### Changes Made
+
+#### Post-Import Validation Hook
+- `DataImportWorker` now calls `DividendValidator.validate()` after successful imports
+- Logs warning with issue count and severity breakdown if any issues found
+- No blocking — log-level only
+
+#### EOD Workflow Update
+- `CLAUDE.md` EOD now includes `mix validate.data` as step 2
+- Validation summary included in SESSION_REPORT.md
+- `mix validate.data` and `mix check.all` added to allowed commands
+
+#### `mix check.all` — Unified Integrity Command
+- New mix task combining dividend validation + gap analysis in one pass
+- Prints combined summary with total findings
+
+#### Timestamped Snapshots & `--compare`
+- `--export` writes timestamped files (`validation_20260218T...json`) + overwrites `validation_latest.json`
+- `--compare` diffs current state vs latest snapshot (records, issues, severity trends)
+- Timestamp field added to exported JSON
+
+#### Threshold Suggestions (`--suggest`)
+- New `suggest_threshold_adjustments/0` in DividendValidator
+- Groups flagged items by currency, computes 95th percentile * 1.2 for currencies with 3+ flags
+- `mix validate.data --suggest` prints suggestions
+
+#### Claude Skill
+- `.claude/skills/data-integrity.md` — all 6 checks documented with triage steps
+- Currency threshold reference table
+- Known false-positive patterns (IE ISINs paying USD, BDC special dividends)
+- Instructions for adding new rules
+
+### Validation Summary (6,223 records)
+- 109 issues: 30 info, 79 warning
+- 19 mixed_amount_types, 11 isin_currency_mismatch, 79 inconsistent_amount
+- 0 invalid currencies, 0 suspicious amounts, 0 cross-source duplicates
+
+### Files Changed
+
+| Action | File |
+|--------|------|
+| Modified | `lib/dividendsomatic/workers/data_import_worker.ex` |
+| Modified | `lib/dividendsomatic/portfolio/dividend_validator.ex` |
+| Modified | `lib/mix/tasks/validate_data.ex` |
+| Modified | `CLAUDE.md` |
+| New | `lib/mix/tasks/check_all.ex` |
+| New | `.claude/skills/data-integrity.md` |
+| Modified | `test/dividendsomatic/portfolio/dividend_validator_test.exs` |
+| Modified | `test/dividendsomatic/workers/data_import_worker_test.exs` |
+
+### Quality
+- 563 tests, 0 failures, 0 credo issues
+
+---
+
 # Session Report — 2026-02-17 (Late Night, cont.)
 
 ## Dashboard Redesign — "Deep Space" Final Polish

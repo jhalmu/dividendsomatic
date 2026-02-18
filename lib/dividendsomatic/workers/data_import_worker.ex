@@ -10,6 +10,7 @@ defmodule Dividendsomatic.Workers.DataImportWorker do
   require Logger
 
   alias Dividendsomatic.DataIngestion.FlexImportOrchestrator
+  alias Dividendsomatic.Portfolio.DividendValidator
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"source" => "csv_directory"}}) do
@@ -20,6 +21,7 @@ defmodule Dividendsomatic.Workers.DataImportWorker do
     case FlexImportOrchestrator.import_all(dir: dir) do
       {:ok, summary} ->
         Logger.info("DataImportWorker: #{inspect(summary)}")
+        run_post_import_validation()
         :ok
 
       {:error, reason} ->
@@ -31,5 +33,15 @@ defmodule Dividendsomatic.Workers.DataImportWorker do
   def perform(%Oban.Job{args: args}) do
     Logger.warning("DataImportWorker: unknown source #{inspect(args)}")
     :ok
+  end
+
+  defp run_post_import_validation do
+    report = DividendValidator.validate()
+
+    if report.issue_count > 0 do
+      Logger.warning(
+        "Post-import validation: #{report.issue_count} issues #{inspect(report.by_severity)}"
+      )
+    end
   end
 end

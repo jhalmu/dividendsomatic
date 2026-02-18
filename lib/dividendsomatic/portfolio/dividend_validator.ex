@@ -99,22 +99,45 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
     end)
   end
 
+  # ~$50 USD equivalent per-share thresholds by currency
+  @suspicious_thresholds %{
+    "USD" => "50",
+    "EUR" => "50",
+    "CAD" => "70",
+    "GBP" => "40",
+    "GBp" => "4000",
+    "CHF" => "50",
+    "AUD" => "80",
+    "NZD" => "85",
+    "SGD" => "70",
+    "HKD" => "400",
+    "JPY" => "7500",
+    "NOK" => "550",
+    "SEK" => "550",
+    "DKK" => "350",
+    "TWD" => "1600"
+  }
+
   @doc """
-  Flags per-share amounts that seem unreasonably high (>$50/share).
+  Flags per-share amounts that seem unreasonably high (~$50 USD equivalent, currency-aware).
   """
   def suspicious_amounts(dividends) do
     dividends
     |> Enum.filter(fn d ->
+      threshold = Map.get(@suspicious_thresholds, d.currency, "50")
+
       d.amount_type == "per_share" and
-        Decimal.compare(d.amount, Decimal.new("50")) == :gt
+        Decimal.compare(d.amount, Decimal.new(threshold)) == :gt
     end)
     |> Enum.map(fn d ->
+      threshold = Map.get(@suspicious_thresholds, d.currency, "50")
+
       %{
         severity: :warning,
         type: :suspicious_amount,
         symbol: d.symbol,
         ex_date: d.ex_date,
-        detail: "Per-share amount #{d.amount} #{d.currency} seems high"
+        detail: "Per-share amount #{d.amount} #{d.currency} seems high (threshold: #{threshold})"
       }
     end)
   end
@@ -203,6 +226,54 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
         isin: dup.isin,
         ex_date: dup.ex_date,
         detail: "#{dup.count} records for ISIN #{dup.isin} on #{dup.ex_date}"
+      }
+    end)
+  end
+
+  @doc """
+  Analyzes flagged dividends and suggests threshold adjustments for currencies
+  with 3+ flags. Uses 95th percentile * 1.2 as the suggested threshold.
+  """
+  def suggest_threshold_adjustments do
+    dividends =
+      Dividend
+      |> where([d], d.amount_type == "per_share")
+      |> Repo.all()
+
+    flagged = suspicious_amounts(dividends)
+
+    flagged
+    |> Enum.group_by(fn issue ->
+      # Extract currency from detail string
+      case Regex.run(~r/(\w+) seems high/, issue.detail) do
+        [_, currency] -> currency
+        _ -> nil
+      end
+    end)
+    |> Map.delete(nil)
+    |> Enum.filter(fn {_currency, items} -> length(items) >= 3 end)
+    |> Enum.map(fn {currency, items} ->
+      # Find actual per_share amounts for flagged items by matching symbol+date
+      flagged_keys = MapSet.new(items, fn i -> {i.symbol, i.ex_date} end)
+
+      amounts =
+        dividends
+        |> Enum.filter(fn d ->
+          d.currency == currency and MapSet.member?(flagged_keys, {d.symbol, d.ex_date})
+        end)
+        |> Enum.map(fn d -> Decimal.to_float(d.amount) end)
+        |> Enum.sort()
+
+      p95_index = max(0, ceil(length(amounts) * 0.95) - 1)
+      p95 = Enum.at(amounts, p95_index, 0.0)
+      suggested = ceil(p95 * 1.2)
+      current = Map.get(@suspicious_thresholds, currency, "50")
+
+      %{
+        currency: currency,
+        current_threshold: current,
+        suggested_threshold: Integer.to_string(suggested),
+        flagged_count: length(items)
       }
     end)
   end
