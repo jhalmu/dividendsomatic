@@ -12,6 +12,8 @@ defmodule Dividendsomatic.Portfolio do
     CsvParser,
     Dividend,
     DividendAnalytics,
+    MarginEquitySnapshot,
+    MarginRates,
     PortfolioSnapshot,
     Position,
     SoldPosition
@@ -1760,5 +1762,277 @@ defmodule Dividendsomatic.Portfolio do
     end)
     |> Enum.filter(fn d -> d.gaps != [] end)
     |> Enum.sort_by(& &1.symbol)
+  end
+
+  ## Margin & Equity Tracking
+
+  @doc """
+  Returns the latest margin equity snapshot.
+  """
+  def get_latest_margin_equity do
+    MarginEquitySnapshot
+    |> order_by([m], desc: m.date)
+    |> limit(1)
+    |> Repo.one()
+  end
+
+  @doc """
+  Returns margin equity snapshot for a specific date.
+  """
+  def get_margin_equity_for_date(date) do
+    Repo.get_by(MarginEquitySnapshot, date: date)
+  end
+
+  @doc """
+  Returns the margin equity snapshot nearest to the given date.
+  """
+  def get_margin_equity_nearest_date(target_date) do
+    before =
+      MarginEquitySnapshot
+      |> where([m], m.date <= ^target_date)
+      |> order_by(desc: :date)
+      |> limit(1)
+      |> Repo.one()
+
+    after_s =
+      MarginEquitySnapshot
+      |> where([m], m.date >= ^target_date)
+      |> order_by(asc: :date)
+      |> limit(1)
+      |> Repo.one()
+
+    case {before, after_s} do
+      {nil, nil} -> nil
+      {b, nil} -> b
+      {nil, a} -> a
+      {b, a} ->
+        if abs(Date.diff(b.date, target_date)) <= abs(Date.diff(a.date, target_date)),
+          do: b,
+          else: a
+    end
+  end
+
+  @doc """
+  Lists all margin equity snapshots ordered by date.
+  """
+  def list_margin_equity_snapshots do
+    MarginEquitySnapshot
+    |> order_by([m], desc: m.date)
+    |> Repo.all()
+  end
+
+  @doc """
+  Creates a margin equity snapshot.
+  """
+  def create_margin_equity_snapshot(attrs) do
+    %MarginEquitySnapshot{}
+    |> MarginEquitySnapshot.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Upserts a margin equity snapshot (by date).
+  """
+  def upsert_margin_equity_snapshot(attrs) do
+    %MarginEquitySnapshot{}
+    |> MarginEquitySnapshot.changeset(attrs)
+    |> Repo.insert(
+      on_conflict: {:replace_all_except, [:id, :inserted_at]},
+      conflict_target: [:date]
+    )
+  end
+
+  @doc """
+  Returns a comprehensive margin & equity summary for display.
+
+  Combines latest margin equity data with actual interest costs and rate comparison.
+  """
+  def margin_equity_summary do
+    zero = Decimal.new("0")
+    margin_snapshot = get_latest_margin_equity()
+
+    actual_interest = total_actual_margin_interest()
+    dw = total_deposits_withdrawals()
+
+    case margin_snapshot do
+      nil ->
+        # No margin data yet — return what we can derive
+        %{
+          has_data: false,
+          net_invested: dw.net_invested,
+          deposits: dw.deposits,
+          withdrawals: dw.withdrawals,
+          actual_interest_total: actual_interest,
+          actual_interest_by_month: margin_interest_by_month()
+        }
+
+      snapshot ->
+        margin_loan = snapshot.margin_loan || zero
+        rate_info = MarginRates.rate_summary("EUR", margin_loan)
+
+        %{
+          has_data: true,
+          date: snapshot.date,
+          cash_balance: snapshot.cash_balance,
+          margin_loan: margin_loan,
+          net_liquidation_value: snapshot.net_liquidation_value,
+          own_equity: snapshot.own_equity,
+          leverage_ratio: snapshot.leverage_ratio,
+          loan_to_value: snapshot.loan_to_value,
+          net_invested: dw.net_invested,
+          deposits: dw.deposits,
+          withdrawals: dw.withdrawals,
+          actual_interest_total: actual_interest,
+          actual_interest_by_month: margin_interest_by_month(),
+          expected_rate: rate_info,
+          payback: compute_payback(snapshot.own_equity)
+        }
+    end
+  end
+
+  @doc """
+  Returns total actual margin interest paid (from broker transactions).
+  """
+  def total_actual_margin_interest do
+    zero = Decimal.new("0")
+
+    result =
+      BrokerTransaction
+      |> where([t], t.transaction_type == "loan_interest")
+      |> select([t], sum(t.amount))
+      |> Repo.one()
+
+    # loan_interest amounts are negative (charges), return absolute value
+    case result do
+      nil -> zero
+      amount -> Decimal.abs(amount)
+    end
+  end
+
+  @doc """
+  Returns margin interest charges grouped by month.
+  """
+  def margin_interest_by_month do
+    BrokerTransaction
+    |> where([t], t.transaction_type == "loan_interest")
+    |> group_by([t], fragment("to_char(?, 'YYYY-MM')", t.trade_date))
+    |> select([t], %{
+      month: fragment("to_char(?, 'YYYY-MM')", t.trade_date),
+      amount: fragment("ABS(SUM(?))", t.amount)
+    })
+    |> order_by([t], fragment("to_char(?, 'YYYY-MM')", t.trade_date))
+    |> Repo.all()
+  end
+
+  @doc """
+  Returns margin interest total for a specific year.
+  """
+  def margin_interest_for_year(year) do
+    zero = Decimal.new("0")
+
+    year_start = Date.new!(year, 1, 1)
+
+    year_end =
+      if year == Date.utc_today().year, do: Date.utc_today(), else: Date.new!(year, 12, 31)
+
+    result =
+      BrokerTransaction
+      |> where([t], t.transaction_type == "loan_interest")
+      |> where([t], t.trade_date >= ^year_start and t.trade_date <= ^year_end)
+      |> select([t], sum(t.amount))
+      |> Repo.one()
+
+    case result do
+      nil -> zero
+      amount -> Decimal.abs(amount)
+    end
+  end
+
+  @doc """
+  Computes payback timeline: how much of own invested capital has been earned back.
+
+  Cumulative earnings = dividends + realized P&L - costs (including margin interest)
+  Payback % = cumulative earnings / own_equity
+  """
+  def compute_payback(own_equity) do
+    zero = Decimal.new("0")
+
+    if is_nil(own_equity) or Decimal.compare(own_equity, zero) != :gt do
+      %{
+        own_equity: own_equity || zero,
+        cumulative_earnings: zero,
+        payback_pct: zero,
+        projected_payback_date: nil
+      }
+    else
+      total_dividends =
+        dividend_years()
+        |> Enum.reduce(zero, fn year, acc ->
+          Decimal.add(acc, total_dividends_for_year(year))
+        end)
+
+      realized_pnl = total_realized_pnl()
+      total_costs = costs_summary().total
+
+      cumulative_earnings =
+        realized_pnl
+        |> Decimal.add(total_dividends)
+        |> Decimal.sub(total_costs)
+
+      payback_pct =
+        cumulative_earnings
+        |> Decimal.div(own_equity)
+        |> Decimal.mult(Decimal.new("100"))
+        |> Decimal.round(1)
+
+      projected_date = project_payback_date(cumulative_earnings, own_equity)
+
+      %{
+        own_equity: own_equity,
+        cumulative_earnings: cumulative_earnings,
+        payback_pct: payback_pct,
+        projected_payback_date: projected_date
+      }
+    end
+  end
+
+  defp project_payback_date(cumulative_earnings, own_equity) do
+    zero = Decimal.new("0")
+
+    if Decimal.compare(cumulative_earnings, zero) != :gt do
+      nil
+    else
+      # Calculate daily earnings rate from first snapshot to now
+      first = get_first_snapshot()
+
+      case first do
+        nil ->
+          nil
+
+        first_snap ->
+          days_active = Date.diff(Date.utc_today(), first_snap.date)
+
+          if days_active > 0 do
+            daily_rate = Decimal.div(cumulative_earnings, Decimal.new(days_active))
+            remaining = Decimal.sub(own_equity, cumulative_earnings)
+
+            if Decimal.compare(remaining, zero) == :gt and
+                 Decimal.compare(daily_rate, zero) == :gt do
+              days_to_payback =
+                remaining
+                |> Decimal.div(daily_rate)
+                |> Decimal.round(0)
+                |> Decimal.to_integer()
+
+              Date.add(Date.utc_today(), days_to_payback)
+            else
+              # Already paid back or no positive earnings rate
+              nil
+            end
+          else
+            nil
+          end
+      end
+    end
   end
 end
