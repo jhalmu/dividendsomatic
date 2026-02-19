@@ -892,6 +892,179 @@
           </div>
         <% end %>
 
+        <%!-- Margin & Equity --%>
+        <%= if @margin_equity do %>
+          <div
+            class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]"
+            data-testid="margin-equity-card"
+          >
+            <div class="terminal-section-label">Margin &amp; Equity</div>
+
+            <%= if @margin_equity.has_data do %>
+              <%!-- Full view with IBKR data --%>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)] mt-[var(--space-sm)]">
+                <div class="text-center">
+                  <div class="terminal-stat-label">Own Equity</div>
+                  <div
+                    class="terminal-stat-value"
+                    style="font-size: 0.8125rem; color: var(--gain);"
+                  >
+                    {format_euro_decimal(@margin_equity.own_equity)}
+                  </div>
+                </div>
+                <div class="text-center">
+                  <div class="terminal-stat-label">Margin Loan</div>
+                  <div class="terminal-stat-value loss" style="font-size: 0.8125rem;">
+                    {format_euro_decimal(@margin_equity.margin_loan)}
+                  </div>
+                </div>
+                <div class="text-center">
+                  <div class="terminal-stat-label">Leverage</div>
+                  <div class="terminal-stat-value" style="font-size: 0.8125rem;">
+                    {format_decimal(@margin_equity.leverage_ratio)}x
+                  </div>
+                </div>
+                <div class="text-center">
+                  <div class="terminal-stat-label">Net Liquidation</div>
+                  <div class="terminal-stat-value" style="font-size: 0.8125rem;">
+                    {format_euro_decimal(@margin_equity.net_liquidation_value)}
+                  </div>
+                </div>
+                <div class="text-center">
+                  <div class="terminal-stat-label">Loan-to-Value</div>
+                  <div class="terminal-stat-value" style="font-size: 0.8125rem;">
+                    {format_decimal(
+                      Decimal.mult(@margin_equity.loan_to_value, Decimal.new("100"))
+                    )}%
+                  </div>
+                </div>
+                <div class="text-center">
+                  <div class="terminal-stat-label">Data Date</div>
+                  <div
+                    class="terminal-stat-value"
+                    style="font-size: 0.8125rem; color: var(--terminal-dim);"
+                  >
+                    {Calendar.strftime(@margin_equity.date, "%Y-%m-%d")}
+                  </div>
+                </div>
+              </div>
+
+              <%!-- Payback Progress --%>
+              <%= if @margin_equity.payback do %>
+                <div
+                  class="mt-[var(--space-sm)]"
+                  style="border-top: 1px solid var(--terminal-border); padding-top: var(--space-sm);"
+                >
+                  <div class="flex items-center justify-between mb-[var(--space-xs)]">
+                    <div class="terminal-stat-label" style="border: none; padding: 0; margin: 0;">
+                      Payback Progress
+                    </div>
+                    <div style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--terminal-accent);">
+                      {format_decimal(@margin_equity.payback.payback_pct)}%
+                    </div>
+                  </div>
+                  <div style="height: 6px; background: var(--terminal-surface); border-radius: 3px; overflow: hidden;">
+                    <div style={"height: 100%; background: var(--gain); border-radius: 3px; width: #{min(100, max(0, Decimal.to_float(@margin_equity.payback.payback_pct)))}%;"}>
+                    </div>
+                  </div>
+                  <div
+                    class="flex items-center justify-between mt-[var(--space-xs)]"
+                    style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);"
+                  >
+                    <span>
+                      Earned: {format_euro_decimal(@margin_equity.payback.cumulative_earnings)}
+                    </span>
+                    <span>
+                      of {format_euro_decimal(@margin_equity.payback.own_equity)}
+                    </span>
+                  </div>
+                  <%= if @margin_equity.payback.projected_payback_date do %>
+                    <div style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim); margin-top: 2px;">
+                      Projected payback: {Calendar.strftime(
+                        @margin_equity.payback.projected_payback_date,
+                        "%Y-%m-%d"
+                      )}
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+            <% else %>
+              <%!-- Degraded view: no IBKR margin data yet --%>
+              <div
+                class="mt-[var(--space-sm)]"
+                style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--terminal-dim);"
+              >
+                <p class="mb-[var(--space-xs)]">
+                  No margin data from IBKR yet. Import a Flex report with cash/margin fields.
+                </p>
+              </div>
+            <% end %>
+
+            <%!-- Margin Interest Cost (always shown if interest exists) --%>
+            <%= if Decimal.compare(@margin_equity.actual_interest_total, Decimal.new("0")) == :gt do %>
+              <div
+                class="mt-[var(--space-sm)]"
+                style="border-top: 1px solid var(--terminal-border); padding-top: var(--space-sm);"
+              >
+                <div class="flex items-center justify-between mb-[var(--space-xs)]">
+                  <div class="terminal-stat-label" style="border: none; padding: 0; margin: 0;">
+                    Margin Interest
+                  </div>
+                  <div style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--loss);">
+                    {format_euro_decimal(@margin_equity.actual_interest_total)} total
+                  </div>
+                </div>
+
+                <%!-- Expected rate info (only with margin data) --%>
+                <%= if @margin_equity[:expected_rate] do %>
+                  <div
+                    class="grid grid-cols-3 gap-[var(--space-xs)]"
+                    style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);"
+                  >
+                    <div>
+                      Rate: {format_decimal(@margin_equity.expected_rate.effective_rate)}%
+                    </div>
+                    <div>
+                      BM: {format_decimal(@margin_equity.expected_rate.benchmark)}%
+                      + {format_decimal(@margin_equity.expected_rate.spread)}%
+                    </div>
+                    <div>
+                      ~{format_euro_decimal(@margin_equity.expected_rate.monthly_cost)}/mo
+                    </div>
+                  </div>
+                <% end %>
+
+                <%!-- Recent monthly interest --%>
+                <%= if length(@margin_equity.actual_interest_by_month) > 0 do %>
+                  <div class="overflow-x-auto mt-[var(--space-xs)]">
+                    <table class="terminal-table" style="font-size: 0.6875rem;">
+                      <thead>
+                        <tr>
+                          <th scope="col">Month</th>
+                          <th scope="col" style="text-align: right;">Interest</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <%= for entry <- Enum.take(@margin_equity.actual_interest_by_month, -6) |> Enum.reverse() do %>
+                          <tr>
+                            <td>{entry.month}</td>
+                            <td
+                              class="terminal-number"
+                              style="text-align: right; color: var(--loss);"
+                            >
+                              {format_euro_decimal(entry.amount)}
+                            </td>
+                          </tr>
+                        <% end %>
+                      </tbody>
+                    </table>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+        <% end %>
+
         <%!-- Realized P&L --%>
         <div
           class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]"

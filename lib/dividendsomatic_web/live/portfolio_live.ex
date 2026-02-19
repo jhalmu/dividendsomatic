@@ -276,6 +276,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
         |> assign(:fx_exposure, Portfolio.compute_fx_exposure(socket.assigns.positions))
         |> assign_pnl_summary()
         |> assign_investment_summary()
+        |> assign_margin_equity()
       else
         socket
       end
@@ -541,6 +542,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:dividend_summary_totals, %{})
     |> assign(:is_reconstructed, false)
     |> assign(:missing_price_count, 0)
+    |> assign(:margin_equity, nil)
     |> assign(:pnl, %{
       total_pnl: Decimal.new("0"),
       total_trades: 0,
@@ -635,6 +637,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:pnl, %{winners: [], losers: [], total_realized: Decimal.new("0")})
     |> assign(:investment_summary, nil)
     |> assign(:summary_loaded, false)
+    |> assign(:margin_equity, nil)
     |> assign_new(:active_tab, fn -> "income" end)
     |> assign_freshness_and_source(snapshot, positions)
     |> maybe_load_summary()
@@ -646,6 +649,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:fx_exposure, Portfolio.compute_fx_exposure(socket.assigns.positions))
     |> assign_pnl_summary()
     |> assign_investment_summary()
+    |> assign_margin_equity()
   end
 
   defp maybe_load_summary(socket), do: socket
@@ -773,6 +777,10 @@ defmodule DividendsomaticWeb.PortfolioLive do
       |> Map.put(:total_return, total_return)
 
     assign(socket, :investment_summary, investment_summary)
+  end
+
+  defp assign_margin_equity(socket) do
+    assign(socket, :margin_equity, Portfolio.margin_equity_summary())
   end
 
   # --- ApexCharts Data Serialization ---

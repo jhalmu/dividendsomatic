@@ -1802,9 +1802,15 @@ defmodule Dividendsomatic.Portfolio do
       |> Repo.one()
 
     case {before, after_s} do
-      {nil, nil} -> nil
-      {b, nil} -> b
-      {nil, a} -> a
+      {nil, nil} ->
+        nil
+
+      {b, nil} ->
+        b
+
+      {nil, a} ->
+        a
+
       {b, a} ->
         if abs(Date.diff(b.date, target_date)) <= abs(Date.diff(a.date, target_date)),
           do: b,
@@ -1999,40 +2005,27 @@ defmodule Dividendsomatic.Portfolio do
   defp project_payback_date(cumulative_earnings, own_equity) do
     zero = Decimal.new("0")
 
-    if Decimal.compare(cumulative_earnings, zero) != :gt do
-      nil
+    with true <- Decimal.compare(cumulative_earnings, zero) == :gt,
+         %{date: first_date} <- get_first_snapshot(),
+         days_active when days_active > 0 <- Date.diff(Date.utc_today(), first_date) do
+      compute_payback_date(cumulative_earnings, own_equity, days_active)
     else
-      # Calculate daily earnings rate from first snapshot to now
-      first = get_first_snapshot()
+      _ -> nil
+    end
+  end
 
-      case first do
-        nil ->
-          nil
+  defp compute_payback_date(cumulative_earnings, own_equity, days_active) do
+    zero = Decimal.new("0")
+    daily_rate = Decimal.div(cumulative_earnings, Decimal.new(days_active))
+    remaining = Decimal.sub(own_equity, cumulative_earnings)
 
-        first_snap ->
-          days_active = Date.diff(Date.utc_today(), first_snap.date)
+    if Decimal.compare(remaining, zero) == :gt and Decimal.compare(daily_rate, zero) == :gt do
+      days_to_payback =
+        remaining |> Decimal.div(daily_rate) |> Decimal.round(0) |> Decimal.to_integer()
 
-          if days_active > 0 do
-            daily_rate = Decimal.div(cumulative_earnings, Decimal.new(days_active))
-            remaining = Decimal.sub(own_equity, cumulative_earnings)
-
-            if Decimal.compare(remaining, zero) == :gt and
-                 Decimal.compare(daily_rate, zero) == :gt do
-              days_to_payback =
-                remaining
-                |> Decimal.div(daily_rate)
-                |> Decimal.round(0)
-                |> Decimal.to_integer()
-
-              Date.add(Date.utc_today(), days_to_payback)
-            else
-              # Already paid back or no positive earnings rate
-              nil
-            end
-          else
-            nil
-          end
-      end
+      Date.add(Date.utc_today(), days_to_payback)
+    else
+      nil
     end
   end
 end
