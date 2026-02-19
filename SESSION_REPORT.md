@@ -1,3 +1,64 @@
+# Session Report — 2026-02-19 (cont.)
+
+## Legacy Stub Cleanup, Playwright E2E Tests, Accessibility Fixes
+
+### Context
+Post-merge cleanup: removed 10 compilation warnings from legacy import stubs, created Playwright E2E tests for portfolio page, and fixed all accessibility violations (color contrast, animations, ARIA).
+
+### Changes Made
+
+#### Legacy Stub Cleanup (0 compilation warnings)
+- **`flex_import_orchestrator.ex`** — simplified `:dividends` and `:trades` routes to skip with log message
+- **`gmail.ex`** — simplified `:dividends` and `:trades` routes to skip with log message
+- **`import_flex_div_csv.ex`** — simplified to legacy disabled message
+- **`import_flex_trades.ex`** — simplified to legacy disabled message
+- **`import_yahoo.ex`** — simplified `import_record` to no-op
+- **`portfolio.ex`** — removed 3 legacy stubs (`import_flex_dividends_csv`, `import_flex_trades_csv`, `create_dividend`), kept `stock_gaps/1` (still used by DataGapsLive)
+
+#### Playwright E2E Tests — 21 tests, 0 failures
+- **`portfolio_page_test.exs`** — NEW: 8 tests (empty state, dashboard with data, holdings table, stock detail navigation, date picker, tab navigation, cash flow section)
+- **`stock_page_test.exs`** — fixed symbol resolution: `insert_profile("KESKOB")` → `insert_profile("KESKOB.HE")` (exchange suffix)
+- **`accessibility_test.exs`** — inject CSS to disable animations before axe-core audit
+
+#### Accessibility Fixes (WCAG AA)
+- **CSS animations causing false contrast violations** — `animate-fade-in` + `animate-delay-*` started at `opacity: 0`, axe-core ran mid-animation seeing near-black foreground colors
+- **Fix**: Added `@media (prefers-reduced-motion: reduce)` — disables all animations, resets opacity to 1
+- **Fix**: Test audit helpers inject CSS to disable animations before axe-core runs
+- **Noise texture/glow overlays** — `z-index: 0` → `z-index: -1` (behind content)
+- **`--terminal-dim`** — `#4C5772` → `#7080A6` (5:1 contrast ratio on `#06080D`)
+- **Motto opacity** — removed `opacity: 0.5` from `.terminal-motto`
+- **Surfaces made opaque** — `--terminal-surface`: `rgba(14,18,27,0.85)` → `#0E121B`, `--terminal-elevated`: `rgba(22,28,40,0.9)` → `#161C28`
+- **Removed all `backdrop-filter: blur()`** — invisible with opaque backgrounds
+- **Date input** — added `aria-label="Select snapshot date"`
+- **Keyboard hint** — removed `opacity-60` from `±1 week` span (failed 4.5:1 contrast)
+
+### Validation Summary (6,167 records)
+- 107 issues: 20 info, 87 warning
+- 8 missing_fx_conversion, 8 mixed_amount_types, 12 isin_currency_mismatch, 79 inconsistent_amount
+
+### Files Changed
+
+| Action | File |
+|--------|------|
+| New | `test/dividendsomatic_web/e2e/portfolio_page_test.exs` — 8 E2E tests |
+| Modified | `assets/css/app.css` — contrast fixes, reduced-motion, opaque surfaces |
+| Modified | `lib/dividendsomatic_web/live/portfolio_live.html.heex` — aria-label, opacity fix |
+| Modified | `lib/dividendsomatic/portfolio.ex` — removed 3 legacy stubs |
+| Modified | `lib/dividendsomatic/data_ingestion/flex_import_orchestrator.ex` — simplified |
+| Modified | `lib/dividendsomatic/gmail.ex` — simplified |
+| Modified | `lib/mix/tasks/import_flex_div_csv.ex` — simplified |
+| Modified | `lib/mix/tasks/import_flex_trades.ex` — simplified |
+| Modified | `lib/mix/tasks/import_yahoo.ex` — simplified |
+| Modified | `test/dividendsomatic_web/e2e/accessibility_test.exs` — animation disable |
+| Modified | `test/dividendsomatic_web/e2e/stock_page_test.exs` — symbol fix, animation disable |
+
+### Quality
+- 668 tests, 0 failures, 0 credo issues
+- 21 Playwright E2E tests, 0 failures
+- 0 compilation warnings
+
+---
+
 # Session Report — 2026-02-19
 
 ## Database Rebuild — Phases 0-5: Clean Tables from IBKR Activity Statements

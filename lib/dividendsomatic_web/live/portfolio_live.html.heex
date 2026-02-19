@@ -124,6 +124,7 @@
                 type="date"
                 name="date"
                 value={Date.to_iso8601(@current_snapshot.date)}
+                aria-label="Select snapshot date"
                 class="bg-transparent border-none text-center cursor-pointer"
                 style="font-family: var(--font-display); font-size: 1.125rem; font-weight: 500; color: var(--terminal-text); letter-spacing: 0.02em; width: auto;"
               />
@@ -1459,7 +1460,7 @@
           <span class="terminal-kbd">←</span>
           <span class="terminal-kbd ml-0.5">→</span>
           <span class="ml-1.5">navigate</span>
-          <span class="ml-2 opacity-60">
+          <span class="ml-2">
             <span class="terminal-kbd">⇧←</span>
             <span class="terminal-kbd ml-0.5">⇧→</span>
             <span class="ml-1">±1 week</span>

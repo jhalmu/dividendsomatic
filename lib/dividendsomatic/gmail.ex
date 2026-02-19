@@ -198,34 +198,14 @@ defmodule Dividendsomatic.Gmail do
     end
   end
 
-  defp route_by_type(:dividends, csv_data, _report_date, subject) do
-    case Portfolio.import_flex_dividends_csv(csv_data) do
-      {:ok, %{imported: 0}} ->
-        {:skipped, subject}
-
-      {:ok, %{imported: n, skipped: s}} ->
-        Logger.info("Gmail: #{subject} → #{n} dividends imported, #{s} skipped")
-        {:ok, subject}
-
-      {:error, reason} ->
-        Logger.error("Gmail: dividend import failed for #{subject}: #{inspect(reason)}")
-        {:error, {subject, reason}}
-    end
+  defp route_by_type(:dividends, _csv_data, _report_date, subject) do
+    Logger.info("Gmail: #{subject} — legacy dividend import disabled, use mix import.activity")
+    {:skipped, subject}
   end
 
-  defp route_by_type(:trades, csv_data, _report_date, subject) do
-    case Portfolio.import_flex_trades_csv(csv_data) do
-      {:ok, %{imported: 0}} ->
-        {:skipped, subject}
-
-      {:ok, %{imported: n, skipped: s}} ->
-        Logger.info("Gmail: #{subject} → #{n} trades imported, #{s} skipped")
-        {:ok, subject}
-
-      {:error, reason} ->
-        Logger.error("Gmail: trade import failed for #{subject}: #{inspect(reason)}")
-        {:error, {subject, reason}}
-    end
+  defp route_by_type(:trades, _csv_data, _report_date, subject) do
+    Logger.info("Gmail: #{subject} — legacy trade import disabled, use mix import.activity")
+    {:skipped, subject}
   end
 
   defp route_by_type(:actions, csv_data, _report_date, subject) do

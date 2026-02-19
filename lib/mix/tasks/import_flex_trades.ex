@@ -15,8 +15,6 @@ defmodule Mix.Tasks.Import.FlexTrades do
   """
   use Mix.Task
 
-  alias Dividendsomatic.Portfolio
-
   @shortdoc "Import IBKR Flex trades CSV"
 
   @impl true
@@ -32,21 +30,7 @@ defmodule Mix.Tasks.Import.FlexTrades do
     end
   end
 
-  defp import_file(path) do
-    case File.read(path) do
-      {:ok, content} ->
-        case Portfolio.import_flex_trades_csv(content) do
-          {:ok, %{imported: imported, skipped: skipped}} ->
-            Mix.shell().info(
-              "Imported #{imported} trades, #{skipped} duplicates skipped from #{path}"
-            )
-
-          {:error, reason} ->
-            Mix.shell().error("Parse error: #{inspect(reason)}")
-        end
-
-      {:error, reason} ->
-        Mix.shell().error("Cannot read file #{path}: #{reason}")
-    end
+  defp import_file(_path) do
+    Mix.shell().info("Legacy trade CSV import disabled — use mix import.activity instead")
   end
 end

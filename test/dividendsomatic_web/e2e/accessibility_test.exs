@@ -12,7 +12,15 @@ defmodule DividendsomaticWeb.E2E.AccessibilityTest do
 
   alias Dividendsomatic.Portfolio
 
+  @disable_animations_js """
+  const style = document.createElement('style');
+  style.textContent = '*, *::before, *::after { animation: none !important; transition: none !important; } .animate-delay-1, .animate-delay-2, .animate-delay-3, .animate-delay-4, .animate-delay-5 { opacity: 1 !important; }';
+  document.head.appendChild(style);
+  void document.body.offsetHeight;
+  """
+
   defp audit_page(session) do
+    session = run_js(session, @disable_animations_js)
     session = run_js(session, A11yAudit.JS.axe_core())
     {session, axe_result} = execute_js(session, A11yAudit.JS.await_audit_results())
     results = A11yAudit.Results.from_json(axe_result)

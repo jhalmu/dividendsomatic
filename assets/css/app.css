@@ -141,13 +141,13 @@
 /* Deep space palette — luminous data on the abyss */
 :root {
     --terminal-bg: #06080D;
-    --terminal-surface: rgba(14, 18, 27, 0.85);
-    --terminal-elevated: rgba(22, 28, 40, 0.9);
+    --terminal-surface: #0E121B;
+    --terminal-elevated: #161C28;
     --terminal-border: rgba(45, 55, 80, 0.5);
     --terminal-border-bright: rgba(65, 80, 110, 0.6);
     --terminal-text: #D8DEE9;
     --terminal-muted: #7E8BA3;
-    --terminal-dim: #4C5772;
+    --terminal-dim: #7080A6;
     --terminal-accent: #5EADF7;
 
     /* P&L Colors — luminous against dark */
@@ -188,7 +188,7 @@
     content: "";
     position: fixed;
     inset: 0;
-    z-index: 0;
+    z-index: -1;
     pointer-events: none;
     opacity: 0.025;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -206,7 +206,7 @@
     width: 800px;
     height: 500px;
     background: radial-gradient(ellipse, rgba(94, 173, 247, 0.03) 0%, transparent 70%);
-    z-index: 0;
+    z-index: -1;
     pointer-events: none;
 }
 
@@ -243,7 +243,6 @@
     font-family: var(--font-display);
     letter-spacing: 0.08em;
     margin-top: 0.375rem;
-    opacity: 0.5;
 }
 
 .terminal-rose-line {
@@ -265,8 +264,6 @@
     border-radius: 14px;
     position: relative;
     z-index: 1;
-    backdrop-filter: blur(16px) saturate(1.2);
-    -webkit-backdrop-filter: blur(16px) saturate(1.2);
 }
 
 /* Accent glow line */
@@ -354,7 +351,6 @@
     border-radius: 10px;
     position: relative;
     z-index: 1;
-    backdrop-filter: blur(16px);
 }
 
 .terminal-nav-bar-compact::before {
@@ -480,7 +476,6 @@
     overflow: hidden;
     transition: border-color 0.25s ease, box-shadow 0.25s ease;
     z-index: 1;
-    backdrop-filter: blur(12px);
 }
 
 .terminal-stat:hover {
@@ -571,7 +566,6 @@ details[open] > .terminal-details-summary .chevron-icon {
     border-radius: 14px;
     position: relative;
     z-index: 1;
-    backdrop-filter: blur(12px);
 }
 
 /* ── Chart Section ── */
@@ -582,7 +576,6 @@ details[open] > .terminal-details-summary .chevron-icon {
     padding: 1.25rem 1.5rem;
     position: relative;
     z-index: 1;
-    backdrop-filter: blur(12px);
 }
 
 .terminal-chart-title {
@@ -993,6 +986,32 @@ details[open] > .terminal-details-summary .chevron-icon {
 .animate-delay-5 {
     animation-delay: 0.3s;
     opacity: 0;
+}
+
+/* Respect reduced motion preference — WCAG accessibility */
+@media (prefers-reduced-motion: reduce) {
+    .animate-fade-in,
+    .animate-slide-in {
+        animation: none;
+    }
+
+    .animate-delay-1,
+    .animate-delay-2,
+    .animate-delay-3,
+    .animate-delay-4,
+    .animate-delay-5 {
+        animation-delay: 0s;
+        opacity: 1;
+    }
+
+    .chart-current-marker {
+        animation: none;
+    }
+
+    .chart-line-animated {
+        animation: none;
+        stroke-dashoffset: 0;
+    }
 }
 
 /* ── Scrollbar ── */

@@ -11,8 +11,6 @@ defmodule Mix.Tasks.Import.Yahoo do
   """
   use Mix.Task
 
-  require Logger
-
   @shortdoc "Import yfinance dividend JSON data"
 
   @impl true
@@ -86,36 +84,8 @@ defmodule Mix.Tasks.Import.Yahoo do
     end
   end
 
-  defp import_record(record, {new_count, dup_count}) do
-    attrs = %{
-      symbol: record["symbol"],
-      ex_date: record["ex_date"],
-      amount: record["amount"],
-      currency: record["currency"] || "USD",
-      source: "yfinance"
-    }
-
-    case Dividendsomatic.Portfolio.create_dividend(attrs) do
-      {:ok, _} ->
-        {new_count + 1, dup_count}
-
-      {:error, %Ecto.Changeset{errors: errors}} ->
-        if duplicate_error?(errors) do
-          {new_count, dup_count + 1}
-        else
-          Logger.warning("Failed to import dividend: #{inspect(errors)}")
-          {new_count, dup_count}
-        end
-
-      {:error, reason} ->
-        Logger.warning("Failed to import dividend: #{inspect(reason)}")
-        {new_count, dup_count}
-    end
-  end
-
-  defp duplicate_error?(errors) do
-    Enum.any?(errors, fn {_field, {msg, _}} ->
-      String.contains?(msg, "already been taken") or String.contains?(msg, "already exists")
-    end)
+  defp import_record(_record, acc) do
+    # Legacy import disabled — dividends are imported via mix import.activity
+    acc
   end
 end

@@ -6,8 +6,8 @@ defmodule Dividendsomatic.DataIngestion.FlexImportOrchestrator do
   and routes to the appropriate import pipeline:
 
   - `:portfolio` → existing `DataIngestion.import_new_from_source(CsvDirectory)`
-  - `:dividends` → `Portfolio.import_flex_dividends_csv/1`
-  - `:trades`    → `Portfolio.import_flex_trades_csv/1`
+  - `:dividends` → skipped (legacy, use `mix import.activity`)
+  - `:trades`    → skipped (legacy, use `mix import.activity`)
   - `:actions`   → `IntegrityChecker.run_all/1` (print report, no insert)
 
   Replaces `CsvDirectory` as the main import entry point for the worker.
@@ -97,34 +97,20 @@ defmodule Dividendsomatic.DataIngestion.FlexImportOrchestrator do
     end
   end
 
-  defp route_import(:dividends, content, _path, filename) do
-    case Portfolio.import_flex_dividends_csv(content) do
-      {:ok, summary} ->
-        Logger.info(
-          "FlexImportOrchestrator: #{filename} → #{summary.imported} dividends imported, " <>
-            "#{summary.skipped} skipped"
-        )
+  defp route_import(:dividends, _content, _path, filename) do
+    Logger.info(
+      "FlexImportOrchestrator: #{filename} — legacy dividend import disabled, use mix import.activity"
+    )
 
-        {:ok, :dividends, summary}
-
-      {:error, reason} ->
-        {:error, "dividend import failed for #{filename}: #{inspect(reason)}"}
-    end
+    {:skipped, :dividends, "#{filename}: legacy import disabled"}
   end
 
-  defp route_import(:trades, content, _path, filename) do
-    case Portfolio.import_flex_trades_csv(content) do
-      {:ok, summary} ->
-        Logger.info(
-          "FlexImportOrchestrator: #{filename} → #{summary.imported} trades imported, " <>
-            "#{summary.skipped} skipped"
-        )
+  defp route_import(:trades, _content, _path, filename) do
+    Logger.info(
+      "FlexImportOrchestrator: #{filename} — legacy trade import disabled, use mix import.activity"
+    )
 
-        {:ok, :trades, summary}
-
-      {:error, reason} ->
-        {:error, "trade import failed for #{filename}: #{inspect(reason)}"}
-    end
+    {:skipped, :trades, "#{filename}: legacy import disabled"}
   end
 
   defp route_import(:actions, _content, path, filename) do

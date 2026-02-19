@@ -1719,17 +1719,6 @@ defmodule Dividendsomatic.Portfolio do
     end
   end
 
-  ## Legacy stubs — old import paths that reference removed functions.
-  ## These will be removed entirely when legacy import code is cleaned up.
-
-  def import_flex_dividends_csv(_csv_string),
-    do: {:error, "Legacy import disabled — use mix import.activity"}
-
-  def import_flex_trades_csv(_csv_string),
-    do: {:error, "Legacy import disabled — use mix import.activity"}
-
-  def create_dividend(_attrs),
-    do: {:error, "Legacy function — dividends are imported via mix import.activity"}
-
+  # stock_gaps is still used by DataGapsLive — returns [] until reimplemented with new tables
   def stock_gaps(_opts \\ []), do: []
 end

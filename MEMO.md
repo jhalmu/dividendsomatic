@@ -65,18 +65,24 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.29.0 (Database Rebuild — Clean Tables)
-**Status:** Clean IBKR-derived tables (instruments, trades, dividend_payments, cash_flows, corporate_actions), legacy tables archived with `legacy_` prefix, 668 tests, 0 credo issues
-**Branch:** `feature/db-rebuild` (worktree at `.worktrees/db-rebuild/`)
+**Version:** 0.30.0 (E2E Tests + Accessibility)
+**Status:** Clean IBKR-derived tables, legacy stubs cleaned up, 21 Playwright E2E tests, WCAG AA accessibility passing
+**Branch:** `main`
 
-**Latest session (2026-02-19):**
+**Latest session (2026-02-19 cont.):**
+- **Legacy stub cleanup** — removed 10 compilation warnings, simplified 5 files
+- **Playwright E2E tests** — 21 tests (8 portfolio page, 7 stock page, 4 accessibility, 2 contrast)
+- **Accessibility fixes** — `prefers-reduced-motion` support, opaque surfaces, contrast fixes, ARIA labels
+- **Root cause**: CSS `fade-in` animations at `opacity: 0` caused axe-core to compute wrong foreground colors
+- 668 tests, 0 failures, 0 credo issues
+
+**Previous session (2026-02-19):**
 - **Database rebuild phases 0-5 complete** — clean tables from 7 IBKR Activity Statement CSVs
 - **6 new tables**: instruments, instrument_aliases, trades, dividend_payments, cash_flows, corporate_actions
 - **IBKR Activity Statement parser** — multi-section CSV parser with dedup
 - **Query migration** — portfolio.ex rewired to query new tables via adapter pattern
 - **Legacy archival** — old tables renamed with `legacy_` prefix, schemas updated
 - **Test migration** — all 26 failures fixed, 668 tests passing
-- 10 compilation warnings (legacy import stubs) — cleanup in future session
 - 668 tests, 0 failures, 0 credo issues
 
 **Previous session (2026-02-18 late night):**
@@ -196,7 +202,7 @@ mix ecto.reset              # Drop + create + migrate
 - Investment summary card (deposits, P&L, dividends, costs, total return)
 - Enhanced navigation: week/month/year jumps, date picker, chart presets
 - Dividend diagnostics for IEx verification
-- 500 tests + 13 Playwright E2E tests, 0 credo issues
+- 668 tests + 21 Playwright E2E tests, 0 credo issues
 - Multi-provider market data: Finnhub + Yahoo Finance + EODHD with fallback chains
 
 **Next priorities:**

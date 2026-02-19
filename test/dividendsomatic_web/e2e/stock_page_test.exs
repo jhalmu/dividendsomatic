@@ -20,7 +20,7 @@ defmodule DividendsomaticWeb.E2E.StockPageTest do
 
   defp now, do: DateTime.truncate(DateTime.utc_now(), :second)
 
-  defp insert_profile(symbol, attrs \\ %{}) do
+  defp insert_profile(symbol, attrs) do
     defaults = %{
       symbol: symbol,
       name: "Test Corp",
@@ -75,7 +75,7 @@ defmodule DividendsomaticWeb.E2E.StockPageTest do
     test "should show sector badge when company profile exists", %{conn: conn} do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      insert_profile("KESKOB", %{
+      insert_profile("KESKOB.HE", %{
         name: "Kesko Oyj",
         industry: "Retail",
         country: "FI",
@@ -99,7 +99,7 @@ defmodule DividendsomaticWeb.E2E.StockPageTest do
     @tag :playwright
     test "should show key metrics card when data exists", %{conn: conn} do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
-      insert_metrics("KESKOB")
+      insert_metrics("KESKOB.HE")
 
       conn
       |> visit(~p"/stocks/KESKOB")
@@ -123,7 +123,7 @@ defmodule DividendsomaticWeb.E2E.StockPageTest do
     @tag :playwright
     test "should skip nil metric fields", %{conn: conn} do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
-      insert_metrics("KESKOB", %{roe: nil, net_margin: nil, beta: nil, payout_ratio: nil})
+      insert_metrics("KESKOB.HE", %{roe: nil, net_margin: nil, beta: nil, payout_ratio: nil})
 
       conn
       |> visit(~p"/stocks/KESKOB")
@@ -135,7 +135,7 @@ defmodule DividendsomaticWeb.E2E.StockPageTest do
     @tag :playwright
     test "should show updated date in metrics header", %{conn: conn} do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
-      insert_metrics("KESKOB")
+      insert_metrics("KESKOB.HE")
 
       conn
       |> visit(~p"/stocks/KESKOB")
@@ -147,8 +147,8 @@ defmodule DividendsomaticWeb.E2E.StockPageTest do
     @tag :playwright
     test "should have no accessibility violations on stock page", %{conn: conn} do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
-      insert_profile("KESKOB", %{name: "Kesko Oyj", industry: "Retail", country: "FI"})
-      insert_metrics("KESKOB")
+      insert_profile("KESKOB.HE", %{name: "Kesko Oyj", industry: "Retail", country: "FI"})
+      insert_metrics("KESKOB.HE")
 
       conn
       |> visit(~p"/stocks/KESKOB")
@@ -159,7 +159,15 @@ defmodule DividendsomaticWeb.E2E.StockPageTest do
 
   # --- Accessibility helpers ---
 
+  @disable_animations_js """
+  const style = document.createElement('style');
+  style.textContent = '*, *::before, *::after { animation: none !important; transition: none !important; } .animate-delay-1, .animate-delay-2, .animate-delay-3, .animate-delay-4, .animate-delay-5 { opacity: 1 !important; }';
+  document.head.appendChild(style);
+  void document.body.offsetHeight;
+  """
+
   defp audit_page(session) do
+    session = run_js(session, @disable_animations_js)
     session = run_js(session, A11yAudit.JS.axe_core())
     {session, axe_result} = execute_js(session, A11yAudit.JS.await_audit_results())
     results = A11yAudit.Results.from_json(axe_result)
