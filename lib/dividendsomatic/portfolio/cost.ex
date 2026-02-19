@@ -13,7 +13,7 @@ defmodule Dividendsomatic.Portfolio.Cost do
 
   @cost_types ~w(commission loan_interest withholding_tax foreign_tax capital_interest)
 
-  schema "costs" do
+  schema "legacy_costs" do
     field :cost_type, :string
     field :date, :date
     field :amount, :decimal
@@ -38,7 +38,9 @@ defmodule Dividendsomatic.Portfolio.Cost do
     |> validate_required(@required_fields)
     |> validate_inclusion(:cost_type, @cost_types)
     |> validate_number(:amount, greater_than: 0)
-    |> unique_constraint([:broker_transaction_id])
+    |> unique_constraint([:broker_transaction_id],
+      name: "costs_broker_transaction_id_index"
+    )
   end
 
   def cost_types, do: @cost_types

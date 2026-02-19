@@ -106,6 +106,10 @@ defmodule Mix.Tasks.Import.Yahoo do
           Logger.warning("Failed to import dividend: #{inspect(errors)}")
           {new_count, dup_count}
         end
+
+      {:error, reason} ->
+        Logger.warning("Failed to import dividend: #{inspect(reason)}")
+        {new_count, dup_count}
     end
   end
 

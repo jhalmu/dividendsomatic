@@ -17,7 +17,7 @@ defmodule Dividendsomatic.Portfolio.BrokerTransaction do
     capital_interest interest_correction corporate_action
   )
 
-  schema "broker_transactions" do
+  schema "legacy_broker_transactions" do
     field :external_id, :string
     field :broker, :string
     field :transaction_type, :string
@@ -81,7 +81,9 @@ defmodule Dividendsomatic.Portfolio.BrokerTransaction do
     |> cast(attrs, @required_fields ++ @optional_fields)
     |> validate_required(@required_fields)
     |> validate_inclusion(:transaction_type, @transaction_types)
-    |> unique_constraint([:broker, :external_id])
+    |> unique_constraint([:broker, :external_id],
+      name: "broker_transactions_broker_external_id_index"
+    )
   end
 
   def transaction_types, do: @transaction_types

@@ -10,7 +10,7 @@ defmodule Dividendsomatic.Portfolio.Dividend do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  schema "dividends" do
+  schema "legacy_dividends" do
     field :symbol, :string
     field :ex_date, :date
     field :pay_date, :date

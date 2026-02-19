@@ -4,6 +4,7 @@ defmodule DividendsomaticWeb.StockLiveTest do
   import Phoenix.LiveViewTest
 
   alias Dividendsomatic.Portfolio
+  alias Dividendsomatic.Portfolio.{DividendPayment, Instrument, InstrumentAlias}
 
   @csv_data """
   "ReportDate","CurrencyPrimary","Symbol","Description","SubCategory","Quantity","MarkPrice","PositionValue","CostBasisPrice","CostBasisMoney","OpenPrice","PercentOfNAV","FifoPnlUnrealized","ListingExchange","AssetClass","FXRateToBase","ISIN","FIGI"
@@ -190,16 +191,14 @@ defmodule DividendsomaticWeb.StockLiveTest do
     setup %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      # Dividend ex_date must be >= first holding date (2026-01-28) to show
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "KESKOB",
-          ex_date: ~D[2026-02-05],
-          amount: Decimal.new("0.50"),
-          currency: "EUR"
-        })
+      # Create instrument + alias for KESKOB dividends
+      {instrument, _alias} = get_or_create_instrument("KESKOB", "FI0009000202")
 
-      %{conn: conn}
+      # Dividend pay_date must be >= first holding date (2026-01-28) to show
+      # net_amount = 500 total (not per-share)
+      insert_dividend_payment(instrument.id, ~D[2026-02-05], "500", "EUR")
+
+      %{conn: conn, instrument: instrument}
     end
 
     test "should show dividends received section", %{conn: conn} do
@@ -214,7 +213,7 @@ defmodule DividendsomaticWeb.StockLiveTest do
     test "should show computed dividend income", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
 
-      # 0.50 * 1000 * 1.0 = 500.00 EUR
+      # net_amount = 500 EUR total, fx=1 → income = 500
       assert html =~ "500"
       assert html =~ "Dividends Received"
     end
@@ -226,15 +225,9 @@ defmodule DividendsomaticWeb.StockLiveTest do
       assert html =~ "TTM Per Share"
     end
 
-    test "should filter out dividends before ownership", %{conn: conn} do
+    test "should filter out dividends before ownership", %{conn: conn, instrument: instrument} do
       # Add a dividend before the holding date - should not appear
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "KESKOB",
-          ex_date: ~D[2025-12-01],
-          amount: Decimal.new("0.30"),
-          currency: "EUR"
-        })
+      insert_dividend_payment(instrument.id, ~D[2025-12-01], "300", "EUR")
 
       {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
 
@@ -377,13 +370,9 @@ defmodule DividendsomaticWeb.StockLiveTest do
     end
 
     test "should show payback meter with dividend data", %{conn: conn} do
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "KESKOB",
-          ex_date: ~D[2025-11-15],
-          amount: Decimal.new("0.50"),
-          currency: "EUR"
-        })
+      {instrument, _alias} = get_or_create_instrument("KESKOB", "FI0009000202")
+      # net_amount = 500 total EUR, per_share = 0.50
+      insert_dividend_payment(instrument.id, ~D[2025-11-15], "500", "EUR", "0.50")
 
       {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
 
@@ -393,13 +382,9 @@ defmodule DividendsomaticWeb.StockLiveTest do
     end
 
     test "should show Rule of 72 as footer note", %{conn: conn} do
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "KESKOB",
-          ex_date: ~D[2025-11-15],
-          amount: Decimal.new("0.50"),
-          currency: "EUR"
-        })
+      {instrument, _alias} = get_or_create_instrument("KESKOB", "FI0009000202")
+      # per_share required for yield_on_cost → Rule of 72
+      insert_dividend_payment(instrument.id, ~D[2025-11-15], "500", "EUR", "0.50")
 
       {:ok, _view, html} = live(conn, ~p"/stocks/KESKOB")
 
@@ -605,5 +590,52 @@ defmodule DividendsomaticWeb.StockLiveTest do
       assert html =~ "short-badge"
       assert html =~ "SHORT"
     end
+  end
+
+  defp get_or_create_instrument(symbol, isin) do
+    case Dividendsomatic.Repo.get_by(Instrument, isin: isin) do
+      nil ->
+        {:ok, instrument} =
+          %Instrument{}
+          |> Instrument.changeset(%{isin: isin, name: "#{symbol} Corp"})
+          |> Dividendsomatic.Repo.insert()
+
+        {:ok, alias_record} =
+          %InstrumentAlias{}
+          |> InstrumentAlias.changeset(%{
+            instrument_id: instrument.id,
+            symbol: symbol,
+            source: "test"
+          })
+          |> Dividendsomatic.Repo.insert()
+
+        {instrument, alias_record}
+
+      instrument ->
+        alias_record =
+          Dividendsomatic.Repo.get_by(InstrumentAlias,
+            instrument_id: instrument.id,
+            symbol: symbol
+          )
+
+        {instrument, alias_record}
+    end
+  end
+
+  defp insert_dividend_payment(instrument_id, pay_date, amount, currency, per_share \\ nil) do
+    attrs = %{
+      external_id: "test-div-#{System.unique_integer([:positive])}",
+      instrument_id: instrument_id,
+      pay_date: pay_date,
+      gross_amount: Decimal.new(amount),
+      net_amount: Decimal.new(amount),
+      currency: currency
+    }
+
+    attrs = if per_share, do: Map.put(attrs, :per_share, Decimal.new(per_share)), else: attrs
+
+    %DividendPayment{}
+    |> DividendPayment.changeset(attrs)
+    |> Dividendsomatic.Repo.insert!()
   end
 end

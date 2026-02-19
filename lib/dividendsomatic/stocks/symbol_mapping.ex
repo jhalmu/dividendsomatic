@@ -11,7 +11,7 @@ defmodule Dividendsomatic.Stocks.SymbolMapping do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  schema "symbol_mappings" do
+  schema "legacy_symbol_mappings" do
     field :isin, :string
     field :finnhub_symbol, :string
     field :security_name, :string
@@ -32,6 +32,6 @@ defmodule Dividendsomatic.Stocks.SymbolMapping do
     |> cast(attrs, @required_fields ++ @optional_fields)
     |> validate_required(@required_fields)
     |> validate_inclusion(:status, ~w(pending resolved unmappable))
-    |> unique_constraint(:isin)
+    |> unique_constraint(:isin, name: "symbol_mappings_isin_index")
   end
 end

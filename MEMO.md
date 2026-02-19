@@ -65,10 +65,21 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.28.0 (Stat Cards + DividendAnalytics)
-**Status:** Full dividend pipeline, Gmail auto-import, Deep Space dashboard, automated validation, Yahoo Finance profiles, 626 tests, 0 credo issues
+**Version:** 0.29.0 (Database Rebuild — Clean Tables)
+**Status:** Clean IBKR-derived tables (instruments, trades, dividend_payments, cash_flows, corporate_actions), legacy tables archived with `legacy_` prefix, 668 tests, 0 credo issues
+**Branch:** `feature/db-rebuild` (worktree at `.worktrees/db-rebuild/`)
 
-**Latest session (2026-02-18 late night):**
+**Latest session (2026-02-19):**
+- **Database rebuild phases 0-5 complete** — clean tables from 7 IBKR Activity Statement CSVs
+- **6 new tables**: instruments, instrument_aliases, trades, dividend_payments, cash_flows, corporate_actions
+- **IBKR Activity Statement parser** — multi-section CSV parser with dedup
+- **Query migration** — portfolio.ex rewired to query new tables via adapter pattern
+- **Legacy archival** — old tables renamed with `legacy_` prefix, schemas updated
+- **Test migration** — all 26 failures fixed, 668 tests passing
+- 10 compilation warnings (legacy import stubs) — cleanup in future session
+- 668 tests, 0 failures, 0 credo issues
+
+**Previous session (2026-02-18 late night):**
 - **Stat card rearrange** — Unrealized P&L + Dividends | Portfolio Value + Costs | Realized {year} | F&G
 - **DividendAnalytics module** — extracted shared functions from StockLive into `Portfolio.DividendAnalytics`
 - **Per-symbol dividends** — moved from StockLive into Portfolio context (holdings table columns)

@@ -7,16 +7,17 @@ defmodule Dividendsomatic.Portfolio do
   require Logger
 
   alias Dividendsomatic.Portfolio.{
-    BrokerTransaction,
-    Cost,
+    CashFlow,
     CsvParser,
-    Dividend,
     DividendAnalytics,
+    DividendPayment,
+    InstrumentAlias,
     MarginEquitySnapshot,
     MarginRates,
     PortfolioSnapshot,
     Position,
-    SoldPosition
+    SoldPosition,
+    Trade
   }
 
   alias Dividendsomatic.Repo
@@ -370,7 +371,7 @@ defmodule Dividendsomatic.Portfolio do
     end)
   end
 
-  ## Dividends
+  ## Dividends — powered by dividend_payments + instruments tables
 
   @doc """
   Lists all positions for a specific symbol (from most recent snapshots).
@@ -386,22 +387,40 @@ defmodule Dividendsomatic.Portfolio do
   defdelegate list_holdings_by_symbol(symbol), to: __MODULE__, as: :list_positions_by_symbol
 
   @doc """
-  Lists all dividends ordered by ex_date descending.
+  Lists all dividends ordered by pay_date descending.
+  Returns maps compatible with legacy Dividend shape.
   """
   def list_dividends do
-    Dividend
-    |> order_by([d], desc: d.ex_date)
+    DividendPayment
+    |> order_by([d], desc: d.pay_date)
+    |> preload(instrument: :aliases)
     |> Repo.all()
+    |> adapt_payments_to_dividends()
   end
 
   @doc """
   Lists dividends for a specific symbol.
+  Looks up instrument via aliases, returns adapted maps.
   """
   def list_dividends_by_symbol(symbol) do
-    Dividend
-    |> where([d], d.symbol == ^symbol)
-    |> order_by([d], desc: d.ex_date)
-    |> Repo.all()
+    instrument_ids =
+      InstrumentAlias
+      |> where([a], a.symbol == ^symbol)
+      |> select([a], a.instrument_id)
+      |> Repo.all()
+
+    case instrument_ids do
+      [] ->
+        []
+
+      ids ->
+        DividendPayment
+        |> where([d], d.instrument_id in ^ids)
+        |> order_by([d], desc: d.pay_date)
+        |> preload(instrument: :aliases)
+        |> Repo.all()
+        |> adapt_payments_to_dividends()
+    end
   end
 
   @doc """
@@ -410,25 +429,23 @@ defmodule Dividendsomatic.Portfolio do
   def list_dividends_this_year do
     year_start = Date.new!(Date.utc_today().year, 1, 1)
 
-    Dividend
-    |> where([d], d.ex_date >= ^year_start)
-    |> order_by([d], desc: d.ex_date)
+    DividendPayment
+    |> where([d], d.pay_date >= ^year_start)
+    |> order_by([d], desc: d.pay_date)
+    |> preload(instrument: :aliases)
     |> Repo.all()
+    |> adapt_payments_to_dividends()
   end
 
   @doc """
-  Lists dividends for the current year with computed income (per-share * qty * fx).
+  Lists dividends for the current year with computed income.
+  With dividend_payments, net_amount is already the income per event.
   """
   def list_dividends_with_income do
     year_start = Date.new!(Date.utc_today().year, 1, 1)
     today = Date.utc_today()
 
-    dividends =
-      Dividend
-      |> where([d], d.ex_date >= ^year_start and d.ex_date <= ^today)
-      |> order_by([d], desc: d.ex_date)
-      |> Repo.all()
-
+    dividends = load_dividends_in_range(year_start, today)
     positions_data = build_positions_map(year_start, today)
 
     dividends
@@ -442,7 +459,7 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   @doc """
-  Gets total dividend income for the current year (base currency).
+  Gets total dividend income for the current year (base currency EUR).
   """
   def total_dividends_this_year do
     total_dividends_for_year(Date.utc_today().year)
@@ -465,9 +482,9 @@ defmodule Dividendsomatic.Portfolio do
   Returns years that have dividend data, most recent first.
   """
   def dividend_years do
-    Dividend
-    |> where([d], not is_nil(d.ex_date))
-    |> select([d], fragment("DISTINCT EXTRACT(YEAR FROM ?)::integer", d.ex_date))
+    DividendPayment
+    |> where([d], not is_nil(d.pay_date))
+    |> select([d], fragment("DISTINCT EXTRACT(YEAR FROM ?)::integer", d.pay_date))
     |> Repo.all()
     |> Enum.sort(:desc)
   end
@@ -484,12 +501,7 @@ defmodule Dividendsomatic.Portfolio do
   Gets dividend income grouped by month for a date range.
   """
   def dividends_by_month(from_date, to_date) do
-    dividends =
-      Dividend
-      |> where([d], d.ex_date >= ^from_date and d.ex_date <= ^to_date)
-      |> order_by([d], asc: d.ex_date)
-      |> Repo.all()
-
+    dividends = load_dividends_in_range(from_date, to_date)
     positions_map = build_positions_map(from_date, to_date)
 
     dividends
@@ -580,81 +592,12 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   @doc """
-  Imports dividends from a Flex Dividend CSV string.
-
-  Deduplicates by ISIN+ex_date first, then symbol+ex_date.
-  Returns `{:ok, %{imported: n, skipped: n}}`.
-  """
-  def import_flex_dividends_csv(csv_string) do
-    alias Dividendsomatic.Portfolio.FlexDividendCsvParser
-
-    case FlexDividendCsvParser.parse(csv_string) do
-      {:ok, records} ->
-        results = Enum.map(records, &upsert_dividend/1)
-        imported = Enum.count(results, &match?({:ok, _}, &1))
-        skipped = Enum.count(results, &match?(:skipped, &1))
-        {:ok, %{imported: imported, skipped: skipped}}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp upsert_dividend(attrs) do
-    cond do
-      attrs[:isin] && attrs[:ex_date] && dividend_exists_by_isin?(attrs.isin, attrs.ex_date) ->
-        :skipped
-
-      attrs[:symbol] && attrs[:ex_date] && dividend_exists_by_symbol?(attrs.symbol, attrs.ex_date) ->
-        :skipped
-
-      true ->
-        create_dividend(attrs)
-    end
-  end
-
-  defp dividend_exists_by_isin?(isin, ex_date) do
-    Dividend
-    |> where([d], d.isin == ^isin and d.ex_date == ^ex_date)
-    |> Repo.exists?()
-  end
-
-  defp dividend_exists_by_symbol?(symbol, ex_date) do
-    Dividend
-    |> where([d], d.symbol == ^symbol and d.ex_date == ^ex_date)
-    |> Repo.exists?()
-  end
-
-  @doc """
-  Creates a dividend record.
-  """
-  def create_dividend(attrs) do
-    %Dividend{}
-    |> Dividend.changeset(attrs)
-    |> Repo.insert()
-  end
-
-  @doc """
-  Updates a dividend record.
-  """
-  def update_dividend(%Dividend{} = dividend, attrs) do
-    dividend
-    |> Dividend.changeset(attrs)
-    |> Repo.update()
-  end
-
-  @doc """
-  Deletes a dividend record.
-  """
-  def delete_dividend(%Dividend{} = dividend) do
-    Repo.delete(dividend)
-  end
-
-  @doc """
-  Gets a dividend by ID.
+  Gets a dividend payment by ID with preloaded instrument.
   """
   def get_dividend(id) do
-    Repo.get(Dividend, id)
+    DividendPayment
+    |> preload(instrument: :aliases)
+    |> Repo.get(id)
   end
 
   @doc """
@@ -712,10 +655,46 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   defp load_dividends_in_range(from, to) do
-    Dividend
-    |> where([d], d.ex_date >= ^from and d.ex_date <= ^to)
-    |> order_by([d], asc: d.ex_date)
+    DividendPayment
+    |> where([d], d.pay_date >= ^from and d.pay_date <= ^to)
+    |> order_by([d], asc: d.pay_date)
+    |> preload(instrument: :aliases)
     |> Repo.all()
+    |> adapt_payments_to_dividends()
+  end
+
+  # Adapts DividendPayment records to maps compatible with the old Dividend shape.
+  # This lets existing computation logic (compute_dividend_income, per_share_amount, etc.)
+  # work unchanged with the new table data.
+  defp adapt_payments_to_dividends(payments) do
+    Enum.map(payments, fn payment ->
+      symbol = payment_symbol(payment)
+
+      %{
+        symbol: symbol,
+        isin: payment.instrument.isin,
+        ex_date: payment.pay_date,
+        pay_date: payment.pay_date,
+        amount: payment.net_amount,
+        amount_type: "total_net",
+        currency: payment.currency,
+        fx_rate: payment.fx_rate,
+        per_share: payment.per_share,
+        gross_rate: payment.per_share,
+        gross_amount: payment.gross_amount,
+        withholding_tax: payment.withholding_tax,
+        net_amount: payment.net_amount,
+        quantity_at_record: nil,
+        description: payment.description
+      }
+    end)
+  end
+
+  defp payment_symbol(payment) do
+    case payment.instrument.aliases do
+      [alias_record | _] -> alias_record.symbol
+      [] -> payment.instrument.name
+    end
   end
 
   defp filter_date_range(dividends, from, to) do
@@ -1178,184 +1157,30 @@ defmodule Dividendsomatic.Portfolio do
     }
   end
 
-  ## Broker Transactions
+  ## Trades (from new trades table)
 
-  @doc """
-  Imports trades from a Flex Trades CSV string.
-
-  Deduplicates by broker+external_id (upsert with on_conflict: :nothing).
-  Returns `{:ok, %{imported: n, skipped: n}}`.
-  """
-  def import_flex_trades_csv(csv_string) do
-    alias Dividendsomatic.Portfolio.FlexTradesCsvParser
-
-    case FlexTradesCsvParser.parse(csv_string) do
-      {:ok, transactions} ->
-        results = Enum.map(transactions, &upsert_flex_trade/1)
-        imported = Enum.count(results, &match?({:ok, _}, &1))
-        skipped = Enum.count(results, &match?(:skipped, &1))
-        {:ok, %{imported: imported, skipped: skipped}}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp upsert_flex_trade(attrs) do
-    if trade_exists?(attrs) do
-      :skipped
-    else
-      upsert_broker_transaction(attrs)
-    end
-  end
-
-  defp trade_exists?(%{isin: isin, trade_date: date, transaction_type: type})
-       when is_binary(isin) and isin != "" and not is_nil(date) do
-    BrokerTransaction
-    |> where([t], t.isin == ^isin and t.trade_date == ^date and t.transaction_type == ^type)
-    |> Repo.exists?()
-  end
-
-  defp trade_exists?(_), do: false
-
-  def create_broker_transaction(attrs) do
-    %BrokerTransaction{}
-    |> BrokerTransaction.changeset(attrs)
-    |> Repo.insert()
-  end
-
-  def upsert_broker_transaction(attrs) do
-    %BrokerTransaction{}
-    |> BrokerTransaction.changeset(attrs)
-    |> Repo.insert(on_conflict: :nothing, conflict_target: [:broker, :external_id])
-  end
-
-  def list_broker_transactions(opts \\ []) do
-    query = BrokerTransaction |> order_by([t], desc: t.trade_date)
+  def list_trades(opts \\ []) do
+    query = Trade |> order_by([t], desc: t.trade_date)
 
     query =
-      case Keyword.get(opts, :broker) do
+      case Keyword.get(opts, :instrument_id) do
         nil -> query
-        broker -> where(query, [t], t.broker == ^broker)
+        id -> where(query, [t], t.instrument_id == ^id)
       end
 
     query =
-      case Keyword.get(opts, :type) do
+      case Keyword.get(opts, :currency) do
         nil -> query
-        type -> where(query, [t], t.transaction_type == ^type)
-      end
-
-    query =
-      case Keyword.get(opts, :isin) do
-        nil -> query
-        isin -> where(query, [t], t.isin == ^isin)
+        currency -> where(query, [t], t.currency == ^currency)
       end
 
     Repo.all(query)
   end
 
-  ## Dividend Diagnostics
+  ## Costs — now from cash_flows table (interest + fee)
 
   @doc """
-  Diagnostic function for verifying dividend totals.
-  Run in IEx: `Dividendsomatic.Portfolio.diagnose_dividends()`
-
-  Returns:
-  - ISIN-based duplicates (same ISIN + ex_date, different symbols)
-  - Zero-income dividends (no matching position found)
-  - Top 20 income records by value
-  - Yearly totals
-  """
-  def diagnose_dividends do
-    all_dividends = Dividend |> order_by([d], asc: d.ex_date) |> Repo.all()
-
-    first_date =
-      case all_dividends do
-        [first | _] -> first.ex_date
-        [] -> Date.utc_today()
-      end
-
-    last_date =
-      case all_dividends do
-        [] -> Date.utc_today()
-        divs -> List.last(divs).ex_date
-      end
-
-    positions_map = build_positions_map(first_date, last_date)
-
-    # ISIN-based duplicates: same ISIN + same ex_date, different symbols
-    isin_dupes =
-      all_dividends
-      |> Enum.filter(& &1.isin)
-      |> Enum.group_by(fn d -> {d.isin, d.ex_date} end)
-      |> Enum.filter(fn {_key, divs} -> length(divs) > 1 end)
-      |> Enum.map(fn {{isin, date}, divs} ->
-        symbols = Enum.map(divs, & &1.symbol) |> Enum.uniq()
-        %{isin: isin, ex_date: date, symbols: symbols, count: length(divs)}
-      end)
-
-    # Zero-income dividends
-    zero_income =
-      all_dividends
-      |> Enum.map(fn div ->
-        income = compute_dividend_income(div, positions_map)
-
-        %{
-          symbol: div.symbol,
-          isin: div.isin,
-          ex_date: div.ex_date,
-          amount: div.amount,
-          income: income
-        }
-      end)
-      |> Enum.filter(fn entry -> Decimal.compare(entry.income, Decimal.new("0")) == :eq end)
-
-    # Top 20 income records
-    top_20 =
-      all_dividends
-      |> Enum.map(fn div ->
-        income = compute_dividend_income(div, positions_map)
-
-        %{
-          symbol: div.symbol,
-          isin: div.isin,
-          ex_date: div.ex_date,
-          amount: div.amount,
-          income: income
-        }
-      end)
-      |> Enum.sort_by(fn e -> Decimal.to_float(e.income) end, :desc)
-      |> Enum.take(20)
-
-    # Yearly totals
-    years = dividend_years()
-
-    yearly_totals =
-      Enum.map(years, fn year ->
-        total = total_dividends_for_year(year)
-        %{year: year, total: total}
-      end)
-
-    grand_total =
-      Enum.reduce(yearly_totals, Decimal.new("0"), fn %{year: _y, total: t}, acc ->
-        Decimal.add(acc, t)
-      end)
-
-    %{
-      total_dividends: length(all_dividends),
-      isin_duplicates: isin_dupes,
-      zero_income_count: length(zero_income),
-      zero_income: Enum.take(zero_income, 20),
-      top_20_income: top_20,
-      yearly_totals: yearly_totals,
-      grand_total: grand_total
-    }
-  end
-
-  ## Costs
-
-  @doc """
-  Returns total costs for a specific year.
+  Returns total costs for a specific year (interest + fees from cash_flows).
   """
   def total_costs_for_year(year) do
     year_start = Date.new!(year, 1, 1)
@@ -1363,41 +1188,32 @@ defmodule Dividendsomatic.Portfolio do
     year_end =
       if year == Date.utc_today().year, do: Date.utc_today(), else: Date.new!(year, 12, 31)
 
-    Cost
+    CashFlow
+    |> where([c], c.flow_type in ["interest", "fee"])
     |> where([c], c.date >= ^year_start and c.date <= ^year_end)
-    |> Repo.aggregate(:sum, :amount) || Decimal.new("0")
-  end
-
-  def create_cost(attrs) do
-    %Cost{}
-    |> Cost.changeset(attrs)
-    |> Repo.insert()
+    |> select([c], sum(fragment("ABS(?)", c.amount)))
+    |> Repo.one() || Decimal.new("0")
   end
 
   def list_costs do
-    Cost
+    CashFlow
+    |> where([c], c.flow_type in ["interest", "fee"])
     |> order_by([c], desc: c.date)
     |> Repo.all()
   end
 
-  def list_costs_by_type(cost_type) do
-    Cost
-    |> where([c], c.cost_type == ^cost_type)
-    |> order_by([c], desc: c.date)
-    |> Repo.all()
-  end
-
-  def list_costs_by_symbol(symbol) do
-    Cost
-    |> where([c], c.symbol == ^symbol)
+  def list_costs_by_type(flow_type) do
+    CashFlow
+    |> where([c], c.flow_type == ^flow_type)
     |> order_by([c], desc: c.date)
     |> Repo.all()
   end
 
   def total_costs_by_type do
-    Cost
-    |> group_by([c], c.cost_type)
-    |> select([c], {c.cost_type, sum(c.amount)})
+    CashFlow
+    |> where([c], c.flow_type in ["interest", "fee"])
+    |> group_by([c], c.flow_type)
+    |> select([c], {c.flow_type, sum(fragment("ABS(?)", c.amount))})
     |> Repo.all()
     |> Map.new()
   end
@@ -1410,37 +1226,35 @@ defmodule Dividendsomatic.Portfolio do
       |> Map.values()
       |> Enum.reduce(Decimal.new("0"), &Decimal.add/2)
 
-    %{by_type: by_type, total: total, count: Repo.aggregate(Cost, :count)}
+    count =
+      CashFlow
+      |> where([c], c.flow_type in ["interest", "fee"])
+      |> Repo.aggregate(:count)
+
+    %{by_type: by_type, total: total, count: count}
   end
 
   ## Investment Summary
 
   @doc """
-  Returns total deposits and withdrawals from broker transactions.
-  Amounts are converted to EUR using exchange_rate when available.
+  Returns total deposits and withdrawals from cash_flows.
   """
   def total_deposits_withdrawals do
     zero = Decimal.new("0")
 
     results =
-      BrokerTransaction
-      |> where([t], t.transaction_type in ["deposit", "withdrawal"])
-      |> select([t], %{
-        transaction_type: t.transaction_type,
-        amount: t.amount,
-        exchange_rate: t.exchange_rate
-      })
+      CashFlow
+      |> where([c], c.flow_type in ["deposit", "withdrawal"])
+      |> select([c], %{flow_type: c.flow_type, amount: c.amount})
       |> Repo.all()
 
     {deposits, withdrawals} =
-      Enum.reduce(results, {zero, zero}, fn txn, {dep_acc, wd_acc} ->
-        amt = txn.amount || zero
-        fx = txn.exchange_rate || Decimal.new("1")
-        eur_amt = Decimal.mult(Decimal.abs(amt), fx)
+      Enum.reduce(results, {zero, zero}, fn cf, {dep_acc, wd_acc} ->
+        amt = Decimal.abs(cf.amount || zero)
 
-        case txn.transaction_type do
-          "deposit" -> {Decimal.add(dep_acc, eur_amt), wd_acc}
-          "withdrawal" -> {dep_acc, Decimal.add(wd_acc, eur_amt)}
+        case cf.flow_type do
+          "deposit" -> {Decimal.add(dep_acc, amt), wd_acc}
+          "withdrawal" -> {dep_acc, Decimal.add(wd_acc, amt)}
           _ -> {dep_acc, wd_acc}
         end
       end)
@@ -1542,46 +1356,44 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   @doc """
-  Returns costs grouped by month for a date range.
+  Returns costs grouped by month for a date range (interest + fees from cash_flows).
   """
   def costs_by_month(from_date, to_date) do
-    Cost
+    CashFlow
+    |> where([c], c.flow_type in ["interest", "fee"])
     |> where([c], c.date >= ^from_date and c.date <= ^to_date)
     |> group_by([c], fragment("to_char(?, 'YYYY-MM')", c.date))
-    |> select([c], {fragment("to_char(?, 'YYYY-MM')", c.date), sum(c.amount)})
+    |> select([c], {fragment("to_char(?, 'YYYY-MM')", c.date), sum(fragment("ABS(?)", c.amount))})
     |> Repo.all()
     |> Map.new()
   end
 
   defp deposits_withdrawals_by_month(from_date, to_date) do
-    BrokerTransaction
-    |> where([t], t.transaction_type in ["deposit", "withdrawal"])
-    |> where([t], t.trade_date >= ^from_date and t.trade_date <= ^to_date)
-    |> select([t], %{
-      month: fragment("to_char(?, 'YYYY-MM')", t.trade_date),
-      transaction_type: t.transaction_type,
-      amount: t.amount,
-      exchange_rate: t.exchange_rate
+    zero = Decimal.new("0")
+
+    CashFlow
+    |> where([c], c.flow_type in ["deposit", "withdrawal"])
+    |> where([c], c.date >= ^from_date and c.date <= ^to_date)
+    |> select([c], %{
+      month: fragment("to_char(?, 'YYYY-MM')", c.date),
+      flow_type: c.flow_type,
+      amount: c.amount
     })
     |> Repo.all()
     |> Enum.group_by(& &1.month)
-    |> Map.new(fn {month, txns} ->
-      {month, sum_dw_transactions(txns)}
+    |> Map.new(fn {month, entries} ->
+      {month, sum_deposits_withdrawals(entries, zero)}
     end)
   end
 
-  defp sum_dw_transactions(txns) do
-    zero = Decimal.new("0")
-
+  defp sum_deposits_withdrawals(entries, zero) do
     {deposits, withdrawals} =
-      Enum.reduce(txns, {zero, zero}, fn txn, {dep, wd} ->
-        amt = Decimal.abs(txn.amount || zero)
-        fx = txn.exchange_rate || Decimal.new("1")
-        eur_amt = Decimal.mult(amt, fx)
+      Enum.reduce(entries, {zero, zero}, fn cf, {dep, wd} ->
+        amt = Decimal.abs(cf.amount || zero)
 
-        case txn.transaction_type do
-          "deposit" -> {Decimal.add(dep, eur_amt), wd}
-          "withdrawal" -> {dep, Decimal.add(wd, eur_amt)}
+        case cf.flow_type do
+          "deposit" -> {Decimal.add(dep, amt), wd}
+          "withdrawal" -> {dep, Decimal.add(wd, amt)}
           _ -> {dep, wd}
         end
       end)
@@ -1601,15 +1413,9 @@ defmodule Dividendsomatic.Portfolio do
     |> Map.new()
   end
 
-  ## Data Gaps Analysis
+  ## Data Coverage Analysis
 
   def broker_coverage do
-    nordnet_range =
-      BrokerTransaction
-      |> where([t], t.broker == "nordnet")
-      |> select([t], %{min_date: min(t.trade_date), max_date: max(t.trade_date), count: count()})
-      |> Repo.one()
-
     ibkr_snapshot_range =
       PortfolioSnapshot
       |> select([s], %{
@@ -1619,143 +1425,44 @@ defmodule Dividendsomatic.Portfolio do
       })
       |> Repo.one()
 
-    ibkr_txn_range =
-      BrokerTransaction
-      |> where([t], t.broker == "ibkr")
-      |> select([t], %{min_date: min(t.trade_date), max_date: max(t.trade_date), count: count()})
+    trade_range =
+      Trade
+      |> select([t], %{
+        min_date: min(t.trade_date),
+        max_date: max(t.trade_date),
+        count: count()
+      })
       |> Repo.one()
 
-    %{nordnet: nordnet_range, ibkr: ibkr_snapshot_range, ibkr_txns: ibkr_txn_range}
-  end
-
-  def stock_gaps(opts \\ []) do
-    current_only = Keyword.get(opts, :current_only, false)
-
-    nordnet_stocks = fetch_nordnet_stock_ranges()
-    ibkr_stocks = fetch_ibkr_stock_ranges()
-    current_isins = if current_only, do: current_position_isins(), else: nil
-
-    gaps = merge_stock_gaps(nordnet_stocks, ibkr_stocks)
-
-    if current_isins do
-      Enum.filter(gaps, fn g -> MapSet.member?(current_isins, g.isin) end)
-    else
-      gaps
-    end
-  end
-
-  defp fetch_nordnet_stock_ranges do
-    BrokerTransaction
-    |> where([t], t.broker == "nordnet" and not is_nil(t.isin))
-    |> where([t], fragment("length(?) >= 12", t.isin))
-    |> group_by([t], [t.isin, t.security_name])
-    |> select([t], %{
-      isin: t.isin,
-      name: t.security_name,
-      first_date: min(t.trade_date),
-      last_date: max(t.trade_date),
-      broker: "nordnet"
-    })
-    |> Repo.all()
-  end
-
-  defp fetch_ibkr_stock_ranges do
-    Position
-    |> where([p], not is_nil(p.isin))
-    |> where([p], fragment("length(?) >= 12", p.isin))
-    |> group_by([p], [p.isin, p.symbol, p.name])
-    |> select([p], %{
-      isin: p.isin,
-      symbol: p.symbol,
-      name: p.name,
-      first_date: min(p.date),
-      last_date: max(p.date),
-      broker: "ibkr"
-    })
-    |> Repo.all()
-  end
-
-  defp current_position_isins do
-    case get_latest_snapshot() do
-      nil ->
-        MapSet.new()
-
-      snapshot ->
-        snapshot.positions
-        |> Enum.map(& &1.isin)
-        |> Enum.reject(&is_nil/1)
-        |> MapSet.new()
-    end
-  end
-
-  defp merge_stock_gaps(nordnet_stocks, ibkr_stocks) do
-    all_isins =
-      (Enum.map(nordnet_stocks, & &1.isin) ++ Enum.map(ibkr_stocks, & &1.isin))
-      |> Enum.uniq()
-
-    nordnet_map = Map.new(nordnet_stocks, &{&1.isin, &1})
-    ibkr_map = Map.new(ibkr_stocks, &{&1.isin, &1})
-
-    all_isins
-    |> Enum.map(fn isin ->
-      nordnet = Map.get(nordnet_map, isin)
-      ibkr = Map.get(ibkr_map, isin)
-      name = (ibkr && ibkr.name) || (nordnet && nordnet.name) || "Unknown"
-      symbol = (ibkr && Map.get(ibkr, :symbol)) || name
-      gap_days = compute_gap_days(nordnet, ibkr)
-
-      %{
-        isin: isin,
-        name: name,
-        symbol: symbol,
-        nordnet: nordnet,
-        ibkr: ibkr,
-        gap_days: gap_days,
-        has_gap: gap_days > 0,
-        brokers: brokers_list(nordnet, ibkr)
-      }
-    end)
-    |> Enum.sort_by(& &1.name)
-  end
-
-  defp compute_gap_days(nil, _ibkr), do: 0
-  defp compute_gap_days(_nordnet, nil), do: 0
-
-  defp compute_gap_days(nordnet, ibkr) do
-    gap = Date.diff(ibkr.first_date, nordnet.last_date)
-    max(gap, 0)
-  end
-
-  defp brokers_list(nordnet, ibkr) do
-    []
-    |> then(fn l -> if nordnet, do: ["nordnet" | l], else: l end)
-    |> then(fn l -> if ibkr, do: ["ibkr" | l], else: l end)
+    %{nordnet: nil, ibkr: ibkr_snapshot_range, ibkr_txns: trade_range}
   end
 
   def dividend_gaps do
-    dividends =
-      Dividend
-      |> order_by([d], asc: d.ex_date)
+    payments =
+      DividendPayment
+      |> order_by([d], asc: d.pay_date)
+      |> preload(instrument: :aliases)
       |> Repo.all()
 
-    dividends
-    |> Enum.group_by(fn d -> d.isin || d.symbol end)
-    |> Enum.map(fn {key, divs} ->
-      sorted = Enum.sort_by(divs, & &1.ex_date, Date)
+    payments
+    |> Enum.group_by(fn d -> d.instrument.isin end)
+    |> Enum.map(fn {isin, divs} ->
+      sorted = Enum.sort_by(divs, & &1.pay_date, Date)
+      symbol = payment_symbol(hd(sorted))
 
       gaps =
         sorted
         |> Enum.chunk_every(2, 1, :discard)
-        |> Enum.filter(fn [a, b] -> Date.diff(b.ex_date, a.ex_date) > 400 end)
+        |> Enum.filter(fn [a, b] -> Date.diff(b.pay_date, a.pay_date) > 400 end)
         |> Enum.map(fn [a, b] ->
-          %{from: a.ex_date, to: b.ex_date, days: Date.diff(b.ex_date, a.ex_date)}
+          %{from: a.pay_date, to: b.pay_date, days: Date.diff(b.pay_date, a.pay_date)}
         end)
 
       %{
-        key: key,
-        symbol: hd(sorted).symbol,
-        first_dividend: hd(sorted).ex_date,
-        last_dividend: List.last(sorted).ex_date,
+        key: isin,
+        symbol: symbol,
+        first_dividend: hd(sorted).pay_date,
+        last_dividend: List.last(sorted).pay_date,
         count: length(sorted),
         gaps: gaps
       }
@@ -1897,36 +1604,27 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   @doc """
-  Returns total actual margin interest paid (from broker transactions).
+  Returns total actual margin interest paid (from cash_flows).
   """
   def total_actual_margin_interest do
-    zero = Decimal.new("0")
-
-    result =
-      BrokerTransaction
-      |> where([t], t.transaction_type == "loan_interest")
-      |> select([t], sum(t.amount))
-      |> Repo.one()
-
-    # loan_interest amounts are negative (charges), return absolute value
-    case result do
-      nil -> zero
-      amount -> Decimal.abs(amount)
-    end
+    CashFlow
+    |> where([c], c.flow_type == "interest")
+    |> select([c], sum(fragment("ABS(?)", c.amount)))
+    |> Repo.one() || Decimal.new("0")
   end
 
   @doc """
   Returns margin interest charges grouped by month.
   """
   def margin_interest_by_month do
-    BrokerTransaction
-    |> where([t], t.transaction_type == "loan_interest")
-    |> group_by([t], fragment("to_char(?, 'YYYY-MM')", t.trade_date))
-    |> select([t], %{
-      month: fragment("to_char(?, 'YYYY-MM')", t.trade_date),
-      amount: fragment("ABS(SUM(?))", t.amount)
+    CashFlow
+    |> where([c], c.flow_type == "interest")
+    |> group_by([c], fragment("to_char(?, 'YYYY-MM')", c.date))
+    |> select([c], %{
+      month: fragment("to_char(?, 'YYYY-MM')", c.date),
+      amount: fragment("ABS(SUM(?))", c.amount)
     })
-    |> order_by([t], fragment("to_char(?, 'YYYY-MM')", t.trade_date))
+    |> order_by([c], fragment("to_char(?, 'YYYY-MM')", c.date))
     |> Repo.all()
   end
 
@@ -1934,24 +1632,16 @@ defmodule Dividendsomatic.Portfolio do
   Returns margin interest total for a specific year.
   """
   def margin_interest_for_year(year) do
-    zero = Decimal.new("0")
-
     year_start = Date.new!(year, 1, 1)
 
     year_end =
       if year == Date.utc_today().year, do: Date.utc_today(), else: Date.new!(year, 12, 31)
 
-    result =
-      BrokerTransaction
-      |> where([t], t.transaction_type == "loan_interest")
-      |> where([t], t.trade_date >= ^year_start and t.trade_date <= ^year_end)
-      |> select([t], sum(t.amount))
-      |> Repo.one()
-
-    case result do
-      nil -> zero
-      amount -> Decimal.abs(amount)
-    end
+    CashFlow
+    |> where([c], c.flow_type == "interest")
+    |> where([c], c.date >= ^year_start and c.date <= ^year_end)
+    |> select([c], sum(fragment("ABS(?)", c.amount)))
+    |> Repo.one() || Decimal.new("0")
   end
 
   @doc """
@@ -2028,4 +1718,18 @@ defmodule Dividendsomatic.Portfolio do
       nil
     end
   end
+
+  ## Legacy stubs — old import paths that reference removed functions.
+  ## These will be removed entirely when legacy import code is cleaned up.
+
+  def import_flex_dividends_csv(_csv_string),
+    do: {:error, "Legacy import disabled — use mix import.activity"}
+
+  def import_flex_trades_csv(_csv_string),
+    do: {:error, "Legacy import disabled — use mix import.activity"}
+
+  def create_dividend(_attrs),
+    do: {:error, "Legacy function — dividends are imported via mix import.activity"}
+
+  def stock_gaps(_opts \\ []), do: []
 end

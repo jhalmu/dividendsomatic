@@ -2,6 +2,7 @@ defmodule Dividendsomatic.PortfolioTest do
   use Dividendsomatic.DataCase
 
   alias Dividendsomatic.Portfolio
+  alias Dividendsomatic.Portfolio.{DividendPayment, Instrument, InstrumentAlias}
 
   describe "portfolio snapshots" do
     @valid_csv """
@@ -148,39 +149,18 @@ defmodule Dividendsomatic.PortfolioTest do
   end
 
   describe "dividends" do
-    test "create_dividend/1 creates a dividend record" do
-      attrs = %{
-        symbol: "KESKOB",
-        ex_date: ~D[2026-01-15],
-        pay_date: ~D[2026-02-01],
-        amount: Decimal.new("0.50"),
-        currency: "EUR"
-      }
-
-      assert {:ok, dividend} = Portfolio.create_dividend(attrs)
-      assert dividend.symbol == "KESKOB"
-      assert Decimal.equal?(dividend.amount, Decimal.new("0.50"))
-    end
-
     test "list_dividends_this_year/0 returns current year dividends" do
       today = Date.utc_today()
-
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "KESKOB",
-          ex_date: Date.new!(today.year, 1, 15),
-          amount: Decimal.new("1.00"),
-          currency: "EUR"
-        })
+      insert_test_dividend("KESKOB", "FI0009000202", Date.new!(today.year, 1, 15), "100", "EUR")
 
       dividends = Portfolio.list_dividends_this_year()
       assert length(dividends) == 1
     end
 
-    test "total_dividends_this_year/0 sums dividend income (per-share * qty * fx)" do
+    test "total_dividends_this_year/0 sums dividend net amounts converted to EUR" do
       today = Date.utc_today()
 
-      # Create a snapshot with holdings so income can be calculated
+      # Create a snapshot with holdings for FX rate lookup
       {:ok, snapshot} =
         %Portfolio.PortfolioSnapshot{}
         |> Portfolio.PortfolioSnapshot.changeset(%{
@@ -189,28 +169,14 @@ defmodule Dividendsomatic.PortfolioTest do
         })
         |> Dividendsomatic.Repo.insert()
 
-      # KESKOB: 100 shares, fx 1.0 (EUR)
       insert_test_holding(snapshot.id, Date.new!(today.year, 1, 10), "KESKOB", 100, "1")
-      # TELIA1: 200 shares, fx 1.0 (EUR)
       insert_test_holding(snapshot.id, Date.new!(today.year, 1, 10), "TELIA1", 200, "1")
 
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "KESKOB",
-          ex_date: Date.new!(today.year, 1, 15),
-          amount: Decimal.new("1.00"),
-          currency: "EUR"
-        })
+      # EUR dividends: net_amount is already EUR value
+      insert_test_dividend("KESKOB", "FI0009000202", Date.new!(today.year, 1, 15), "100", "EUR")
+      insert_test_dividend("TELIA1", "SE0000667925", Date.new!(today.year, 1, 20), "400", "EUR")
 
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "TELIA1",
-          ex_date: Date.new!(today.year, 1, 20),
-          amount: Decimal.new("2.00"),
-          currency: "EUR"
-        })
-
-      # KESKOB: 1.00 * 100 * 1.0 = 100, TELIA1: 2.00 * 200 * 1.0 = 400
+      # 100 + 400 = 500
       total = Portfolio.total_dividends_this_year()
       assert Decimal.equal?(total, Decimal.new("500"))
     end
@@ -230,30 +196,20 @@ defmodule Dividendsomatic.PortfolioTest do
 
       insert_test_holding(snapshot.id, Date.new!(today.year, 1, 10), "KESKOB", 100, "1")
 
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "KESKOB",
-          ex_date: Date.new!(today.year, 1, 15),
-          amount: Decimal.new("0.50"),
-          currency: "EUR"
-        })
+      # With dividend_payments, net_amount is the total (not per-share)
+      insert_test_dividend("KESKOB", "FI0009000202", Date.new!(today.year, 1, 15), "50", "EUR")
 
       [entry] = Portfolio.list_dividends_with_income()
       assert entry.dividend.symbol == "KESKOB"
-      # 0.50 * 100 * 1.0 = 50.0
-      assert Decimal.equal?(entry.income, Decimal.new("50.0"))
+      # EUR dividend: net_amount * 1.0 = 50
+      assert Decimal.equal?(entry.income, Decimal.new("50"))
     end
 
     test "should exclude dividends with no matching holdings" do
       today = Date.utc_today()
 
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "ORPHAN",
-          ex_date: Date.new!(today.year, 1, 15),
-          amount: Decimal.new("1.00"),
-          currency: "EUR"
-        })
+      # Non-EUR dividend with no position → fx_rate unknown → income = 0 → filtered out
+      insert_test_dividend("ORPHAN", "XX0000000000", Date.new!(today.year, 1, 15), "100", "USD")
 
       assert Portfolio.list_dividends_with_income() == []
     end
@@ -269,59 +225,49 @@ defmodule Dividendsomatic.PortfolioTest do
         })
         |> Dividendsomatic.Repo.insert()
 
-      # USD stock with fx_rate 0.92
       insert_test_holding(snapshot.id, Date.new!(today.year, 1, 10), "AAPL", 50, "0.92", "USD")
 
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "AAPL",
-          ex_date: Date.new!(today.year, 1, 15),
-          amount: Decimal.new("1.00"),
-          currency: "USD"
-        })
+      # USD dividend: net_amount = 50 USD (total)
+      insert_test_dividend("AAPL", "US0378331005", Date.new!(today.year, 1, 15), "50", "USD")
 
       [entry] = Portfolio.list_dividends_with_income()
-      # 1.00 * 50 * 0.92 = 46.00
+      # 50 * 0.92 = 46.00
       assert Decimal.equal?(entry.income, Decimal.new("46.00"))
     end
 
-    test "should apply fx_rate to total_net dividend income" do
+    test "should apply fx_rate from payment when present" do
       today = Date.utc_today()
 
-      # SEK total_net of 400 with fx_rate 0.094 → income ~37.60 EUR
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "TELIA1",
-          ex_date: Date.new!(today.year, 1, 15),
-          amount: Decimal.new("400.00"),
-          currency: "SEK",
-          amount_type: "total_net",
-          fx_rate: Decimal.new("0.094")
-        })
+      # SEK dividend with explicit fx_rate on the payment
+      {instrument, _alias} = get_or_create_instrument("TELIA1", "SE0000667925")
+
+      %DividendPayment{}
+      |> DividendPayment.changeset(%{
+        external_id: "test-fx-#{System.unique_integer([:positive])}",
+        instrument_id: instrument.id,
+        pay_date: Date.new!(today.year, 1, 15),
+        gross_amount: Decimal.new("400"),
+        net_amount: Decimal.new("400"),
+        currency: "SEK",
+        fx_rate: Decimal.new("0.094")
+      })
+      |> Repo.insert!()
 
       [entry] = Portfolio.list_dividends_with_income()
       assert entry.dividend.symbol == "TELIA1"
-      # 400.00 * 0.094 = 37.600
+      # 400 * 0.094 = 37.600
       assert Decimal.equal?(entry.income, Decimal.new("37.600"))
     end
 
-    test "should treat total_net with no fx_rate as base currency" do
+    test "should treat EUR dividends as base currency" do
       today = Date.utc_today()
 
-      # EUR total_net with nil fx_rate → income = amount (fx defaults to 1)
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "KESKOB",
-          ex_date: Date.new!(today.year, 1, 15),
-          amount: Decimal.new("150.00"),
-          currency: "EUR",
-          amount_type: "total_net"
-        })
+      insert_test_dividend("KESKOB", "FI0009000202", Date.new!(today.year, 1, 15), "150", "EUR")
 
       [entry] = Portfolio.list_dividends_with_income()
       assert entry.dividend.symbol == "KESKOB"
-      # 150.00 * 1 = 150.00
-      assert Decimal.equal?(entry.income, Decimal.new("150.00"))
+      # EUR: 150 * 1 = 150
+      assert Decimal.equal?(entry.income, Decimal.new("150"))
     end
   end
 
@@ -620,31 +566,9 @@ defmodule Dividendsomatic.PortfolioTest do
     test "dividend_cash_flow_summary/0 returns cumulative totals" do
       today = Date.utc_today()
 
-      {:ok, snapshot} =
-        %Portfolio.PortfolioSnapshot{}
-        |> Portfolio.PortfolioSnapshot.changeset(%{
-          date: Date.new!(today.year, 1, 5),
-          source: "test"
-        })
-        |> Repo.insert()
-
-      insert_test_holding(snapshot.id, Date.new!(today.year, 1, 5), "KESKOB", 100, "1")
-
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "KESKOB",
-          ex_date: Date.new!(today.year, 1, 15),
-          amount: Decimal.new("1.00"),
-          currency: "EUR"
-        })
-
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "KESKOB",
-          ex_date: Date.new!(today.year, 2, 10),
-          amount: Decimal.new("0.50"),
-          currency: "EUR"
-        })
+      # EUR dividends: net_amount is the total EUR value
+      insert_test_dividend("KESKOB", "FI0009000202", Date.new!(today.year, 1, 15), "100", "EUR")
+      insert_test_dividend("KESKOB", "FI0009000202", Date.new!(today.year, 2, 10), "50", "EUR")
 
       result = Portfolio.dividend_cash_flow_summary()
 
@@ -660,35 +584,13 @@ defmodule Dividendsomatic.PortfolioTest do
     test "should return all dividend data in one pass" do
       today = Date.utc_today()
 
-      {:ok, snapshot} =
-        %Portfolio.PortfolioSnapshot{}
-        |> Portfolio.PortfolioSnapshot.changeset(%{
-          date: Date.new!(today.year, 1, 5),
-          source: "test"
-        })
-        |> Repo.insert()
-
-      insert_test_holding(snapshot.id, Date.new!(today.year, 1, 5), "KESKOB", 100, "1")
-
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "KESKOB",
-          ex_date: Date.new!(today.year, 1, 15),
-          amount: Decimal.new("1.00"),
-          currency: "EUR"
-        })
-
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "KESKOB",
-          ex_date: Date.new!(today.year, 2, 10),
-          amount: Decimal.new("0.50"),
-          currency: "EUR"
-        })
+      # EUR dividends with total net amounts
+      insert_test_dividend("KESKOB", "FI0009000202", Date.new!(today.year, 1, 15), "100", "EUR")
+      insert_test_dividend("KESKOB", "FI0009000202", Date.new!(today.year, 2, 10), "50", "EUR")
 
       result = Portfolio.compute_dividend_dashboard(today.year, nil)
 
-      # total_for_year: 1.00*100 + 0.50*100 = 150
+      # total_for_year: 100 + 50 = 150
       assert Decimal.equal?(result.total_for_year, Decimal.new("150"))
       assert %Decimal{} = result.projected_annual
       assert is_list(result.recent_with_income)
@@ -710,23 +612,8 @@ defmodule Dividendsomatic.PortfolioTest do
     test "should handle chart_date_range wider than year" do
       today = Date.utc_today()
 
-      {:ok, snapshot} =
-        %Portfolio.PortfolioSnapshot{}
-        |> Portfolio.PortfolioSnapshot.changeset(%{
-          date: Date.new!(today.year, 1, 5),
-          source: "test"
-        })
-        |> Repo.insert()
-
-      insert_test_holding(snapshot.id, Date.new!(today.year, 1, 5), "KESKOB", 100, "1")
-
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "KESKOB",
-          ex_date: Date.new!(today.year, 1, 15),
-          amount: Decimal.new("1.00"),
-          currency: "EUR"
-        })
+      # EUR dividend with total net amount
+      insert_test_dividend("KESKOB", "FI0009000202", Date.new!(today.year, 1, 15), "100", "EUR")
 
       chart_range = {Date.new!(today.year - 1, 1, 1), today}
       result = Portfolio.compute_dividend_dashboard(today.year, chart_range)
@@ -754,5 +641,45 @@ defmodule Dividendsomatic.PortfolioTest do
       fx_rate: fx_rate
     })
     |> Dividendsomatic.Repo.insert!()
+  end
+
+  defp get_or_create_instrument(symbol, isin) do
+    case Repo.get_by(Instrument, isin: isin) do
+      nil ->
+        {:ok, instrument} =
+          %Instrument{}
+          |> Instrument.changeset(%{isin: isin, name: "#{symbol} Corp"})
+          |> Repo.insert()
+
+        {:ok, alias_record} =
+          %InstrumentAlias{}
+          |> InstrumentAlias.changeset(%{
+            instrument_id: instrument.id,
+            symbol: symbol,
+            source: "test"
+          })
+          |> Repo.insert()
+
+        {instrument, alias_record}
+
+      instrument ->
+        alias_record = Repo.get_by(InstrumentAlias, instrument_id: instrument.id, symbol: symbol)
+        {instrument, alias_record}
+    end
+  end
+
+  defp insert_test_dividend(symbol, isin, pay_date, net_amount, currency) do
+    {instrument, _alias} = get_or_create_instrument(symbol, isin)
+
+    %DividendPayment{}
+    |> DividendPayment.changeset(%{
+      external_id: "test-div-#{System.unique_integer([:positive])}",
+      instrument_id: instrument.id,
+      pay_date: pay_date,
+      gross_amount: Decimal.new(net_amount),
+      net_amount: Decimal.new(net_amount),
+      currency: currency
+    })
+    |> Repo.insert!()
   end
 end

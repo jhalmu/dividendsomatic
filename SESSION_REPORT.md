@@ -1,3 +1,98 @@
+# Session Report — 2026-02-19
+
+## Database Rebuild — Phases 0-5: Clean Tables from IBKR Activity Statements
+
+### Context
+Full database rebuild from 7 IBKR Activity Statement CSVs (2021–2026). Old tables had dirty data: missing ISINs on ~3,800 broker transactions, symbols mixed with names, no master instrument registry, fragile cross-referencing. Goal: ISIN as primary identifier via master `instruments` table, with clean `trades`, `dividend_payments`, `cash_flows`, `corporate_actions` tables.
+
+### Changes Made (Phase 0-2, previous session)
+
+#### New Schemas (6 tables)
+- `instruments` — master instrument registry (ISIN, CUSIP, Conid, FIGI, name, exchange, currency)
+- `instrument_aliases` — symbol history with date ranges (tracks symbol changes over time)
+- `trades` — clean trade records with instrument_id FK
+- `dividend_payments` — dividends + withholding tax paired in same row
+- `cash_flows` — deposits, withdrawals, interest, fees (replaces costs + broker_transactions for non-trade entries)
+- `corporate_actions` — splits, mergers, symbol changes
+
+#### IBKR Activity Statement Parser (`ibkr_activity_parser.ex`)
+- Multi-section CSV parser: splits by section header, parses Financial Instrument Information first
+- Builds instruments table from "Financial Instrument Information" sections
+- Routes Trades → trades, Dividends + WHT → paired dividend_payments, Interest/Fees → cash_flows
+- Deterministic external_ids (hash of date+instrument+amount+type) for safe re-import dedup
+- Handles consolidated 2021 file (multi-account with Account column)
+
+#### Data Import (`mix import.activity`)
+- Imports all 7 CSVs in chronological order
+- Results: ~40 instruments, ~1,200 trades, ~800 dividend payments, ~200 cash flows
+
+### Changes Made (Phase 3-5, this session)
+
+#### Phase 3: Portfolio Snapshots — Deferred
+Existing snapshot system works fine with instrument_id references. No changes needed.
+
+#### Phase 4: Migrate Existing Queries
+- **`portfolio.ex`** — rewrote dividend, cost, deposit/withdrawal, margin interest functions to query new tables (DividendPayment, CashFlow, Trade)
+- **Adapter pattern** — `adapt_payments_to_dividends/1` wraps DividendPayment records in maps matching old Dividend struct shape, preserving ~80% of dashboard computation code
+- **`broker_coverage/0`** — returns `%{nordnet: nil, ibkr: range, ibkr_txns: range}` matching template expectations
+- **Extracted `sum_deposits_withdrawals/2`** — reduced nesting depth in `deposits_withdrawals_by_month/2`
+- **`import_yahoo.ex`** — added catch-all `{:error, reason}` clause for legacy stub
+
+#### Phase 4: Test Migration (26 failures → 0)
+- **`portfolio_test.exs`** — rewrote dividend/dashboard describe blocks, added `get_or_create_instrument/2` and `insert_test_dividend/5` helpers
+- **`portfolio_nordnet_test.exs`** — complete rewrite for CashFlow-based cost functions
+- **`data_gaps_live_test.exs`** — complete rewrite using Trade/DividendPayment/Instrument
+- **`stock_live_test.exs`** — dividend display/payback tests updated with DividendPayment + per_share for yield_on_cost
+- **`portfolio_live_test.exs`** — cash flow summary test updated
+- **`import_yahoo_test.exs`** — updated for legacy disabled behavior
+
+#### Phase 5: Legacy Table Archival
+- **Migration** `archive_legacy_tables` — renames 4 tables: `dividends→legacy_dividends`, `costs→legacy_costs`, `broker_transactions→legacy_broker_transactions`, `symbol_mappings→legacy_symbol_mappings`
+- **Schema updates** — all 4 legacy schemas updated to reference `legacy_*` table names
+- **Constraint names** — explicit `name:` option on `unique_constraint` calls (3 schemas) to match actual DB index names after table rename
+
+#### Credo Fixes
+- Alias ordering (alphabetical) in `ibkr_activity_parser.ex`, `import_activity.ex`, `ibkr_activity_parser_test.exs`
+- Nesting depth reduction in `portfolio.ex` (extracted helper)
+- Long comment line wrap in `ibkr_activity_parser.ex`
+
+### Validation Summary (6,167 records)
+- 107 issues: 20 info, 87 warning
+- 8 missing_fx_conversion, 8 mixed_amount_types, 12 isin_currency_mismatch, 79 inconsistent_amount
+
+### Files Changed
+
+| Action | File |
+|--------|------|
+| New | `lib/dividendsomatic/portfolio/instrument.ex` |
+| New | `lib/dividendsomatic/portfolio/instrument_alias.ex` |
+| New | `lib/dividendsomatic/portfolio/trade.ex` |
+| New | `lib/dividendsomatic/portfolio/dividend_payment.ex` |
+| New | `lib/dividendsomatic/portfolio/cash_flow.ex` |
+| New | `lib/dividendsomatic/portfolio/corporate_action.ex` |
+| New | `lib/dividendsomatic/portfolio/ibkr_activity_parser.ex` |
+| New | `lib/mix/tasks/import_activity.ex` |
+| New | `test/dividendsomatic/ibkr_activity_parser_test.exs` |
+| New | `priv/repo/migrations/20260219192212_create_clean_tables.exs` |
+| New | `priv/repo/migrations/20260219200456_archive_legacy_tables.exs` |
+| Modified | `lib/dividendsomatic/portfolio.ex` — query migration, broker_coverage, adapter |
+| Modified | `lib/dividendsomatic/portfolio/broker_transaction.ex` — legacy_ table name |
+| Modified | `lib/dividendsomatic/portfolio/cost.ex` — legacy_ table name |
+| Modified | `lib/dividendsomatic/portfolio/dividend.ex` — legacy_ table name |
+| Modified | `lib/dividendsomatic/stocks/symbol_mapping.ex` — legacy_ table name |
+| Modified | `lib/mix/tasks/import_yahoo.ex` — catch-all error clause |
+| Modified | `test/dividendsomatic/portfolio_test.exs` — rewrite for new tables |
+| Modified | `test/dividendsomatic/portfolio_nordnet_test.exs` — rewrite for CashFlow |
+| Modified | `test/dividendsomatic_web/live/data_gaps_live_test.exs` — rewrite |
+| Modified | `test/dividendsomatic_web/live/stock_live_test.exs` — DividendPayment |
+| Modified | `test/dividendsomatic_web/live/portfolio_live_test.exs` — DividendPayment |
+| Modified | `test/dividendsomatic/import_yahoo_test.exs` — legacy behavior |
+
+### Quality
+- 668 tests, 0 failures, 0 credo issues
+
+---
+
 # Session Report — 2026-02-18 (Late Night)
 
 ## Stat Cards Rearrange, DividendAnalytics Extraction, Per-Symbol Dividends

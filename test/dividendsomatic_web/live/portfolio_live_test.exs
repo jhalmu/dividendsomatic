@@ -4,6 +4,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
   import Phoenix.LiveViewTest
 
   alias Dividendsomatic.Portfolio
+  alias Dividendsomatic.Portfolio.{DividendPayment, Instrument, InstrumentAlias}
 
   @csv_data """
   "ReportDate","CurrencyPrimary","Symbol","Description","SubCategory","Quantity","MarkPrice","PositionValue","CostBasisPrice","CostBasisMoney","OpenPrice","PercentOfNAV","FifoPnlUnrealized","ListingExchange","AssetClass","FXRateToBase","ISIN","FIGI"
@@ -415,13 +416,9 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       })
       |> Dividendsomatic.Repo.insert!()
 
-      {:ok, _} =
-        Portfolio.create_dividend(%{
-          symbol: "KESKOB",
-          ex_date: Date.new!(today.year, 1, 15),
-          amount: Decimal.new("0.50"),
-          currency: "EUR"
-        })
+      # Insert dividend via new tables
+      {instrument, _alias} = get_or_create_instrument("KESKOB", "FI0009000202")
+      insert_dividend_payment(instrument.id, Date.new!(today.year, 1, 15), "500", "EUR")
 
       {:ok, view, _html} = live(conn, ~p"/")
 
@@ -444,5 +441,48 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       assert html =~ "short-badge"
       assert html =~ "SHORT"
     end
+  end
+
+  defp get_or_create_instrument(symbol, isin) do
+    case Dividendsomatic.Repo.get_by(Instrument, isin: isin) do
+      nil ->
+        {:ok, instrument} =
+          %Instrument{}
+          |> Instrument.changeset(%{isin: isin, name: "#{symbol} Corp"})
+          |> Dividendsomatic.Repo.insert()
+
+        {:ok, alias_record} =
+          %InstrumentAlias{}
+          |> InstrumentAlias.changeset(%{
+            instrument_id: instrument.id,
+            symbol: symbol,
+            source: "test"
+          })
+          |> Dividendsomatic.Repo.insert()
+
+        {instrument, alias_record}
+
+      instrument ->
+        alias_record =
+          Dividendsomatic.Repo.get_by(InstrumentAlias,
+            instrument_id: instrument.id,
+            symbol: symbol
+          )
+
+        {instrument, alias_record}
+    end
+  end
+
+  defp insert_dividend_payment(instrument_id, pay_date, amount, currency) do
+    %DividendPayment{}
+    |> DividendPayment.changeset(%{
+      external_id: "test-div-#{System.unique_integer([:positive])}",
+      instrument_id: instrument_id,
+      pay_date: pay_date,
+      gross_amount: Decimal.new(amount),
+      net_amount: Decimal.new(amount),
+      currency: currency
+    })
+    |> Dividendsomatic.Repo.insert!()
   end
 end
