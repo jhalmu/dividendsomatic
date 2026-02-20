@@ -17,7 +17,7 @@ defmodule Mix.Tasks.Backfill.FxRates do
   import Ecto.Query
 
   alias Dividendsomatic.Portfolio
-  alias Dividendsomatic.Portfolio.{CashFlow, DividendPayment}
+  alias Dividendsomatic.Portfolio.{CashFlow, Dividend, DividendPayment}
   alias Dividendsomatic.Repo
 
   require Logger
@@ -36,6 +36,7 @@ defmodule Mix.Tasks.Backfill.FxRates do
 
     div_result = backfill_dividends(dry_run)
     cf_result = backfill_cash_flows(dry_run)
+    legacy_result = backfill_legacy_dividends(dry_run)
 
     Mix.shell().info("\nSummary:")
 
@@ -47,11 +48,20 @@ defmodule Mix.Tasks.Backfill.FxRates do
       "  Cash flows: #{cf_result.updated} updated, #{cf_result.skipped} skipped (no rate)"
     )
 
+    Mix.shell().info(
+      "  Legacy dividends: #{legacy_result.updated} updated, #{legacy_result.skipped} skipped (no rate)"
+    )
+
     remaining_div = DividendPayment |> where([d], is_nil(d.fx_rate)) |> Repo.aggregate(:count)
     remaining_cf = CashFlow |> where([c], is_nil(c.fx_rate)) |> Repo.aggregate(:count)
 
+    remaining_legacy =
+      Dividend
+      |> where([d], d.amount_type == "total_net" and d.currency != "EUR" and is_nil(d.fx_rate))
+      |> Repo.aggregate(:count)
+
     Mix.shell().info(
-      "\n  Remaining without fx_rate: #{remaining_div} dividends, #{remaining_cf} cash flows"
+      "\n  Remaining without fx_rate: #{remaining_div} dividends, #{remaining_cf} cash flows, #{remaining_legacy} legacy dividends"
     )
   end
 
@@ -90,11 +100,35 @@ defmodule Mix.Tasks.Backfill.FxRates do
     end)
   end
 
+  defp backfill_legacy_dividends(dry_run) do
+    records =
+      Dividend
+      |> where([d], d.amount_type == "total_net" and d.currency != "EUR" and is_nil(d.fx_rate))
+      |> select([d], %{id: d.id, currency: d.currency, ex_date: d.ex_date, amount: d.amount})
+      |> Repo.all()
+
+    Mix.shell().info("Backfilling #{length(records)} legacy_dividends...")
+
+    Enum.reduce(records, %{updated: 0, skipped: 0}, fn record, acc ->
+      rate = Portfolio.get_fx_rate(record.currency, record.ex_date)
+      apply_backfill(Dividend, record.id, record.amount, rate, dry_run, acc)
+    end)
+  end
+
   defp apply_backfill(_schema, _id, _amount, nil, _dry_run, acc) do
     %{acc | skipped: acc.skipped + 1}
   end
 
   defp apply_backfill(_schema, _id, _amount, _rate, true, acc) do
+    %{acc | updated: acc.updated + 1}
+  end
+
+  # Dividend schema has no amount_eur field — only set fx_rate
+  defp apply_backfill(Dividend, id, _amount, rate, false, acc) do
+    Dividend
+    |> where([r], r.id == ^id)
+    |> Repo.update_all(set: [fx_rate: rate])
+
     %{acc | updated: acc.updated + 1}
   end
 

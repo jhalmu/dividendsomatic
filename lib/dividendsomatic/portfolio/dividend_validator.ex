@@ -16,7 +16,7 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
   @isin_currency_map %{
     "US" => ["USD"],
     "CA" => ["CAD"],
-    "SE" => ["SEK"],
+    "SE" => ["SEK", "EUR"],
     "FI" => ["EUR"],
     "DE" => ["EUR"],
     "FR" => ["EUR"],
@@ -157,7 +157,12 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
   defp find_outliers(group) when length(group) < 2, do: []
 
   defp find_outliers(group) do
-    amounts = Enum.map(group, fn d -> Decimal.to_float(d.amount) end) |> Enum.sort()
+    # Use recent 5-year median to avoid pre-split historical skew
+    cutoff = Date.add(Date.utc_today(), -1825)
+    recent = Enum.filter(group, fn d -> Date.compare(d.ex_date, cutoff) != :lt end)
+    basis = if recent != [], do: recent, else: group
+
+    amounts = Enum.map(basis, fn d -> Decimal.to_float(d.amount) end) |> Enum.sort()
     median = Enum.at(amounts, div(length(amounts), 2))
 
     group
@@ -166,8 +171,12 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
       median > 0 && (val / median > 10 || median / val > 10)
     end)
     |> Enum.map(fn d ->
+      val = Decimal.to_float(d.amount)
+      # Small amounts (< median) are likely supplemental dividends, not data errors
+      severity = if val > median, do: :warning, else: :info
+
       %{
-        severity: :warning,
+        severity: severity,
         type: :inconsistent_amount,
         symbol: d.symbol,
         isin: d.isin,
