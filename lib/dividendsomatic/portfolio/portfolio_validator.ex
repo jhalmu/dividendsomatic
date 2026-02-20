@@ -12,7 +12,14 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
   import Ecto.Query
 
   alias Dividendsomatic.Portfolio
-  alias Dividendsomatic.Portfolio.{CashFlow, PortfolioSnapshot, SoldPosition}
+
+  alias Dividendsomatic.Portfolio.{
+    CashFlow,
+    MarginEquitySnapshot,
+    PortfolioSnapshot,
+    SoldPosition
+  }
+
   alias Dividendsomatic.Repo
 
   @warn_threshold Decimal.new("1")
@@ -43,7 +50,7 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
       snapshot ->
         zero = Decimal.new("0")
 
-        current_value =
+        position_value =
           Enum.reduce(snapshot.positions, zero, fn pos, acc ->
             fx = pos.fx_rate || Decimal.new("1")
             val = pos.value || zero
@@ -55,6 +62,15 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
             pnl = pos.unrealized_pnl || zero
             Decimal.add(acc, pnl)
           end)
+
+        # Cash balance from latest margin equity snapshot (informational)
+        cash_balance = latest_cash_balance()
+
+        # Use position value as current_value for the balance check.
+        # The cash_balance is shown separately for transparency but not added
+        # to the equation — positions already reflect margin-funded holdings,
+        # and the negative cash (margin loan) is a liability, not a loss.
+        current_value = position_value
 
         # Initial capital + date boundary from first IBKR Flex snapshot
         {initial_capital, ibkr_start_date} =
@@ -72,16 +88,22 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
           |> Decimal.add(deposits)
           |> Decimal.sub(withdrawals)
 
-        # Dividends and costs are all-time (not double-counted with cost basis)
-        summary = Portfolio.investment_summary()
+        # Split costs into interest and fees
+        costs_by_type = Portfolio.total_costs_by_type()
+        interest_costs = Map.get(costs_by_type, "interest", zero)
+        fee_costs = Map.get(costs_by_type, "fee", zero)
+        total_costs = Decimal.add(interest_costs, fee_costs)
+
+        # Dividends
+        total_dividends = portfolio_total_dividends()
 
         # IBKR-only realized P&L
         realized_pnl = ibkr_realized_pnl()
 
         net_profit =
           realized_pnl
-          |> Decimal.add(summary.total_dividends)
-          |> Decimal.sub(summary.total_costs)
+          |> Decimal.add(total_dividends)
+          |> Decimal.sub(total_costs)
 
         total_return = Decimal.add(net_profit, unrealized_pnl)
 
@@ -115,13 +137,39 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
             total_withdrawals: withdrawals,
             realized_pnl: realized_pnl,
             unrealized_pnl: unrealized_pnl,
-            total_dividends: summary.total_dividends,
-            total_costs: summary.total_costs,
+            total_dividends: total_dividends,
+            total_costs: total_costs,
+            interest_costs: interest_costs,
+            fee_costs: fee_costs,
             total_return: total_return,
+            position_value: position_value,
+            cash_balance: cash_balance,
             current_value: current_value
           }
         }
     end
+  end
+
+  defp latest_cash_balance do
+    case Repo.one(
+           from(m in MarginEquitySnapshot,
+             order_by: [desc: m.date],
+             limit: 1,
+             select: m.cash_balance
+           )
+         ) do
+      nil -> Decimal.new("0")
+      cash -> cash
+    end
+  end
+
+  defp portfolio_total_dividends do
+    zero = Decimal.new("0")
+
+    Portfolio.dividend_years()
+    |> Enum.reduce(zero, fn year, acc ->
+      Decimal.add(acc, Portfolio.total_dividends_for_year(year))
+    end)
   end
 
   # Returns {cost_basis, date} from the first IBKR Flex snapshot.

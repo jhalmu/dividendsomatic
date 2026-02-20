@@ -81,8 +81,81 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidatorTest do
       assert Map.has_key?(check.components, :unrealized_pnl)
       assert Map.has_key?(check.components, :total_dividends)
       assert Map.has_key?(check.components, :total_costs)
+      assert Map.has_key?(check.components, :interest_costs)
+      assert Map.has_key?(check.components, :fee_costs)
       assert Map.has_key?(check.components, :total_return)
+      assert Map.has_key?(check.components, :position_value)
+      assert Map.has_key?(check.components, :cash_balance)
       assert Map.has_key?(check.components, :current_value)
+    end
+
+    test "should expose cash balance from margin equity snapshots" do
+      alias Dividendsomatic.Portfolio.MarginEquitySnapshot
+
+      setup_balanced_portfolio(
+        deposits: "100000",
+        current_value: "105000",
+        unrealized_pnl: "10000",
+        cost_basis: "95000"
+      )
+
+      # Add a margin equity snapshot with cash balance
+      %MarginEquitySnapshot{}
+      |> MarginEquitySnapshot.changeset(%{
+        date: ~D[2024-06-15],
+        cash_balance: Decimal.new("5000"),
+        net_liquidation_value: Decimal.new("110000"),
+        own_equity: Decimal.new("110000"),
+        source: "test"
+      })
+      |> Repo.insert!()
+
+      result = PortfolioValidator.validate()
+      check = hd(result.checks)
+
+      # Cash balance is exposed for display but not added to current_value
+      assert Decimal.equal?(check.components.position_value, Decimal.new("105000"))
+      assert Decimal.equal?(check.components.cash_balance, Decimal.new("5000"))
+      # current_value = position_value only (cash is informational)
+      assert Decimal.equal?(check.components.current_value, Decimal.new("105000"))
+    end
+
+    test "should split costs into interest and fees" do
+      setup_balanced_portfolio(
+        deposits: "100000",
+        current_value: "110000",
+        unrealized_pnl: "10000",
+        cost_basis: "100000"
+      )
+
+      # Add interest cost
+      %CashFlow{}
+      |> CashFlow.changeset(%{
+        external_id: "test-interest-1",
+        flow_type: "interest",
+        date: ~D[2024-03-01],
+        amount: Decimal.new("-500"),
+        currency: "EUR"
+      })
+      |> Repo.insert!()
+
+      # Add fee cost
+      %CashFlow{}
+      |> CashFlow.changeset(%{
+        external_id: "test-fee-1",
+        flow_type: "fee",
+        date: ~D[2024-03-01],
+        amount: Decimal.new("-100"),
+        currency: "EUR"
+      })
+      |> Repo.insert!()
+
+      result = PortfolioValidator.validate()
+      check = hd(result.checks)
+
+      assert Decimal.equal?(check.components.interest_costs, Decimal.new("500"))
+      assert Decimal.equal?(check.components.fee_costs, Decimal.new("100"))
+      assert Decimal.equal?(check.components.total_costs, Decimal.new("600"))
     end
 
     test "should compute difference and percentage correctly" do

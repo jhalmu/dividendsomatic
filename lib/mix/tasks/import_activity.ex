@@ -77,15 +77,28 @@ defmodule Mix.Tasks.Import.Activity do
   defp print_summary(results) do
     Mix.shell().info("\n=== Import Summary ===")
 
+    zero_totals = %{
+      trades: 0,
+      dividends: 0,
+      cash_flows: 0,
+      interest: 0,
+      fees: 0,
+      corporate_actions: 0,
+      nav: 0,
+      borrow_fees: 0
+    }
+
     totals =
-      Enum.reduce(results, %{trades: 0, dividends: 0, cash_flows: 0, interest: 0, fees: 0}, fn r,
-                                                                                               acc ->
+      Enum.reduce(results, zero_totals, fn r, acc ->
         %{
           trades: acc.trades + (r.trades[:inserted] || 0),
           dividends: acc.dividends + (r.dividends[:inserted] || 0),
           cash_flows: acc.cash_flows + (r.cash_flows[:inserted] || 0),
           interest: acc.interest + (r.interest[:inserted] || 0),
-          fees: acc.fees + (r.fees[:inserted] || 0)
+          fees: acc.fees + (r.fees[:inserted] || 0),
+          corporate_actions: acc.corporate_actions + (r[:corporate_actions][:inserted] || 0),
+          nav: acc.nav + (r[:nav][:inserted] || 0),
+          borrow_fees: acc.borrow_fees + (r[:borrow_fees][:inserted] || 0)
         }
       end)
 
@@ -94,6 +107,9 @@ defmodule Mix.Tasks.Import.Activity do
     Mix.shell().info("  Cash flows: #{totals.cash_flows}")
     Mix.shell().info("  Interest: #{totals.interest}")
     Mix.shell().info("  Fees: #{totals.fees}")
+    Mix.shell().info("  Corporate actions: #{totals.corporate_actions}")
+    Mix.shell().info("  NAV snapshots: #{totals.nav}")
+    Mix.shell().info("  Borrow fees: #{totals.borrow_fees}")
   end
 
   defp verify do
@@ -101,9 +117,11 @@ defmodule Mix.Tasks.Import.Activity do
 
     alias Dividendsomatic.Portfolio.{
       CashFlow,
+      CorporateAction,
       DividendPayment,
       Instrument,
       InstrumentAlias,
+      MarginEquitySnapshot,
       Trade
     }
 
@@ -114,12 +132,16 @@ defmodule Mix.Tasks.Import.Activity do
     trade_count = Repo.aggregate(Trade, :count)
     dividend_count = Repo.aggregate(DividendPayment, :count)
     cash_flow_count = Repo.aggregate(CashFlow, :count)
+    corp_action_count = Repo.aggregate(CorporateAction, :count)
+    nav_count = Repo.aggregate(MarginEquitySnapshot, :count)
 
     Mix.shell().info("  Instruments: #{instrument_count}")
     Mix.shell().info("  Aliases: #{alias_count}")
     Mix.shell().info("  Trades: #{trade_count}")
     Mix.shell().info("  Dividend payments: #{dividend_count}")
     Mix.shell().info("  Cash flows: #{cash_flow_count}")
+    Mix.shell().info("  Corporate actions: #{corp_action_count}")
+    Mix.shell().info("  NAV snapshots: #{nav_count}")
 
     # Check for orphaned trades (no instrument)
     orphan_trades =

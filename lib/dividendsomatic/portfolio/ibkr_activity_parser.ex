@@ -13,9 +13,11 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
 
   alias Dividendsomatic.Portfolio.{
     CashFlow,
+    CorporateAction,
     DividendPayment,
     Instrument,
     InstrumentAlias,
+    MarginEquitySnapshot,
     Trade
   }
 
@@ -84,6 +86,9 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
     cash_flow_result = import_cash_flows(sections, is_consolidated)
     interest_result = import_interest(sections, is_consolidated)
     fee_result = import_fees(sections)
+    corporate_action_result = import_corporate_actions(sections, is_consolidated)
+    nav_result = import_nav_snapshot(sections)
+    borrow_fee_result = import_borrow_fees(sections, is_consolidated)
 
     %{
       file: Path.basename(file_path),
@@ -91,7 +96,10 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
       dividends: dividend_result,
       cash_flows: cash_flow_result,
       interest: interest_result,
-      fees: fee_result
+      fees: fee_result,
+      corporate_actions: corporate_action_result,
+      nav: nav_result,
+      borrow_fees: borrow_fee_result
     }
   end
 
@@ -819,6 +827,348 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
   end
 
   defp extract_fee_fields(_row), do: {"", "", "", ""}
+
+  # --- Corporate Actions ---
+
+  defp import_corporate_actions(sections, is_consolidated) do
+    rows = Map.get(sections, "Corporate Actions", [])
+
+    results =
+      rows
+      |> Enum.map(&parse_corporate_action_row(&1, is_consolidated))
+      |> Enum.reject(&is_nil/1)
+
+    {inserted, skipped, errors} =
+      Enum.reduce(results, {0, 0, []}, fn attrs, {ins, skip, errs} ->
+        case insert_corporate_action(attrs) do
+          {:ok, :inserted} -> {ins + 1, skip, errs}
+          {:ok, :skipped} -> {ins, skip + 1, errs}
+          {:error, reason} -> {ins, skip, [reason | errs]}
+        end
+      end)
+
+    Logger.info(
+      "  Corporate actions: #{inserted} new, #{skipped} skipped, #{length(errors)} errors"
+    )
+
+    %{inserted: inserted, skipped: skipped, errors: errors}
+  end
+
+  defp parse_corporate_action_row(row, is_consolidated) do
+    # After section+Data stripped:
+    # Standard: [AssetCategory, Currency, ReportDate, DateTime, Description, Quantity, Proceeds, Value, RealizedP/L, Code]
+    # Consolidated adds Account column after Currency
+    {asset_category, currency, report_date_str, _datetime_str, description, quantity_str,
+     proceeds_str, value_str} =
+      if is_consolidated do
+        {Enum.at(row, 0, ""), Enum.at(row, 1, ""), Enum.at(row, 3, ""), Enum.at(row, 4, ""),
+         Enum.at(row, 5, ""), Enum.at(row, 6, ""), Enum.at(row, 7, ""), Enum.at(row, 8, "")}
+      else
+        {Enum.at(row, 0, ""), Enum.at(row, 1, ""), Enum.at(row, 2, ""), Enum.at(row, 3, ""),
+         Enum.at(row, 4, ""), Enum.at(row, 5, ""), Enum.at(row, 6, ""), Enum.at(row, 7, "")}
+      end
+
+    # Skip Total rows and Closed Lot rows
+    skip? =
+      asset_category in ["Total", "Total in EUR", ""] or
+        report_date_str == "" or
+        String.starts_with?(report_date_str, "Closed")
+
+    if skip? do
+      nil
+    else
+      date = parse_date(report_date_str)
+
+      if date == nil do
+        nil
+      else
+        # Extract ISIN from description: SYMBOL(ISIN) or (ISIN)
+        {isin, _per_share} = extract_isin_and_per_share(description)
+        instrument_id = resolve_instrument_by_isin(isin)
+
+        action_type = classify_corporate_action(description)
+        quantity = parse_decimal(quantity_str)
+        proceeds = parse_decimal(proceeds_str)
+        amount = parse_decimal(value_str)
+
+        external_id =
+          corporate_action_external_id(
+            instrument_id || isin || description,
+            date,
+            action_type,
+            quantity
+          )
+
+        %{
+          external_id: external_id,
+          instrument_id: instrument_id,
+          action_type: action_type,
+          date: date,
+          description: description,
+          quantity: quantity,
+          amount: amount,
+          currency: currency,
+          proceeds: proceeds,
+          raw_data: %{"row" => row}
+        }
+      end
+    end
+  end
+
+  @doc """
+  Classifies a corporate action type from its description.
+  """
+  def classify_corporate_action(description) do
+    desc = String.downcase(description)
+
+    cond do
+      String.contains?(desc, "spinoff") -> "spinoff"
+      String.contains?(desc, "rights issue") -> "rights_issue"
+      String.contains?(desc, "subscribes to") -> "rights_exercise"
+      String.contains?(desc, "stock dividend") -> "stock_dividend"
+      String.contains?(desc, "merged") -> "merger"
+      String.contains?(desc, "delisted") -> "delist"
+      String.contains?(desc, "tendered") -> "tender"
+      String.contains?(desc, "tender") -> "tender"
+      String.contains?(desc, "consent") -> "consent"
+      String.contains?(desc, "split") -> "split"
+      String.contains?(desc, "name change") -> "name_change"
+      true -> "other"
+    end
+  end
+
+  defp insert_corporate_action(%{external_id: external_id} = attrs) do
+    case Repo.get_by(CorporateAction, external_id: external_id) do
+      nil ->
+        %CorporateAction{}
+        |> CorporateAction.changeset(attrs)
+        |> Repo.insert()
+        |> case do
+          {:ok, _} -> {:ok, :inserted}
+          {:error, changeset} -> {:error, {:insert_failed, external_id, changeset}}
+        end
+
+      _existing ->
+        {:ok, :skipped}
+    end
+  end
+
+  defp corporate_action_external_id(ref, date, action_type, quantity) do
+    data = "corporate_action:#{ref}:#{date}:#{action_type}:#{quantity}"
+    :crypto.hash(:sha256, data) |> Base.encode16(case: :lower) |> binary_part(0, 32)
+  end
+
+  # --- Net Asset Value → Margin Equity Snapshots ---
+
+  defp import_nav_snapshot(sections) do
+    rows = Map.get(sections, "Net Asset Value", [])
+    statement_rows = Map.get(sections, "Statement", [])
+
+    if rows == [] do
+      Logger.info("  NAV snapshot: no data")
+      %{inserted: 0, skipped: 0}
+    else
+      # Extract date from Statement period
+      date = extract_statement_end_date(statement_rows)
+
+      if date == nil do
+        Logger.warning("  NAV snapshot: could not determine statement date")
+        %{inserted: 0, skipped: 0}
+      else
+        parse_and_upsert_nav(rows, date)
+      end
+    end
+  end
+
+  defp extract_statement_end_date(statement_rows) do
+    # Statement rows: [Field Name, Field Value]
+    # Look for "Period" field: "January 1, 2026 - February 18, 2026" or "February 19, 2026"
+    Enum.find_value(statement_rows, fn row ->
+      field_name = Enum.at(row, 0, "")
+
+      if field_name == "Period" do
+        period_str = Enum.at(row, 1, "")
+        parse_period_end_date(period_str)
+      end
+    end)
+  end
+
+  @doc """
+  Parses IBKR statement period string to extract end date.
+  Handles: "January 1, 2026 - February 18, 2026" and "February 19, 2026"
+  """
+  def parse_period_end_date(period_str) do
+    # Try range format first: "Month DD, YYYY - Month DD, YYYY"
+    case String.split(period_str, " - ") do
+      [_, end_part] -> parse_ibkr_date_string(String.trim(end_part))
+      [single] -> parse_ibkr_date_string(String.trim(single))
+      _ -> nil
+    end
+  end
+
+  defp parse_ibkr_date_string(str) do
+    # "February 18, 2026" or "January 1, 2026"
+    months = %{
+      "january" => 1,
+      "february" => 2,
+      "march" => 3,
+      "april" => 4,
+      "may" => 5,
+      "june" => 6,
+      "july" => 7,
+      "august" => 8,
+      "september" => 9,
+      "october" => 10,
+      "november" => 11,
+      "december" => 12
+    }
+
+    with [_, month_name, day_str, year_str] <-
+           Regex.run(~r/(\w+)\s+(\d+),?\s+(\d{4})/, str),
+         month when not is_nil(month) <- Map.get(months, String.downcase(month_name)),
+         {day, _} <- Integer.parse(day_str),
+         {year, _} <- Integer.parse(year_str),
+         {:ok, date} <- Date.new(year, month, day) do
+      date
+    else
+      _ -> nil
+    end
+  end
+
+  defp parse_and_upsert_nav(rows, date) do
+    zero = Decimal.new("0")
+
+    # Parse Cash and Stock/Total rows
+    # NAV rows after section+Data stripped: [AssetClass, PriorTotal, CurrentLong, CurrentShort, CurrentTotal, Change]
+    nav_data =
+      Enum.reduce(rows, %{}, fn row, acc ->
+        asset_class = Enum.at(row, 0, "") |> String.trim()
+        current_total_str = Enum.at(row, 4, "")
+        current_total = parse_decimal(current_total_str)
+
+        case String.downcase(asset_class) do
+          "cash" -> Map.put(acc, :cash, current_total || zero)
+          "stock" -> Map.put(acc, :stock, current_total || zero)
+          "total" -> Map.put(acc, :total, current_total || zero)
+          _ -> acc
+        end
+      end)
+
+    cash = Map.get(nav_data, :cash, zero)
+    nlv = Map.get(nav_data, :total, zero)
+
+    # Negative cash = margin loan
+    margin_loan =
+      if Decimal.compare(cash, zero) == :lt,
+        do: Decimal.abs(cash),
+        else: zero
+
+    # NLV = cash + stock (cash is negative when on margin)
+    # own_equity = NLV itself (already net of margin loan)
+
+    attrs = %{
+      date: date,
+      cash_balance: cash,
+      margin_loan: margin_loan,
+      net_liquidation_value: nlv,
+      own_equity: nlv,
+      source: "ibkr_activity_statement",
+      metadata: %{
+        "nav_rows" =>
+          nav_data |> Map.new(fn {k, v} -> {Atom.to_string(k), Decimal.to_string(v)} end)
+      }
+    }
+
+    case upsert_margin_equity(attrs) do
+      {:ok, :inserted} ->
+        Logger.info("  NAV snapshot: inserted for #{date} (NLV: #{nlv}, Cash: #{cash})")
+        %{inserted: 1, skipped: 0}
+
+      {:ok, :skipped} ->
+        Logger.info("  NAV snapshot: already exists for #{date}")
+        %{inserted: 0, skipped: 1}
+    end
+  end
+
+  defp upsert_margin_equity(attrs) do
+    case Repo.get_by(MarginEquitySnapshot, date: attrs.date) do
+      nil ->
+        %MarginEquitySnapshot{}
+        |> MarginEquitySnapshot.changeset(attrs)
+        |> Repo.insert()
+        |> case do
+          {:ok, _} ->
+            {:ok, :inserted}
+
+          {:error, changeset} ->
+            Logger.warning("  NAV insert error: #{inspect(changeset.errors)}")
+            {:ok, :skipped}
+        end
+
+      _existing ->
+        {:ok, :skipped}
+    end
+  end
+
+  # --- Borrow Fee Details ---
+
+  defp import_borrow_fees(sections, is_consolidated) do
+    rows = Map.get(sections, "Borrow Fee Details", [])
+
+    results =
+      rows
+      |> Enum.map(&parse_borrow_fee_row(&1, is_consolidated))
+      |> Enum.reject(&is_nil/1)
+
+    {inserted, skipped, errors} =
+      Enum.reduce(results, {0, 0, []}, fn attrs, {ins, skip, errs} ->
+        case insert_if_new(CashFlow, attrs) do
+          {:ok, :inserted} -> {ins + 1, skip, errs}
+          {:ok, :skipped} -> {ins, skip + 1, errs}
+          {:error, reason} -> {ins, skip, [reason | errs]}
+        end
+      end)
+
+    Logger.info("  Borrow fees: #{inserted} new, #{skipped} skipped, #{length(errors)} errors")
+
+    %{inserted: inserted, skipped: skipped, errors: errors}
+  end
+
+  defp parse_borrow_fee_row(row, is_consolidated) do
+    # After section+Data stripped:
+    # Standard: [Currency, ValueDate, Symbol, Quantity, Price, Value, FeeRate, BorrowFee, Code]
+    # Consolidated: [Currency, Account, ValueDate, Symbol, Quantity, Price, Value, FeeRate, BorrowFee, Code]
+    {currency, date_str, symbol, borrow_fee_str} =
+      if is_consolidated do
+        {Enum.at(row, 0, ""), Enum.at(row, 2, ""), Enum.at(row, 3, ""), Enum.at(row, 8, "")}
+      else
+        {Enum.at(row, 0, ""), Enum.at(row, 1, ""), Enum.at(row, 2, ""), Enum.at(row, 7, "")}
+      end
+
+    if currency in ["Total", "Total in EUR", ""] or date_str == "" do
+      nil
+    else
+      date = parse_date(date_str)
+      amount = parse_decimal(borrow_fee_str)
+
+      if date == nil or amount == nil do
+        nil
+      else
+        description = "Borrow fee: #{symbol}"
+        external_id = cash_flow_external_id("fee", date, amount, currency, description)
+
+        %{
+          external_id: external_id,
+          flow_type: "fee",
+          date: date,
+          amount: amount,
+          currency: currency,
+          description: description,
+          raw_data: %{"row" => row}
+        }
+      end
+    end
+  end
 
   # --- Instrument Resolution ---
 

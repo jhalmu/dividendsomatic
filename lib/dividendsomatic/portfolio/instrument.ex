@@ -17,7 +17,12 @@ defmodule Dividendsomatic.Portfolio.Instrument do
     :currency,
     :multiplier,
     :type,
-    :metadata
+    :metadata,
+    :sector,
+    :industry,
+    :country,
+    :logo_url,
+    :web_url
   ]
 
   schema "instruments" do
@@ -32,6 +37,11 @@ defmodule Dividendsomatic.Portfolio.Instrument do
     field :multiplier, :decimal, default: Decimal.new("1")
     field :type, :string
     field :metadata, :map, default: %{}
+    field :sector, :string
+    field :industry, :string
+    field :country, :string
+    field :logo_url, :string
+    field :web_url, :string
 
     has_many :aliases, Dividendsomatic.Portfolio.InstrumentAlias
     has_many :trades, Dividendsomatic.Portfolio.Trade

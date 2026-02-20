@@ -179,8 +179,20 @@ defmodule Mix.Tasks.Validate.Data do
       Mix.shell().info("    (Unrealized P&L: €#{format_decimal(c.unrealized_pnl)})")
       Mix.shell().info("    (Dividends:      €#{format_decimal(c.total_dividends)})")
       Mix.shell().info("    (Costs:         -€#{format_decimal(c.total_costs)})")
+
+      if Map.has_key?(c, :interest_costs) do
+        Mix.shell().info("      Interest:    -€#{format_decimal(c.interest_costs)}")
+        Mix.shell().info("      Fees:        -€#{format_decimal(c.fee_costs)}")
+      end
+
       Mix.shell().info("  = Expected value: €#{format_decimal(check.expected)}")
-      Mix.shell().info("  Current value:    €#{format_decimal(check.actual)}")
+
+      if Map.has_key?(c, :position_value) do
+        Mix.shell().info("  Position value:   €#{format_decimal(c.position_value)}")
+        Mix.shell().info("  + Cash balance:   €#{format_decimal(c.cash_balance)}")
+      end
+
+      Mix.shell().info("  = Current value:  €#{format_decimal(check.actual)}")
 
       Mix.shell().info(
         "  Difference:       €#{format_decimal(check.difference)} (#{check.difference_pct}%)"

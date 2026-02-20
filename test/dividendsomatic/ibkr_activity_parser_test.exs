@@ -309,6 +309,102 @@ defmodule Dividendsomatic.IbkrActivityParserTest do
     end
   end
 
+  describe "classify_corporate_action/1" do
+    test "should classify spinoff" do
+      assert IbkrActivityParser.classify_corporate_action(
+               "WPC(US92936U1097) Spinoff  1 for 15 (NLOP, WP CAREY INC - Spinoff, US64110Y1082)"
+             ) == "spinoff"
+    end
+
+    test "should classify rights issue" do
+      assert IbkrActivityParser.classify_corporate_action(
+               "CLM(US21924B3024) Subscribable Rights Issue  1 for 1"
+             ) == "rights_issue"
+    end
+
+    test "should classify merger" do
+      assert IbkrActivityParser.classify_corporate_action(
+               "OPP.EX6(US768BAS0482) Merged(Voluntary Offer Allocation)"
+             ) == "merger"
+    end
+
+    test "should classify delist" do
+      assert IbkrActivityParser.classify_corporate_action(
+               "(US219RGT0573) Delisted (CLM.RTS, CORNERSTONE STRATEGIC VALUE - RIGHTS)"
+             ) == "delist"
+    end
+
+    test "should classify stock dividend" do
+      assert IbkrActivityParser.classify_corporate_action(
+               "NLOP (US64110Y1082) Stock Dividend US64110Y1082 142737196 for 10000000000"
+             ) == "stock_dividend"
+    end
+
+    test "should return other for unknown actions" do
+      assert IbkrActivityParser.classify_corporate_action("Unknown action") == "other"
+    end
+  end
+
+  describe "parse_period_end_date/1" do
+    test "should parse range format" do
+      assert IbkrActivityParser.parse_period_end_date("January 1, 2026 - February 18, 2026") ==
+               ~D[2026-02-18]
+    end
+
+    test "should parse single date format" do
+      assert IbkrActivityParser.parse_period_end_date("February 19, 2026") == ~D[2026-02-19]
+    end
+
+    test "should return nil for invalid format" do
+      assert IbkrActivityParser.parse_period_end_date("invalid") == nil
+    end
+  end
+
+  describe "import_file/1 with corporate actions and NAV" do
+    @tag :integration
+    test "should import corporate actions" do
+      csv_content = """
+      Statement,Header,Field Name,Field Value
+      Statement,Data,Period,"January 1, 2026 - December 31, 2026"
+      Financial Instrument Information,Header,Asset Category,Symbol,Description,Conid,Security ID,Underlying,Listing Exch,Multiplier,Type,Code
+      Financial Instrument Information,Data,Stocks,WPC,W.P. CAREY INC,12345,US92936U1097,WPC,NYSE,1,REIT,
+      Financial Instrument Information,Data,Stocks,NLOP,NET LEASE OFFICE PROPERTY,67890,US64110Y1082,NLOP,NYSE,1,REIT,
+      Corporate Actions,Header,Asset Category,Currency,Report Date,Date/Time,Description,Quantity,Proceeds,Value,Realized P/L,Code
+      Corporate Actions,Data,Stocks,USD,2026-11-02,"2026-11-01, 20:25:00","WPC(US92936U1097) Spinoff  1 for 15 (NLOP, NET LEASE OFFICE PROPERTY, US64110Y1082)",1.3333,0,0,0,
+      Net Asset Value,Header,Asset Class,Prior Total,Current Long,Current Short,Current Total,Change
+      Net Asset Value,Data,Cash ,-55411.73,327.88,-264496.95,-264169.07,5223.35
+      Net Asset Value,Data,Stock,356491.87,350051.81,0,350051.81,-6440.06
+      Net Asset Value,Data,Total,87410.22,640019.77,-553850.91,86168.86,-1241.36
+      """
+
+      path = Path.join(System.tmp_dir!(), "test_corp_nav.csv")
+      File.write!(path, csv_content)
+
+      result = IbkrActivityParser.import_file(path)
+
+      # Verify corporate action
+      alias Dividendsomatic.Portfolio.CorporateAction
+
+      assert result.corporate_actions.inserted == 1
+      ca = Repo.one!(CorporateAction)
+      assert ca.action_type == "spinoff"
+      assert ca.currency == "USD"
+      assert Decimal.equal?(ca.quantity, Decimal.new("1.3333"))
+
+      # Verify NAV snapshot
+      alias Dividendsomatic.Portfolio.MarginEquitySnapshot
+
+      assert result.nav.inserted == 1
+      nav = Repo.one!(MarginEquitySnapshot)
+      assert nav.date == ~D[2026-12-31]
+      assert Decimal.equal?(nav.cash_balance, Decimal.new("-264169.07"))
+      assert Decimal.equal?(nav.net_liquidation_value, Decimal.new("86168.86"))
+      assert nav.source == "ibkr_activity_statement"
+
+      File.rm!(path)
+    end
+  end
+
   describe "import_file/1 integration" do
     @tag :integration
     test "should import a small test CSV" do

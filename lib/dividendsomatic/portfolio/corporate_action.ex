@@ -7,15 +7,27 @@ defmodule Dividendsomatic.Portfolio.CorporateAction do
   @foreign_key_type :binary_id
 
   @required_fields [:action_type, :date]
-  @optional_fields [:instrument_id, :description, :quantity, :amount, :raw_data]
+  @optional_fields [
+    :external_id,
+    :instrument_id,
+    :description,
+    :quantity,
+    :amount,
+    :currency,
+    :proceeds,
+    :raw_data
+  ]
 
   schema "corporate_actions" do
     belongs_to :instrument, Dividendsomatic.Portfolio.Instrument
+    field :external_id, :string
     field :action_type, :string
     field :date, :date
     field :description, :string
     field :quantity, :decimal
     field :amount, :decimal
+    field :currency, :string
+    field :proceeds, :decimal
     field :raw_data, :map, default: %{}
 
     timestamps()
@@ -26,5 +38,6 @@ defmodule Dividendsomatic.Portfolio.CorporateAction do
     |> cast(attrs, @required_fields ++ @optional_fields)
     |> validate_required(@required_fields)
     |> foreign_key_constraint(:instrument_id)
+    |> unique_constraint(:external_id)
   end
 end
