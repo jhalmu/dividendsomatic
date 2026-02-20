@@ -3,9 +3,17 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
   Validates portfolio-level data integrity.
 
   Checks the accounting identity: current_value ≈ net_invested + total_return
+
+  Scoped to IBKR data only. Cash flows and positions are IBKR-sourced,
+  so realized P&L is filtered to source="ibkr" to avoid counting
+  Nordnet/Lynx 9A trades that lack corresponding deposit records.
   """
 
+  import Ecto.Query
+
   alias Dividendsomatic.Portfolio
+  alias Dividendsomatic.Portfolio.{CashFlow, PortfolioSnapshot, SoldPosition}
+  alias Dividendsomatic.Repo
 
   @warn_threshold Decimal.new("1")
   @fail_threshold Decimal.new("5")
@@ -48,13 +56,36 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
             Decimal.add(acc, pnl)
           end)
 
+        # Initial capital + date boundary from first IBKR Flex snapshot
+        {initial_capital, ibkr_start_date} =
+          case first_ibkr_snapshot() do
+            {cost, date} -> {cost, date}
+            nil -> {zero, nil}
+          end
+
+        # Cash flows AFTER the first IBKR snapshot (avoid double-counting)
+        {deposits, withdrawals} = deposits_withdrawals_after(ibkr_start_date)
+
+        # Net invested = initial capital + post-snapshot deposits - withdrawals
+        net_invested =
+          initial_capital
+          |> Decimal.add(deposits)
+          |> Decimal.sub(withdrawals)
+
+        # Dividends and costs are all-time (not double-counted with cost basis)
         summary = Portfolio.investment_summary()
 
-        total_return =
-          summary.net_profit
-          |> Decimal.add(unrealized_pnl)
+        # IBKR-only realized P&L
+        realized_pnl = ibkr_realized_pnl()
 
-        expected = Decimal.add(summary.net_invested, total_return)
+        net_profit =
+          realized_pnl
+          |> Decimal.add(summary.total_dividends)
+          |> Decimal.sub(summary.total_costs)
+
+        total_return = Decimal.add(net_profit, unrealized_pnl)
+
+        expected = Decimal.add(net_invested, total_return)
         difference = Decimal.abs(Decimal.sub(current_value, expected))
 
         difference_pct =
@@ -78,10 +109,11 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
           difference_pct: difference_pct,
           tolerance_pct: @warn_threshold,
           components: %{
-            net_invested: summary.net_invested,
-            total_deposits: summary.total_deposits,
-            total_withdrawals: summary.total_withdrawals,
-            realized_pnl: summary.realized_pnl,
+            initial_capital: initial_capital,
+            net_invested: net_invested,
+            total_deposits: deposits,
+            total_withdrawals: withdrawals,
+            realized_pnl: realized_pnl,
             unrealized_pnl: unrealized_pnl,
             total_dividends: summary.total_dividends,
             total_costs: summary.total_costs,
@@ -90,6 +122,53 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
           }
         }
     end
+  end
+
+  # Returns {cost_basis, date} from the first IBKR Flex snapshot.
+  # Cost basis represents positions transferred in-kind + cash deposits
+  # up to that date. Cash flows after this date are counted separately.
+  defp first_ibkr_snapshot do
+    PortfolioSnapshot
+    |> where([s], s.source == "ibkr_flex")
+    |> order_by([s], asc: s.date)
+    |> limit(1)
+    |> select([s], {s.total_cost, s.date})
+    |> Repo.one()
+  end
+
+  # Returns {deposits, withdrawals} for cash flows after the given date.
+  # When date is nil (no IBKR snapshot), returns all cash flows.
+  defp deposits_withdrawals_after(nil) do
+    dw = Portfolio.total_deposits_withdrawals()
+    {dw.deposits, dw.withdrawals}
+  end
+
+  defp deposits_withdrawals_after(date) do
+    zero = Decimal.new("0")
+
+    results =
+      CashFlow
+      |> where([c], c.flow_type in ["deposit", "withdrawal"])
+      |> where([c], c.date > ^date)
+      |> select([c], %{flow_type: c.flow_type, amount: c.amount})
+      |> Repo.all()
+
+    Enum.reduce(results, {zero, zero}, fn cf, {dep_acc, wd_acc} ->
+      amt = Decimal.abs(cf.amount || zero)
+
+      case cf.flow_type do
+        "deposit" -> {Decimal.add(dep_acc, amt), wd_acc}
+        "withdrawal" -> {dep_acc, Decimal.add(wd_acc, amt)}
+        _ -> {dep_acc, wd_acc}
+      end
+    end)
+  end
+
+  defp ibkr_realized_pnl do
+    SoldPosition
+    |> where([s], s.source == "ibkr")
+    |> select([s], sum(fragment("COALESCE(?, ?)", s.realized_pnl_eur, s.realized_pnl)))
+    |> Repo.one() || Decimal.new("0")
   end
 
   defp determine_status(pct) do

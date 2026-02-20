@@ -170,7 +170,10 @@ defmodule Mix.Tasks.Validate.Data do
     Enum.each(checks, fn check ->
       c = check.components
 
-      Mix.shell().info("  Net invested:     €#{format_decimal(c.net_invested)}")
+      Mix.shell().info("  Initial capital:  €#{format_decimal(c.initial_capital)}")
+      Mix.shell().info("  + Cash deposits:  €#{format_decimal(c.total_deposits)}")
+      Mix.shell().info("  - Withdrawals:    €#{format_decimal(c.total_withdrawals)}")
+      Mix.shell().info("  = Net invested:   €#{format_decimal(c.net_invested)}")
       Mix.shell().info("  + Total return:   €#{format_decimal(c.total_return)}")
       Mix.shell().info("    (Realized P&L:   €#{format_decimal(c.realized_pnl)})")
       Mix.shell().info("    (Unrealized P&L: €#{format_decimal(c.unrealized_pnl)})")

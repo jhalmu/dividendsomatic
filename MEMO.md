@@ -65,11 +65,20 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.30.0 (E2E Tests + Accessibility)
-**Status:** Clean IBKR-derived tables, legacy stubs cleaned up, 21 Playwright E2E tests, WCAG AA accessibility passing
+**Version:** 0.31.0 (Portfolio Balance Check)
+**Status:** PortfolioValidator with balance check, integrated into mix validate.data
 **Branch:** `main`
 
-**Latest session (2026-02-19 cont.):**
+**Latest session (2026-02-20):**
+- **PortfolioValidator** — new module validating `current_value ≈ net_invested + total_return`
+- **Balance check** — 1%/5% tolerance thresholds (pass/warning/fail), all components exposed
+- **IBKR scoping** — realized P&L filtered to `source="ibkr"`, cash flows date-scoped after first IBKR Flex snapshot
+- **Initial capital** — first IBKR Flex snapshot cost basis (€389k) used as implicit deposit for in-kind transfers
+- **Integrated into `mix validate.data`** — formatted output + JSON export support
+- **Gap reduced** from 185% → 8.58% (€26.6k remaining, likely FX/cash/dividend scope)
+- 676 tests, 0 failures
+
+**Previous session (2026-02-19 cont.):**
 - **Legacy stub cleanup** — removed 10 compilation warnings, simplified 5 files
 - **Playwright E2E tests** — 21 tests (8 portfolio page, 7 stock page, 4 accessibility, 2 contrast)
 - **Accessibility fixes** — `prefers-reduced-motion` support, opaque surfaces, contrast fixes, ARIA labels
@@ -206,7 +215,7 @@ mix ecto.reset              # Drop + create + migrate
 - Multi-provider market data: Finnhub + Yahoo Finance + EODHD with fallback chains
 
 **Next priorities:**
-- Cross-check: `net_invested + total_return ≈ current_value`
+- Fix balance check gaps: deposits under-reported (€42k vs €309k portfolio), realized_pnl -€302k needs investigation
 - Investigate 5,623 zero-income dividends (Yahoo historical, no matching positions)
 - EODHD historical data backfill (30+ years available)
 - Production deployment
