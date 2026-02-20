@@ -23,6 +23,20 @@ defmodule Dividendsomatic.Portfolio.FlexCsvRouterTest do
   "U7299935","","","EUR","1","STK","TRIN","TRINITY CAPITAL INC","468533653","US8964423086","ISIN","896442308","US8964423086","NASDAQ","","TRIN","","","","1","","","","","2026-02-09","2026-01-15","2026-01-15","FRTAX","TRIN description","","","","0","0","0","0","0","","10.0791523","10.0791523","","-228532.648612115","BaseCurrency","5393915966"
   """
 
+  @activity_statement_csv """
+  Statement,Header,Field Name,Field Value
+  Statement,Data,Title,Activity Statement
+  Statement,Data,Period,"January 2, 2026 - February 19, 2026"
+  Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,C. Price,Proceeds,Comm/Fee,Basis,Realized P/L,MTM P/L,Code
+  Trades,Data,Order,Stocks,EUR,NDA FI,"2026-02-13, 10:30:00",1000,16.185,16.325,16185,4.50,16189.50,0,140,O
+  """
+
+  @cash_report_csv """
+  "ClientAccountID","AccountAlias","Model","CurrencyPrimary","LevelOfDetail","FromDate","ToDate","StartingCash","Commissions","Deposits/Withdrawals","Dividends","BrokerInterest","OtherFees","EndingCash"
+  "U7299935","","","EUR","BaseCurrency","2026-01-01","2026-02-19","-264532.12","-198.45","0","1234.56","-789.01","0","-264285.02"
+  "U7299935","","","EUR","BASE_SUMMARY","2026-01-01","2026-02-19","-264532.12","-198.45","0","1234.56","-789.01","0","-264285.02"
+  """
+
   @dividends_with_dupe_header """
   "Symbol","ISIN","FIGI","AssetClass","CurrencyPrimary","FXRateToBase","ExDate","PayDate","Quantity","GrossRate","NetAmount"
   "TELIA1","SE0000667925","BBG000GJ9377","STK","SEK","0.094367","2026-02-05","2026-02-11","10000","0.5","-3500"
@@ -46,6 +60,19 @@ defmodule Dividendsomatic.Portfolio.FlexCsvRouterTest do
 
     test "should detect actions CSV" do
       assert :actions == FlexCsvRouter.detect_csv_type(@actions_csv)
+    end
+
+    test "should detect activity statement format" do
+      assert :activity_statement == FlexCsvRouter.detect_csv_type(@activity_statement_csv)
+    end
+
+    test "should detect activity statement with BOM prefix" do
+      bom_csv = "\uFEFF" <> @activity_statement_csv
+      assert :activity_statement == FlexCsvRouter.detect_csv_type(bom_csv)
+    end
+
+    test "should detect cash report format" do
+      assert :cash_report == FlexCsvRouter.detect_csv_type(@cash_report_csv)
     end
 
     test "should return unknown for empty string" do

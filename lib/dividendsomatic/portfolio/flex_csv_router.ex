@@ -11,9 +11,18 @@ defmodule Dividendsomatic.Portfolio.FlexCsvRouter do
   - `:dividends` — Dividend records (has GrossRate + NetAmount)
   - `:trades` — Trade executions (has TradeID + Buy/Sell)
   - `:actions` — Account activity (has ActivityCode + TransactionID)
+  - `:activity_statement` — IBKR Activity Statement (multi-section, starts with "Statement,")
+  - `:cash_report` — Cash Report summary (has ClientAccountID + StartingCash + EndingCash)
   """
 
-  @type csv_type :: :portfolio | :dividends | :trades | :actions | :unknown
+  @type csv_type ::
+          :portfolio
+          | :dividends
+          | :trades
+          | :actions
+          | :activity_statement
+          | :cash_report
+          | :unknown
 
   @doc """
   Detects the CSV type from the first header row.
@@ -75,9 +84,10 @@ defmodule Dividendsomatic.Portfolio.FlexCsvRouter do
     {type, cleaned}
   end
 
-  # Extract the first non-empty line
+  # Extract the first non-empty line, stripping BOM if present
   defp first_header_line(csv_string) do
     csv_string
+    |> String.replace_prefix("\uFEFF", "")
     |> String.split(~r/\r?\n/, parts: 2)
     |> List.first("")
     |> String.trim()
@@ -87,10 +97,13 @@ defmodule Dividendsomatic.Portfolio.FlexCsvRouter do
   defp classify_headers(""), do: :unknown
 
   defp classify_headers(header_line) do
-    # Order matters: actions header also contains "Buy/Sell", so check it before trades
+    # Order matters: activity statement must be checked first (multi-section format),
+    # then actions before trades (actions header also contains "Buy/Sell")
     cond do
+      String.starts_with?(header_line, "Statement,") -> :activity_statement
       has_headers?(header_line, ["MarkPrice", "PositionValue"]) -> :portfolio
       has_headers?(header_line, ["GrossRate", "NetAmount"]) -> :dividends
+      has_headers?(header_line, ["ClientAccountID", "StartingCash", "EndingCash"]) -> :cash_report
       has_headers?(header_line, ["ActivityCode", "TransactionID"]) -> :actions
       has_headers?(header_line, ["TradeID", "Buy/Sell"]) -> :trades
       true -> :unknown

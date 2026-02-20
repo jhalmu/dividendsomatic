@@ -5,18 +5,32 @@ defmodule Dividendsomatic.DataIngestion.FlexImportOrchestrator do
   Scans a directory, classifies each CSV by type using `FlexCsvRouter`,
   and routes to the appropriate import pipeline:
 
-  - `:portfolio` → existing `DataIngestion.import_new_from_source(CsvDirectory)`
-  - `:dividends` → skipped (legacy, use `mix import.activity`)
-  - `:trades`    → skipped (legacy, use `mix import.activity`)
-  - `:actions`   → `IntegrityChecker.run_all/1` (print report, no insert)
+  - `:portfolio`           → `Portfolio.create_snapshot_from_csv/2`
+  - `:activity_statement`  → `IbkrActivityParser.import_file/1`
+  - `:dividends`           → FX rate enrichment on existing dividend_payments
+  - `:trades`              → FX rate enrichment on existing trades
+  - `:actions`             → `IntegrityChecker.run_all/1` (validation report)
+  - `:cash_report`         → log EUR totals for validation
 
   Replaces `CsvDirectory` as the main import entry point for the worker.
   """
 
   require Logger
 
+  import Ecto.Query
+
   alias Dividendsomatic.Portfolio
-  alias Dividendsomatic.Portfolio.{FlexCsvRouter, IntegrityChecker}
+
+  alias Dividendsomatic.Portfolio.{
+    DividendPayment,
+    FlexCsvRouter,
+    IbkrActivityParser,
+    IntegrityChecker,
+    Trade
+  }
+
+  alias Dividendsomatic.Portfolio.{FlexDividendCsvParser, FlexTradesCsvParser}
+  alias Dividendsomatic.Repo
 
   @default_dir "csv_data"
 
@@ -97,20 +111,47 @@ defmodule Dividendsomatic.DataIngestion.FlexImportOrchestrator do
     end
   end
 
-  defp route_import(:dividends, _content, _path, filename) do
+  defp route_import(:activity_statement, _content, path, filename) do
+    result = IbkrActivityParser.import_file(path)
+
     Logger.info(
-      "FlexImportOrchestrator: #{filename} — legacy dividend import disabled, use mix import.activity"
+      "FlexImportOrchestrator: #{filename} activity import → " <>
+        "trades: #{inspect(result[:trades])}, dividends: #{inspect(result[:dividends])}, " <>
+        "cash_flows: #{inspect(result[:cash_flows])}"
     )
 
-    {:skipped, :dividends, "#{filename}: legacy import disabled"}
+    {:ok, :activity_statement, result}
+  rescue
+    e ->
+      {:error, "activity import failed for #{filename}: #{Exception.message(e)}"}
   end
 
-  defp route_import(:trades, _content, _path, filename) do
+  defp route_import(:dividends, content, _path, filename) do
+    {_type, cleaned} = FlexCsvRouter.classify_and_clean(content)
+    enriched = enrich_dividend_fx_rates(cleaned)
+
     Logger.info(
-      "FlexImportOrchestrator: #{filename} — legacy trade import disabled, use mix import.activity"
+      "FlexImportOrchestrator: #{filename} enriched #{enriched} dividends with FX rates"
     )
 
-    {:skipped, :trades, "#{filename}: legacy import disabled"}
+    {:ok, :dividends, %{fx_enriched: enriched}}
+  end
+
+  defp route_import(:trades, content, _path, filename) do
+    {_type, cleaned} = FlexCsvRouter.classify_and_clean(content)
+    enriched = enrich_trade_fx_rates(cleaned)
+
+    Logger.info("FlexImportOrchestrator: #{filename} enriched #{enriched} trades with FX rates")
+
+    {:ok, :trades, %{fx_enriched: enriched}}
+  end
+
+  defp route_import(:cash_report, content, _path, filename) do
+    summary = extract_cash_report_summary(content)
+
+    Logger.info("FlexImportOrchestrator: #{filename} cash report → #{inspect(summary)}")
+
+    {:ok, :cash_report, summary}
   end
 
   defp route_import(:actions, _content, path, filename) do
@@ -151,32 +192,183 @@ defmodule Dividendsomatic.DataIngestion.FlexImportOrchestrator do
     end
   end
 
+  # --- FX Rate Enrichment ---
+
+  # Enrich dividend_payments with FX rates from Flex Dividends CSV.
+  # Matches by instrument ISIN + pay_date + net_amount, updates fx_rate + amount_eur where NULL.
+  defp enrich_dividend_fx_rates(cleaned_csv) do
+    case FlexDividendCsvParser.parse(cleaned_csv) do
+      {:ok, records} ->
+        Enum.reduce(records, 0, fn record, count ->
+          case enrich_single_dividend(record) do
+            {:ok, _} -> count + 1
+            _ -> count
+          end
+        end)
+
+      {:error, _} ->
+        0
+    end
+  end
+
+  defp enrich_single_dividend(record) do
+    isin = record[:isin]
+    pay_date = record[:pay_date]
+    fx_rate = record[:fx_rate] || record[:exchange_rate]
+
+    with true <- is_binary(isin) and isin != "",
+         %Date{} <- pay_date,
+         %Decimal{} <- fx_rate,
+         false <- Decimal.equal?(fx_rate, 0) do
+      # Find matching dividend_payment by ISIN + pay_date with NULL fx_rate
+      query =
+        from dp in DividendPayment,
+          join: i in assoc(dp, :instrument),
+          where: i.isin == ^isin and dp.pay_date == ^pay_date and is_nil(dp.fx_rate),
+          select: dp
+
+      case Repo.all(query) do
+        [] ->
+          :no_match
+
+        payments ->
+          Enum.each(payments, fn dp ->
+            amount_eur = Decimal.div(dp.net_amount, fx_rate)
+
+            dp
+            |> Ecto.Changeset.change(%{fx_rate: fx_rate, amount_eur: amount_eur})
+            |> Repo.update()
+          end)
+
+          {:ok, length(payments)}
+      end
+    else
+      _ -> :skip
+    end
+  end
+
+  # Enrich trades with FX rates from Flex Trades CSV.
+  # Matches by instrument ISIN + trade_date + trade_id, updates fx_rate where NULL.
+  defp enrich_trade_fx_rates(cleaned_csv) do
+    case FlexTradesCsvParser.parse(cleaned_csv) do
+      {:ok, records} ->
+        Enum.reduce(records, 0, fn record, count ->
+          case enrich_single_trade(record) do
+            {:ok, _} -> count + 1
+            _ -> count
+          end
+        end)
+
+      {:error, _} ->
+        0
+    end
+  end
+
+  defp enrich_single_trade(record) do
+    isin = record[:isin]
+    trade_date = record[:trade_date]
+    fx_rate = record[:exchange_rate]
+    trade_id = get_in(record, [:raw_data, "trade_id"])
+
+    with true <- is_binary(isin) and isin != "",
+         %Date{} <- trade_date,
+         %Decimal{} <- fx_rate,
+         false <- Decimal.equal?(fx_rate, 0) do
+      # Find matching trade by ISIN + trade_date with NULL fx_rate
+      query =
+        from t in Trade,
+          join: i in assoc(t, :instrument),
+          where: i.isin == ^isin and t.trade_date == ^trade_date and is_nil(t.fx_rate)
+
+      # Narrow by trade_id in raw_data if available
+      query =
+        if trade_id && trade_id != "" do
+          from t in query,
+            where: fragment("?->>'trade_id' = ?", t.raw_data, ^trade_id)
+        else
+          query
+        end
+
+      case Repo.all(query) do
+        [] ->
+          :no_match
+
+        trades ->
+          Enum.each(trades, fn t ->
+            t
+            |> Ecto.Changeset.change(%{fx_rate: fx_rate})
+            |> Repo.update()
+          end)
+
+          {:ok, length(trades)}
+      end
+    else
+      _ -> :skip
+    end
+  end
+
+  # --- Cash Report Summary ---
+
+  # Extracts summary totals from a Cash Report CSV.
+  # Looks for the BASE_SUMMARY row with EUR totals.
+  defp extract_cash_report_summary(content) do
+    lines =
+      content
+      |> String.split(~r/\r?\n/, trim: true)
+      |> Enum.map(&String.trim/1)
+
+    case lines do
+      [header | data_lines] ->
+        headers =
+          header
+          |> String.split(",")
+          |> Enum.map(&String.trim(&1, "\""))
+
+        # Find BASE_SUMMARY row (has pre-computed EUR totals)
+        base_row =
+          Enum.find(data_lines, fn line ->
+            String.contains?(line, "BASE_SUMMARY")
+          end)
+
+        if base_row do
+          values =
+            base_row
+            |> String.split(",")
+            |> Enum.map(&String.trim(&1, "\""))
+
+          pairs = Enum.zip(headers, values) |> Map.new()
+
+          %{
+            level: "BASE_SUMMARY",
+            starting_cash: pairs["StartingCash"],
+            ending_cash: pairs["EndingCash"],
+            dividends: pairs["Dividends"],
+            interest: pairs["BrokerInterest"],
+            deposits_withdrawals: pairs["Deposits/Withdrawals"]
+          }
+        else
+          %{level: "no_base_summary", raw_rows: length(data_lines)}
+        end
+
+      _ ->
+        %{level: "empty"}
+    end
+  end
+
   defp build_summary(results) do
+    count = fn type ->
+      results |> Enum.filter(&match?({:ok, ^type, _}, &1)) |> length()
+    end
+
     %{
-      portfolio:
-        results
-        |> Enum.filter(&match?({:ok, :portfolio, _}, &1))
-        |> length(),
-      dividends:
-        results
-        |> Enum.filter(&match?({:ok, :dividends, _}, &1))
-        |> length(),
-      trades:
-        results
-        |> Enum.filter(&match?({:ok, :trades, _}, &1))
-        |> length(),
-      actions:
-        results
-        |> Enum.filter(&match?({:ok, :actions, _}, &1))
-        |> length(),
-      skipped:
-        results
-        |> Enum.filter(&match?({:skipped, _, _}, &1))
-        |> length(),
-      errors:
-        results
-        |> Enum.filter(&match?({:error, _}, &1))
-        |> length()
+      portfolio: count.(:portfolio),
+      activity_statement: count.(:activity_statement),
+      dividends: count.(:dividends),
+      trades: count.(:trades),
+      actions: count.(:actions),
+      cash_report: count.(:cash_report),
+      skipped: results |> Enum.filter(&match?({:skipped, _, _}, &1)) |> length(),
+      errors: results |> Enum.filter(&match?({:error, _}, &1)) |> length()
     }
   end
 end

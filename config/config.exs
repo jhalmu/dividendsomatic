@@ -67,7 +67,7 @@ config :dividendsomatic, Oban,
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
     {Oban.Plugins.Cron,
      crontab: [
-       {"30 10 * * 1-6", Dividendsomatic.Workers.DataImportWorker,
+       {"0 13 * * 1-6", Dividendsomatic.Workers.DataImportWorker,
         args: %{"source" => "csv_directory"}}
      ]}
   ],
