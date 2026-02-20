@@ -778,10 +778,27 @@ defmodule Dividendsomatic.Portfolio do
   defp compute_per_symbol_dividends(positions, all_dividends, positions_map) do
     current_symbols = MapSet.new(positions, & &1.symbol)
 
+    # ISIN-to-position-symbol map for cross-matching when adapted symbol differs
+    isin_to_pos_symbol =
+      positions
+      |> Enum.filter(& &1.isin)
+      |> Map.new(fn p -> {p.isin, p.symbol} end)
+
+    # Resolve each dividend to the position symbol (by symbol or ISIN fallback)
     divs_by_symbol =
       all_dividends
-      |> Enum.filter(fn d -> MapSet.member?(current_symbols, d.symbol) end)
-      |> Enum.group_by(& &1.symbol)
+      |> Enum.map(fn d ->
+        pos_symbol =
+          if MapSet.member?(current_symbols, d.symbol) do
+            d.symbol
+          else
+            Map.get(isin_to_pos_symbol, d.isin)
+          end
+
+        {pos_symbol, d}
+      end)
+      |> Enum.reject(fn {pos_symbol, _d} -> is_nil(pos_symbol) end)
+      |> Enum.group_by(fn {pos_symbol, _d} -> pos_symbol end, fn {_ps, d} -> d end)
 
     pos_map = Map.new(positions, fn p -> {p.symbol, p} end)
 
