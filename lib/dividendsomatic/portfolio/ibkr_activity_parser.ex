@@ -11,6 +11,8 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
 
   alias Dividendsomatic.Repo
 
+  alias Dividendsomatic.Portfolio
+
   alias Dividendsomatic.Portfolio.{
     CashFlow,
     CorporateAction,
@@ -89,6 +91,7 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
     corporate_action_result = import_corporate_actions(sections, is_consolidated)
     nav_result = import_nav_snapshot(sections)
     borrow_fee_result = import_borrow_fees(sections, is_consolidated)
+    fx_result = import_fx_rates(sections)
 
     %{
       file: Path.basename(file_path),
@@ -99,7 +102,8 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
       fees: fee_result,
       corporate_actions: corporate_action_result,
       nav: nav_result,
-      borrow_fees: borrow_fee_result
+      borrow_fees: borrow_fee_result,
+      fx_rates: fx_result
     }
   end
 
@@ -1242,6 +1246,127 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
   end
 
   # --- Parsing Helpers ---
+
+  # --- FX Rates from Mark-to-Market Forex + Base Currency Exchange Rate ---
+
+  defp import_fx_rates(sections) do
+    m2m_result = import_m2m_forex_rates(sections)
+    bcr_result = import_base_currency_rates(sections)
+
+    total = m2m_result.inserted + bcr_result.inserted
+
+    Logger.info(
+      "  FX rates: #{total} upserted (#{m2m_result.inserted} M2M, #{bcr_result.inserted} BCR)"
+    )
+
+    %{inserted: total}
+  end
+
+  # Parse FX rates from Mark-to-Market Performance Summary Forex rows.
+  # Format: [AssetCategory, Symbol(currency), PriorQty, CurrentQty, PriorPrice, CurrentPrice, ...]
+  # PriorPrice = rate at period start, CurrentPrice = rate at period end
+  defp import_m2m_forex_rates(sections) do
+    rows = Map.get(sections, "Mark-to-Market Performance Summary", [])
+    statement_rows = Map.get(sections, "Statement", [])
+
+    forex_rows =
+      Enum.filter(rows, fn row -> Enum.at(row, 0, "") |> String.trim() == "Forex" end)
+
+    {start_date, end_date} = extract_statement_period(statement_rows)
+
+    if forex_rows == [] or start_date == nil or end_date == nil do
+      %{inserted: 0}
+    else
+      inserted =
+        Enum.reduce(forex_rows, 0, &upsert_m2m_forex_row(&1, start_date, end_date, &2))
+
+      %{inserted: inserted}
+    end
+  end
+
+  defp upsert_m2m_forex_row(row, start_date, end_date, acc) do
+    currency = Enum.at(row, 1, "") |> String.trim()
+
+    if currency in ["", "EUR"] do
+      acc
+    else
+      prior_price = Enum.at(row, 4, "") |> parse_decimal()
+      current_price = Enum.at(row, 5, "") |> parse_decimal()
+      c1 = upsert_fx_rate_if_valid(currency, start_date, prior_price, "activity_statement")
+      c2 = upsert_fx_rate_if_valid(currency, end_date, current_price, "activity_statement")
+      acc + c1 + c2
+    end
+  end
+
+  # Parse FX rates from Base Currency Exchange Rate section (AllActions CSVs).
+  # Format: [Currency, Rate]
+  defp import_base_currency_rates(sections) do
+    rows = Map.get(sections, "Base Currency Exchange Rate", [])
+    statement_rows = Map.get(sections, "Statement", [])
+    date = extract_statement_end_date(statement_rows)
+
+    if rows == [] or date == nil do
+      %{inserted: 0}
+    else
+      inserted = Enum.reduce(rows, 0, &upsert_bcr_row(&1, date, &2))
+      Logger.info("  FX rates (BCR): #{inserted} currencies for #{date}")
+      %{inserted: inserted}
+    end
+  end
+
+  defp upsert_bcr_row(row, date, acc) do
+    currency = Enum.at(row, 0, "") |> String.trim()
+    rate = Enum.at(row, 1, "") |> parse_decimal()
+
+    if currency in ["", "EUR"] or rate == nil do
+      acc
+    else
+      acc + upsert_fx_rate_if_valid(currency, date, rate, "allactions")
+    end
+  end
+
+  defp upsert_fx_rate_if_valid(_currency, _date, nil, _source), do: 0
+
+  defp upsert_fx_rate_if_valid(currency, date, rate, source) do
+    if Decimal.compare(rate, Decimal.new("0")) == :eq do
+      0
+    else
+      case Portfolio.upsert_fx_rate(%{
+             date: date,
+             currency: currency,
+             rate: rate,
+             source: source
+           }) do
+        {:ok, _} -> 1
+        {:error, _} -> 0
+      end
+    end
+  end
+
+  # Extract both start and end dates from Statement period.
+  # "January 1, 2025 - December 31, 2025" → {~D[2025-01-01], ~D[2025-12-31]}
+  defp extract_statement_period(statement_rows) do
+    Enum.find_value(statement_rows, {nil, nil}, fn row ->
+      if Enum.at(row, 0, "") == "Period" do
+        parse_period_range(Enum.at(row, 1, ""))
+      end
+    end)
+  end
+
+  defp parse_period_range(period_str) do
+    case String.split(period_str, " - ") do
+      [start_part, end_part] ->
+        {parse_ibkr_date_string(String.trim(start_part)),
+         parse_ibkr_date_string(String.trim(end_part))}
+
+      [single] ->
+        date = parse_ibkr_date_string(String.trim(single))
+        {date, date}
+
+      _ ->
+        {nil, nil}
+    end
+  end
 
   defp parse_decimal(nil), do: nil
   defp parse_decimal(""), do: nil

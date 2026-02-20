@@ -11,6 +11,7 @@ defmodule Dividendsomatic.Portfolio do
     CsvParser,
     DividendAnalytics,
     DividendPayment,
+    FxRate,
     InstrumentAlias,
     MarginEquitySnapshot,
     MarginRates,
@@ -953,6 +954,41 @@ defmodule Dividendsomatic.Portfolio do
       else: Decimal.new("0")
   end
 
+  ## FX Rate Lookup
+
+  @doc """
+  Returns the FX rate for a currency on a given date (1 unit = rate EUR).
+
+  - EUR always returns `Decimal.new("1")`
+  - Looks up exact date first, then falls back to nearest preceding date
+  - Returns `nil` if no rate found
+  """
+  def get_fx_rate("EUR", _date), do: Decimal.new("1")
+
+  def get_fx_rate(currency, date) when is_binary(currency) do
+    # Try exact date first, then nearest preceding
+    FxRate
+    |> where([f], f.currency == ^currency and f.date <= ^date)
+    |> order_by([f], desc: f.date)
+    |> limit(1)
+    |> select([f], f.rate)
+    |> Repo.one()
+  end
+
+  def get_fx_rate(_, _), do: nil
+
+  @doc """
+  Upserts an FX rate record. If a rate for the same date+currency exists, updates it.
+  """
+  def upsert_fx_rate(attrs) do
+    %FxRate{}
+    |> FxRate.changeset(attrs)
+    |> Repo.insert(
+      on_conflict: {:replace, [:rate, :source, :updated_at]},
+      conflict_target: [:date, :currency]
+    )
+  end
+
   ## Dividend Cash Flow
 
   @doc """
@@ -1191,7 +1227,7 @@ defmodule Dividendsomatic.Portfolio do
     CashFlow
     |> where([c], c.flow_type in ["interest", "fee"])
     |> where([c], c.date >= ^year_start and c.date <= ^year_end)
-    |> select([c], sum(fragment("ABS(?)", c.amount)))
+    |> select([c], sum(fragment("ABS(COALESCE(?, ?))", c.amount_eur, c.amount)))
     |> Repo.one() || Decimal.new("0")
   end
 
@@ -1213,7 +1249,7 @@ defmodule Dividendsomatic.Portfolio do
     CashFlow
     |> where([c], c.flow_type in ["interest", "fee"])
     |> group_by([c], c.flow_type)
-    |> select([c], {c.flow_type, sum(fragment("ABS(?)", c.amount))})
+    |> select([c], {c.flow_type, sum(fragment("ABS(COALESCE(?, ?))", c.amount_eur, c.amount))})
     |> Repo.all()
     |> Map.new()
   end
@@ -1245,12 +1281,12 @@ defmodule Dividendsomatic.Portfolio do
     results =
       CashFlow
       |> where([c], c.flow_type in ["deposit", "withdrawal"])
-      |> select([c], %{flow_type: c.flow_type, amount: c.amount})
+      |> select([c], %{flow_type: c.flow_type, amount: c.amount, amount_eur: c.amount_eur})
       |> Repo.all()
 
     {deposits, withdrawals} =
       Enum.reduce(results, {zero, zero}, fn cf, {dep_acc, wd_acc} ->
-        amt = Decimal.abs(cf.amount || zero)
+        amt = Decimal.abs(cf.amount_eur || cf.amount || zero)
 
         case cf.flow_type do
           "deposit" -> {Decimal.add(dep_acc, amt), wd_acc}

@@ -44,6 +44,14 @@ mix validate.data --compare          # Compare vs latest snapshot
 mix check.all                        # Unified integrity check
 mix check.sqlite                     # Check SQLite for unique data
 
+# Data maintenance
+mix backfill.instruments             # Backfill currency + company data
+mix backfill.instruments --currency  # Only currency
+mix backfill.instruments --company   # Only company profiles
+mix import.fx_rates                  # Import FX rates from all CSV sources
+mix backfill.fx_rates                # Backfill fx_rate + amount_eur
+mix compare.legacy                   # Compare legacy vs new tables
+
 # Historical data
 mix fetch.historical_prices              # Full pipeline
 mix fetch.historical_prices --resolve    # Only resolve symbols
@@ -65,11 +73,36 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.31.0 (Portfolio Balance Check)
-**Status:** PortfolioValidator with balance check, integrated into mix validate.data
+**Version:** 0.33.0 (FX Rates & EUR Conversion)
+**Status:** FX rates populated, all amounts EUR-converted, honest balance check
 **Branch:** `main`
 
-**Latest session (2026-02-20):**
+**Latest session (2026-02-20 FX Rates):**
+- **fx_rates table** — 607 rate records, 9 currencies (USD, CAD, NOK, JPY, SEK, HKD, GBP, TRY, CHF), 2021-2026
+- **FxRate schema + lookup** — `get_fx_rate/2` with nearest-preceding-date fallback, `upsert_fx_rate/1`
+- **`mix import.fx_rates`** — imports from 163 Flex CSVs (FXRateToBase) + 8 Activity Statements (M2M Forex + Base Currency Exchange Rate)
+- **`mix backfill.fx_rates`** — 840/841 dividends + 677/689 cash flows got fx_rate + amount_eur
+- **EUR-aware aggregation** — `total_costs_by_type`, `total_deposits_withdrawals`, validator all use `COALESCE(amount_eur, amount)`
+- **Activity parser extended** — `import_fx_rates` wired into `import_transactions` pipeline
+- Interest costs: €39.6k → **€18.2k** (close to Lynx ground truth €21.8k)
+- Fee costs: €3.1k → **€1.97k** (properly converted)
+- Dividend total: €141.7k → **€78.8k** (841 IBKR records, honestly EUR-converted)
+- Balance check gap: 12.13% (€37.6k) — wider because old inflated numbers no longer cancel; all figures now honest EUR
+- 702 tests, 0 failures, 2 pre-existing credo suggestions
+
+**Previous session (2026-02-20 cont.):**
+- **Data Table Filling & Consolidation** — 5-phase plan fully implemented
+- **Instrument currency backfill** — 336/336 instruments filled (trades → dividends → Flex CSVs → Activity CSVs → ISIN/exchange inference)
+- **Activity Statement parser extended** — corporate actions (30), NAV snapshots (7), borrow fees (119)
+- **Instrument enrichment** — 39 instruments got sector/industry/country from company_profiles via aliases join
+- **`mix compare.legacy`** — diagnostic comparing legacy vs new tables (trades 7407→7663, dividends 6167→841 IBKR-only, costs distributed)
+- **Balance check improved** — costs split into interest (€39.6k) / fees (€3.1k), cash balance (−€264k margin loan) exposed as informational
+- **Migrations** — corporate_action fields (external_id, currency, proceeds) + instrument enrichment (sector, industry, country, logo_url, web_url)
+- **Credo cleanup** — refactored `unless...else` → `if`, extracted helpers to reduce nesting depth
+- Balance check gap: 8.77% (€27.2k) — FX effects and timing differences not yet accounted for
+- 688 tests, 0 failures, 2 credo suggestions (cyclomatic complexity in parser)
+
+**Previous session (2026-02-20):**
 - **PortfolioValidator** — new module validating `current_value ≈ net_invested + total_return`
 - **Balance check** — 1%/5% tolerance thresholds (pass/warning/fail), all components exposed
 - **IBKR scoping** — realized P&L filtered to `source="ibkr"`, cash flows date-scoped after first IBKR Flex snapshot
@@ -211,14 +244,18 @@ mix ecto.reset              # Drop + create + migrate
 - Investment summary card (deposits, P&L, dividends, costs, total return)
 - Enhanced navigation: week/month/year jumps, date picker, chart presets
 - Dividend diagnostics for IEx verification
-- 668 tests + 21 Playwright E2E tests, 0 credo issues
+- FX rates table (607 records, 9 currencies, 2021-2026) with EUR conversion on dividends + cash flows
+- 702 tests + 21 Playwright E2E tests, 2 pre-existing credo suggestions
 - Multi-provider market data: Finnhub + Yahoo Finance + EODHD with fallback chains
+- All instrument currencies populated (336/336)
+- Corporate actions, NAV snapshots, borrow fees parsed from Activity Statements
+- Legacy comparison diagnostic (`mix compare.legacy`)
 
 **Next priorities:**
-- Fix balance check gaps: deposits under-reported (€42k vs €309k portfolio), realized_pnl -€302k needs investigation
-- Investigate 5,623 zero-income dividends (Yahoo historical, no matching positions)
+- Balance check gap (12.13%) — validator only counts 841 IBKR dividends; include all-source dividends or adjust scope
+- Fetch missing company profiles (~293 instruments without sector/industry) via Finnhub/Yahoo
+- Production deployment (Hetzner via docker-compose)
 - EODHD historical data backfill (30+ years available)
-- Production deployment
 
 ---
 
@@ -239,7 +276,9 @@ All issues (#1-#22) closed.
 - [x] Chart reconstruction N+1 queries fixed (3,700+ → 3 queries + persistent_term cache)
 - [x] Multi-provider market data architecture (Finnhub + Yahoo + EODHD)
 - [x] IBKR dividend recovery: PIL fallback, Foreign Tax filter, 73 new dividends
-- [x] Test coverage: 500 tests + 13 Playwright E2E, 0 credo issues
+- [x] Test coverage: 688 tests + 21 Playwright E2E
+- [x] Data consolidation: all instrument currencies, corporate actions, NAV snapshots, borrow fees
+- [ ] ~293 instruments missing company profiles (sector/industry/country)
 - [x] Historical prices: 53/63 stocks + 7 forex pairs fetched
 - [x] Symbol resolution: 64 resolved, 44 unmappable, 0 pending
 

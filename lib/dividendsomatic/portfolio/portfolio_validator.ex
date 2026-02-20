@@ -198,11 +198,12 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
       CashFlow
       |> where([c], c.flow_type in ["deposit", "withdrawal"])
       |> where([c], c.date > ^date)
-      |> select([c], %{flow_type: c.flow_type, amount: c.amount})
+      |> select([c], %{flow_type: c.flow_type, amount: c.amount, amount_eur: c.amount_eur})
       |> Repo.all()
 
     Enum.reduce(results, {zero, zero}, fn cf, {dep_acc, wd_acc} ->
-      amt = Decimal.abs(cf.amount || zero)
+      # Prefer EUR-converted amount, fall back to raw amount
+      amt = Decimal.abs(cf.amount_eur || cf.amount || zero)
 
       case cf.flow_type do
         "deposit" -> {Decimal.add(dep_acc, amt), wd_acc}
