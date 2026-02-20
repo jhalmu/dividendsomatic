@@ -537,7 +537,7 @@ defmodule Dividendsomatic.Portfolio do
     (lookback_snapshot ++ range_snapshots)
     |> Enum.flat_map(fn snapshot ->
       Enum.map(snapshot.positions, fn p ->
-        {snapshot.date, p.symbol, p.quantity, p.fx_rate, p.currency}
+        {snapshot.date, p.symbol, p.quantity, p.fx_rate, p.currency, p.isin}
       end)
     end)
   end
@@ -550,7 +550,7 @@ defmodule Dividendsomatic.Portfolio do
 
     {matched_qty, holding_fx, holding_currency} =
       case matching do
-        {_date, _symbol, quantity, fx_rate, currency} ->
+        {_date, _symbol, quantity, fx_rate, currency, _isin} ->
           {quantity || Decimal.new("0"), fx_rate || Decimal.new("1"), currency}
 
         nil ->
@@ -579,15 +579,20 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   defp find_matching_position(dividend, positions_data) do
-    # Only consider positions matching symbol and within -7..+45 days of ex_date
-    Enum.filter(positions_data, fn {date, symbol, _qty, _fx, _cur} ->
-      if symbol == dividend.symbol do
+    div_isin = Map.get(dividend, :isin)
+
+    # Match by ISIN first, then by symbol; within -7..+45 days of ex_date
+    Enum.filter(positions_data, fn {date, symbol, _qty, _fx, _cur, isin} ->
+      matches =
+        (div_isin && isin && div_isin == isin) || symbol == dividend.symbol
+
+      if matches do
         diff = Date.diff(dividend.ex_date, date)
         diff >= -7 and diff <= 45
       end
     end)
     |> Enum.min_by(
-      fn {date, _, _, _, _} -> abs(Date.diff(date, dividend.ex_date)) end,
+      fn {date, _, _, _, _, _} -> abs(Date.diff(date, dividend.ex_date)) end,
       fn -> nil end
     )
   end
@@ -685,7 +690,7 @@ defmodule Dividendsomatic.Portfolio do
         gross_amount: payment.gross_amount,
         withholding_tax: payment.withholding_tax,
         net_amount: payment.net_amount,
-        quantity_at_record: nil,
+        quantity_at_record: payment.quantity,
         description: payment.description
       }
     end)
@@ -816,11 +821,13 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   defp build_symbol_dividend_data(divs_with_income, raw_divs, pos) do
-    annual_per_share = DividendAnalytics.compute_annual_dividend_per_share(divs_with_income)
+    # Enrich total_net dividends that lack per_share: derive from net_amount / position qty
+    enriched = enrich_missing_per_share(divs_with_income, pos)
+    annual_per_share = DividendAnalytics.compute_annual_dividend_per_share(enriched)
     div_fx_rate = latest_dividend_fx_rate(raw_divs)
     yield_on_cost = symbol_yield_on_cost(annual_per_share, pos)
     projected_annual = symbol_projected_annual(annual_per_share, pos, div_fx_rate)
-    ytd_paid = symbol_ytd_paid(divs_with_income)
+    ytd_paid = symbol_ytd_paid(enriched)
 
     %{
       est_monthly: symbol_est_monthly(projected_annual),
@@ -874,6 +881,37 @@ defmodule Dividendsomatic.Portfolio do
         Date.compare(e.dividend.ex_date, today) != :gt
     end)
     |> Enum.reduce(Decimal.new("0"), fn e, acc -> Decimal.add(acc, e.income) end)
+  end
+
+  # For total_net dividends where NO payment has per_share data, derive per_share
+  # from net_amount / position quantity. Only enriches when ALL dividends lack per_share
+  # to avoid double-counting when IBKR splits a dividend into multiple entries
+  # (e.g., "Payment in Lieu" + regular dividend with per_share).
+  defp enrich_missing_per_share(divs_with_income, nil), do: divs_with_income
+
+  defp enrich_missing_per_share(divs_with_income, pos) do
+    has_per_share =
+      Enum.any?(divs_with_income, fn e ->
+        d = e.dividend
+        d[:gross_rate] && Decimal.compare(d.gross_rate, Decimal.new("0")) == :gt
+      end)
+
+    qty = pos.quantity
+
+    if has_per_share || is_nil(qty) || Decimal.compare(qty, Decimal.new("0")) != :gt do
+      divs_with_income
+    else
+      Enum.map(divs_with_income, fn entry ->
+        d = entry.dividend
+
+        if d.amount_type == "total_net" do
+          derived = Decimal.div(d.amount || Decimal.new("0"), qty)
+          %{entry | dividend: Map.put(d, :gross_rate, derived)}
+        else
+          entry
+        end
+      end)
+    end
   end
 
   defp symbol_est_remaining(projected_annual, ytd_paid) do
