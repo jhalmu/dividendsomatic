@@ -522,6 +522,52 @@ defmodule Dividendsomatic.PortfolioTest do
     end
   end
 
+  describe "per-symbol dividend EUR conversion" do
+    test "should EUR-convert projected_annual using dividend fx_rate, not position fx_rate" do
+      today = Date.utc_today()
+
+      # Position is EUR-listed (like TELIA on Frankfurt), fx_rate = 1
+      position = %Portfolio.Position{
+        symbol: "TESTSEK",
+        currency: "EUR",
+        fx_rate: Decimal.new("1"),
+        quantity: Decimal.new("1000"),
+        cost_price: Decimal.new("4.00"),
+        price: Decimal.new("4.00"),
+        value: Decimal.new("4000")
+      }
+
+      # Insert a SEK dividend with explicit fx_rate (SEK→EUR conversion)
+      insert_test_dividend(
+        "TESTSEK",
+        "SE0000000001",
+        Date.new!(today.year, 1, 15),
+        "200",
+        "SEK",
+        fx_rate: Decimal.new("0.09"),
+        per_share: Decimal.new("2.00")
+      )
+
+      result = Portfolio.compute_dividend_dashboard(today.year, nil, [position])
+
+      per_sym = result.per_symbol["TESTSEK"]
+      assert per_sym != nil
+
+      # annual_per_share should be the per_share value (2.00) since it's gross_rate via adapt
+      # projected_annual = annual_per_share * qty * div_fx_rate = per_share * 1000 * 0.09
+      # NOT per_share * 1000 * 1 (which would be the wrong pos.fx_rate)
+      projected = per_sym.projected_annual
+
+      # With div_fx_rate=0.09: projected should be much less than with pos.fx_rate=1
+      # The exact value depends on per_share_amount calculation, but it should use 0.09
+      assert Decimal.compare(projected, Decimal.new("500")) == :lt,
+             "Expected projected_annual < 500 (EUR-converted), got #{projected}"
+
+      assert Decimal.compare(projected, Decimal.new("0")) == :gt,
+             "Expected projected_annual > 0, got #{projected}"
+    end
+  end
+
   describe "FX exposure (Feature 3)" do
     test "compute_fx_exposure/1 groups by currency with correct percentages" do
       # Build mock positions
@@ -668,18 +714,23 @@ defmodule Dividendsomatic.PortfolioTest do
     end
   end
 
-  defp insert_test_dividend(symbol, isin, pay_date, net_amount, currency) do
+  defp insert_test_dividend(symbol, isin, pay_date, net_amount, currency, opts \\ []) do
     {instrument, _alias} = get_or_create_instrument(symbol, isin)
 
-    %DividendPayment{}
-    |> DividendPayment.changeset(%{
+    attrs = %{
       external_id: "test-div-#{System.unique_integer([:positive])}",
       instrument_id: instrument.id,
       pay_date: pay_date,
       gross_amount: Decimal.new(net_amount),
       net_amount: Decimal.new(net_amount),
       currency: currency
-    })
+    }
+
+    attrs = if opts[:fx_rate], do: Map.put(attrs, :fx_rate, opts[:fx_rate]), else: attrs
+    attrs = if opts[:per_share], do: Map.put(attrs, :per_share, opts[:per_share]), else: attrs
+
+    %DividendPayment{}
+    |> DividendPayment.changeset(attrs)
     |> Repo.insert!()
   end
 end

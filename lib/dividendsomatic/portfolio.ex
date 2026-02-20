@@ -800,8 +800,9 @@ defmodule Dividendsomatic.Portfolio do
 
   defp build_symbol_dividend_data(divs_with_income, raw_divs, pos) do
     annual_per_share = DividendAnalytics.compute_annual_dividend_per_share(divs_with_income)
+    div_fx_rate = latest_dividend_fx_rate(raw_divs)
     yield_on_cost = symbol_yield_on_cost(annual_per_share, pos)
-    projected_annual = symbol_projected_annual(annual_per_share, pos)
+    projected_annual = symbol_projected_annual(annual_per_share, pos, div_fx_rate)
     ytd_paid = symbol_ytd_paid(divs_with_income)
 
     %{
@@ -879,17 +880,23 @@ defmodule Dividendsomatic.Portfolio do
     end
   end
 
-  defp symbol_projected_annual(_annual_per_share, nil), do: Decimal.new("0")
+  defp symbol_projected_annual(_annual_per_share, nil, _div_fx_rate), do: Decimal.new("0")
 
-  defp symbol_projected_annual(annual_per_share, pos) do
+  defp symbol_projected_annual(annual_per_share, pos, div_fx_rate) do
     qty = pos.quantity || Decimal.new("0")
 
     if Decimal.compare(qty, Decimal.new("0")) == :gt do
-      fx = pos.fx_rate || Decimal.new("1")
+      fx = div_fx_rate || pos.fx_rate || Decimal.new("1")
       annual_per_share |> Decimal.mult(qty) |> Decimal.mult(fx)
     else
       Decimal.new("0")
     end
+  end
+
+  defp latest_dividend_fx_rate(divs) do
+    divs
+    |> Enum.sort_by(& &1.ex_date, {:desc, Date})
+    |> Enum.find_value(fn d -> d.fx_rate end)
   end
 
   defp symbol_rule72(nil), do: nil
