@@ -12,6 +12,7 @@ defmodule Mix.Tasks.Validate.Data do
   use Mix.Task
 
   alias Dividendsomatic.Portfolio.DividendValidator
+  alias Dividendsomatic.Portfolio.PortfolioValidator
 
   @shortdoc "Validate dividend data integrity"
 
@@ -48,6 +49,10 @@ defmodule Mix.Tasks.Validate.Data do
     if "--export" in args, do: export_report(report)
     if "--compare" in args, do: compare_with_latest(report)
     if "--suggest" in args, do: print_suggestions()
+
+    # Portfolio balance check
+    portfolio_report = PortfolioValidator.validate()
+    print_portfolio_balance(portfolio_report)
   end
 
   defp print_issue_group({type, items}) do
@@ -151,6 +156,44 @@ defmodule Mix.Tasks.Validate.Data do
       end)
     end
   end
+
+  defp print_portfolio_balance(%{checks: []}) do
+    Mix.shell().info("\n=== Portfolio Balance Check ===")
+    Mix.shell().info("  No portfolio data available.")
+  end
+
+  defp print_portfolio_balance(%{checks: checks}) do
+    Mix.shell().info("\n=== Portfolio Balance Check ===")
+
+    Enum.each(checks, fn check ->
+      c = check.components
+
+      Mix.shell().info("  Net invested:     €#{format_decimal(c.net_invested)}")
+      Mix.shell().info("  + Total return:   €#{format_decimal(c.total_return)}")
+      Mix.shell().info("    (Realized P&L:   €#{format_decimal(c.realized_pnl)})")
+      Mix.shell().info("    (Unrealized P&L: €#{format_decimal(c.unrealized_pnl)})")
+      Mix.shell().info("    (Dividends:      €#{format_decimal(c.total_dividends)})")
+      Mix.shell().info("    (Costs:         -€#{format_decimal(c.total_costs)})")
+      Mix.shell().info("  = Expected value: €#{format_decimal(check.expected)}")
+      Mix.shell().info("  Current value:    €#{format_decimal(check.actual)}")
+
+      Mix.shell().info(
+        "  Difference:       €#{format_decimal(check.difference)} (#{check.difference_pct}%)"
+      )
+
+      Mix.shell().info("  Status:           #{status_icon(check.status)}")
+    end)
+  end
+
+  defp format_decimal(decimal) do
+    decimal
+    |> Decimal.round(2)
+    |> Decimal.to_string()
+  end
+
+  defp status_icon(:pass), do: "✓ PASS (within 1% tolerance)"
+  defp status_icon(:warning), do: "⚠ WARNING (1-5% difference)"
+  defp status_icon(:fail), do: "✗ FAIL (>5% difference)"
 
   defp serialize_report(report) do
     %{
