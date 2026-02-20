@@ -46,12 +46,13 @@ defmodule Mix.Tasks.Validate.Data do
       Mix.shell().info("\nNo issues found!")
     end
 
-    if "--export" in args, do: export_report(report)
+    # Portfolio balance check (computed before export so it's available for serialization)
+    portfolio_report = PortfolioValidator.validate()
+
+    if "--export" in args, do: export_report(report, portfolio_report)
     if "--compare" in args, do: compare_with_latest(report)
     if "--suggest" in args, do: print_suggestions()
 
-    # Portfolio balance check
-    portfolio_report = PortfolioValidator.validate()
     print_portfolio_balance(portfolio_report)
   end
 
@@ -70,10 +71,11 @@ defmodule Mix.Tasks.Validate.Data do
     end
   end
 
-  defp export_report(report) do
+  defp export_report(report, portfolio_report) do
     File.mkdir_p!(@export_dir)
 
     serialized = serialize_report(report)
+    serialized = Map.put(serialized, :portfolio_balance, serialize_portfolio(portfolio_report))
     json = Jason.encode!(serialized, pretty: true)
 
     # Write timestamped file
@@ -211,6 +213,23 @@ defmodule Mix.Tasks.Validate.Data do
             other -> other
           end)
         end)
+    }
+  end
+
+  defp serialize_portfolio(%{checks: checks, summary: summary}) do
+    %{
+      checks:
+        Enum.map(checks, fn check ->
+          %{
+            name: Atom.to_string(check.name),
+            status: Atom.to_string(check.status),
+            expected: Decimal.to_string(check.expected),
+            actual: Decimal.to_string(check.actual),
+            difference: Decimal.to_string(check.difference),
+            difference_pct: Decimal.to_string(check.difference_pct)
+          }
+        end),
+      summary: summary
     }
   end
 end
