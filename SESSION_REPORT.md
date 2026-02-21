@@ -1,62 +1,55 @@
-# Session Report — 2026-02-20 (NLV-Based Balance Check)
+# Session Report — 2026-02-21 (Legacy Instrument Merge & Cleanup)
 
-## Balance Check Investigation & Fix
+## Legacy Instrument Merge
 
 ### Context
-The portfolio balance check had a 12.13% gap (€37.6k), which was misleading. Investigation revealed multiple issues:
-
-1. **initial_capital used cost_basis (€388k)** — includes margin-funded positions. Actual equity (NLV) was only €107k.
-2. **current_value used position_value (€310k)** — ignores -€264k margin loan. Actual NLV is €86k.
-3. **unrealized_pnl not EUR-converted** — mixed USD/EUR/SEK/JPY values summed raw (€1,265 instead of €2,525).
-4. **Dividends partially zeroed** — the `compute_dividend_income` pipeline returns fx_rate=0 for cross-currency dividends without matching position data, losing ~€5k.
-
-The 12.13% gap was *accidentally small* because two errors (inflated initial_capital and inflated current_value) partially cancelled each other.
+The Positions view showed dashes for dividend columns (est_monthly, projected_annual, yield_on_cost). Root cause: `mix migrate.legacy_dividends` created 29 fake instruments with ISINs like `LEGACY:CVZ`, `LEGACY:AKTIA` and linked 1,256 dividend_payments to them. The same stocks had proper instruments (from IBKR Activity Statements) with real ISINs but zero dividend_payments.
 
 ### Changes Made
 
-#### NLV-Based Accounting
-- **`initial_capital_and_date/1`** — looks up NLV from `margin_equity_snapshots` nearest to first IBKR snapshot date. Falls back to cost_basis when no margin data.
-- **`current_value`** — uses latest NLV from margin_equity_snapshots. Falls back to position_value.
-- **`margin_mode`** flag — propagated through components, controls threshold selection and output formatting.
+#### `mix merge.legacy_instruments` (new task)
+- Finds all LEGACY: instruments and matches to proper counterparts via instrument_aliases
+- Reassigns dividend_payments, trades, corporate_actions in a transaction
+- Deduplicates dividend_payments after merge (same instrument + pay_date, keeps IBKR-sourced)
+- Includes `--backfill` flag for per_share backfill
+- Dry-run by default, `--commit` to execute
+- Result: 24 merged, 5 unmatched (2A41, FROo, BCIC, GLAD.OLD, FOT — sold/delisted)
+- 27 duplicate dividend_payments removed
 
-#### EUR-Converted Unrealized P&L
-- `compute_unrealized_pnl/2` now multiplies `unrealized_pnl * fx_rate` per position.
-- Before: raw sum = €1,265 (mixed currencies). After: EUR sum = €2,525.
+#### Legacy Schema Reference Cleanup
+Rewrote 8 files to use new schemas (DividendPayment, Trade, Instrument) instead of legacy schemas (Dividend, BrokerTransaction):
 
-#### Direct EUR Dividend Sum
-- **`total_dividends_eur/0`** — `SUM(COALESCE(amount_eur, net_amount))` directly from `dividend_payments`.
-- More accurate than the `compute_dividend_income` pipeline which zeroes out cross-currency dividends.
-- Before: €78,812 (pipeline). After: €83,871 (direct EUR sum). Recovered €5,059.
+| File | Change |
+|------|--------|
+| `dividend_validator.ex` | DividendPayment + Instrument join (was Dividend) |
+| `dividend_validator_test.exs` | DividendPayment + Instrument fixtures |
+| `position_reconstructor.ex` | Trade + Instrument join (was BrokerTransaction) |
+| `symbol_mapper.ex` | Trade + Instrument join for distinct_isins |
+| `fetch_historical_prices.ex` | Trade + Instrument joins |
+| `backfill_fx_rates.ex` | Removed legacy dividend backfill function |
+| `check_sqlite.ex` | DividendPayment (was Dividend) |
+| `process_data.ex` | DividendPayment + Trade (was Dividend + BrokerTransaction) |
 
-#### Margin-Aware Thresholds
-- Cash accounts: <1% pass, 1-5% warning, >5% fail (unchanged).
-- Margin accounts: <5% pass, 5-20% warning, >20% fail.
-- Wider thresholds account for FX effects on multi-currency cash balances, corporate actions, and timing differences.
+Deleted: `migrate_legacy_dividends.ex`, `compare_legacy.ex` (superseded)
 
-#### Output Formatting
-- `mix validate.data` shows "Mode: Margin account (NLV-based)" when margin data detected.
-- Status messages show appropriate threshold ranges per mode.
+#### Deferred: Drop Legacy Tables
+Created migration to drop 6 legacy tables but discovered 7 import tasks still INSERT into them. Deleted migration to avoid breaking tests. Prerequisites documented for future cleanup.
 
 ### Validation Results
 
-| Metric | Before | After |
-|--------|--------|-------|
-| Initial capital | €388,596 (cost_basis) | €107,014 (NLV) |
-| Current value | €309,797 (position_value) | €86,169 (NLV) |
-| Unrealized P&L | €1,265 (raw) | €2,525 (EUR-converted) |
-| Dividends | €78,812 (pipeline) | €83,871 (direct EUR) |
-| Gap | €37,593 (12.13%) FAIL | €14,042 (16.30%) WARNING |
-| Tests | 702 | 705 (0 failures) |
-
-### Remaining Gap Analysis
-The €14k (16.3%) gap represents:
-- **FX effects on cash**: ~€330k margin loan in mixed currencies over 4 years (EUR weakened vs USD = FX gains on cash)
-- **Corporate actions**: Not tracked in balance check
-- **Timing differences**: NLV snapshots are sparse (annual + recent monthly)
-- **Double-counted start unrealized**: ~€3.5k (unrealized P&L at start embedded in both NLV and realized/unrealized components)
+| Metric | Value |
+|--------|-------|
+| Tests | 716 pass, 0 failures |
+| Dividends checked | 2,138 records |
+| Issues | 662 (350 info, 312 warning) |
+| Duplicates | 281 (same-date IBKR payouts) |
+| Missing FX | 1 (NCZ) |
+| Balance check | €10,906 (12.66%) WARNING |
+| Dividends total | €88,197 |
 
 ### Files Changed
-- Modified: `lib/dividendsomatic/portfolio/portfolio_validator.ex` — NLV-based accounting, EUR-converted unrealized P&L, direct dividend sum, margin thresholds
-- Modified: `lib/mix/tasks/validate_data.ex` — margin mode display, threshold-aware status messages
-- Modified: `test/dividendsomatic/portfolio/portfolio_validator_test.exs` — 3 new tests (NLV mode, margin thresholds, EUR unrealized P&L, direct dividends), updated existing
-- Modified: `MEMO.md` — version 0.34.0, session notes
+- Created: `lib/mix/tasks/merge_legacy_instruments.ex`
+- Modified: `dividend_validator.ex`, `position_reconstructor.ex`, `symbol_mapper.ex`, `fetch_historical_prices.ex`, `backfill_fx_rates.ex`, `check_sqlite.ex`, `process_data.ex`, `validate_data.ex`, `portfolio_validator.ex`, `portfolio_live.html.heex`
+- Modified tests: `dividend_validator_test.exs`, `portfolio_validator_test.exs`
+- Deleted: `migrate_legacy_dividends.ex`, `compare_legacy.ex`
+- 17 files changed, +1,024 / -785 lines

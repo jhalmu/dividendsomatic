@@ -73,11 +73,19 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.34.0 (NLV-Based Balance Check)
-**Status:** Margin-aware validator, NLV-based accounting, direct EUR dividend sum
+**Version:** 0.35.0 (Legacy Instrument Merge)
+**Status:** LEGACY instruments merged, dividend_payments linked to real ISINs, legacy schema references cleaned up
 **Branch:** `main`
 
-**Latest session (2026-02-20 Balance Check Fix):**
+**Latest session (2026-02-21 Legacy Instrument Merge):**
+- **`mix merge.legacy_instruments`** — merged 24/29 LEGACY: instruments into proper counterparts, deduped 27 dividend_payments
+- **Legacy schema cleanup** — rewrote 8 files from Dividend/BrokerTransaction to DividendPayment/Trade+Instrument joins
+- **Deleted** `migrate_legacy_dividends.ex`, `compare_legacy.ex` (superseded by merge task)
+- **Deferred** legacy table drop — 7 import tasks still reference legacy schemas
+- Positions view now shows dividend data (est_monthly, projected_annual, yield_on_cost)
+- 716 tests, 0 failures, 12 pre-existing credo issues
+
+**Previous session (2026-02-20 Balance Check Fix):**
 - **NLV-based balance check** — validator uses net liquidation value for margin accounts instead of gross position_value/cost_basis
 - **Initial capital fix** — NLV at start (€107k) instead of cost_basis (€389k) which included margin-funded positions
 - **Current value fix** — NLV now (€86k) instead of position_value (€310k) which ignored -€264k margin loan
@@ -255,14 +263,15 @@ mix ecto.reset              # Drop + create + migrate
 - Enhanced navigation: week/month/year jumps, date picker, chart presets
 - Dividend diagnostics for IEx verification
 - FX rates table (607 records, 9 currencies, 2021-2026) with EUR conversion on dividends + cash flows
-- 705 tests + 21 Playwright E2E tests, 5 pre-existing credo issues
+- 716 tests + 21 Playwright E2E tests, 12 pre-existing credo issues
 - Multi-provider market data: Finnhub + Yahoo Finance + EODHD with fallback chains
 - All instrument currencies populated (336/336)
 - Corporate actions, NAV snapshots, borrow fees parsed from Activity Statements
-- Legacy comparison diagnostic (`mix compare.legacy`)
+- Legacy instrument merge (`mix merge.legacy_instruments`)
 
 **Next priorities:**
-- Balance check remaining gap (16.3%) — likely FX effects on ~€330k multi-currency cash over 4 years; could track FX P&L on cash
+- Drop legacy tables — rewrite 7 import tasks (import_lynx_data, import_flex_dividends, import_yahoo_dividends, import_nordnet, import_ibkr, backfill_isin, migrate_to_unified) to use new schemas, then drop 6 legacy tables
+- Balance check remaining gap (12.66%) — likely FX effects on ~€330k multi-currency cash over 4 years; could track FX P&L on cash
 - Fetch missing company profiles (~293 instruments without sector/industry) via Finnhub/Yahoo
 - Production deployment (Hetzner via docker-compose)
 - EODHD historical data backfill (30+ years available)
