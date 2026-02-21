@@ -126,7 +126,9 @@ defmodule Mix.Tasks.Backfill.Aliases do
     "KIO RT" => "KIO-RT",
     "ACP RT" => "ACP-RT",
     # Brazilian preferred ADR
-    "PBR A" => "PBR-A"
+    "PBR A" => "PBR-A",
+    # Nordnet Oslo convention
+    "FROo" => "FRO"
   }
 
   @impl Mix.Task

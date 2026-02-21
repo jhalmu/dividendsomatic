@@ -77,6 +77,7 @@ defmodule Dividendsomatic.Stocks.SymbolMapper do
     # Oslo (OSE) — .OL suffix
     "NO0003054108" => "MOWI.OL",
     "NO0010735343" => "EPR.OL",
+    "CY0200352116" => "FRO.OL",
     # Bermuda / other
     "BMG162581083" => "BEP",
     # Irish ETFs (London listing)
