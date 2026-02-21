@@ -223,6 +223,71 @@ defmodule Dividendsomatic.Portfolio.SchemaIntegrity do
         issues
       end
 
+    # Instruments missing ISIN
+    inst_no_isin =
+      from(i in Instrument, where: is_nil(i.isin), select: count())
+      |> Repo.one()
+
+    issues =
+      if inst_no_isin > 0 do
+        [
+          %{
+            check: :null_instrument_isin,
+            severity: :warning,
+            count: inst_no_isin,
+            message: "#{inst_no_isin} instruments missing ISIN"
+          }
+          | issues
+        ]
+      else
+        issues
+      end
+
+    # Dividend payments on instruments missing ISIN
+    dp_no_isin =
+      from(dp in DividendPayment,
+        join: i in Instrument,
+        on: dp.instrument_id == i.id,
+        where: is_nil(i.isin),
+        select: count()
+      )
+      |> Repo.one()
+
+    issues =
+      if dp_no_isin > 0 do
+        [
+          %{
+            check: :null_dividend_instrument_isin,
+            severity: :warning,
+            count: dp_no_isin,
+            message: "#{dp_no_isin} dividend payments on instruments missing ISIN"
+          }
+          | issues
+        ]
+      else
+        issues
+      end
+
+    # Positions missing ISIN
+    pos_no_isin =
+      from(p in Position, where: is_nil(p.isin), select: count())
+      |> Repo.one()
+
+    issues =
+      if pos_no_isin > 0 do
+        [
+          %{
+            check: :null_position_isin,
+            severity: :info,
+            count: pos_no_isin,
+            message: "#{pos_no_isin} positions missing ISIN"
+          }
+          | issues
+        ]
+      else
+        issues
+      end
+
     # Sold positions missing ISIN
     sold_no_isin =
       from(sp in SoldPosition, where: is_nil(sp.isin), select: count())
