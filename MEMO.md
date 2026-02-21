@@ -41,6 +41,8 @@ mix check.sqlite                     # Check SQLite for unique data
 mix backfill.instruments             # Backfill currency + company data
 mix backfill.instruments --currency  # Only currency
 mix backfill.instruments --company   # Only company profiles
+mix backfill.aliases                 # Split commas, set primary, fix base names
+mix backfill.aliases --variants      # Also collect variant aliases from data tables
 mix import.fx_rates                  # Import FX rates from all CSV sources
 mix backfill.fx_rates                # Backfill fx_rate + amount_eur
 
@@ -65,11 +67,22 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.37.0 (ISIN Backfill & Symbol Unification)
-**Status:** Canonical symbol on all instruments, sold_position ISINs backfilled 20%→77%, all currencies filled
+**Version:** 0.38.0 (Alias System — Base Names & Variants)
+**Status:** Deterministic alias system, 349 primary aliases, 567 total, 49 symbols fixed to canonical tickers
 **Branch:** `main`
 
-**Latest session (2026-02-21 ISIN Backfill & Symbol Unification):**
+**Latest session (2026-02-21 Alias System — Base Names & Variants):**
+- **`is_primary` flag on aliases**: 349/349 instruments have primary alias (finnhub > symbol_mapping > ibkr priority)
+- **Comma-separated aliases split**: 12→0 (e.g., "TELIA1, TLS" → separate records)
+- **49 instrument symbols fixed**: broker codes + company names → tickers (TELIA1→TELIA, "ALIBABA GROUP..."→BABA)
+- **122 variant aliases collected**: 62 from positions + 59 from sold_positions + 1 from trades
+- **Deterministic lookups**: dividend_validator + ibkr_activity_parser now ORDER BY is_primary DESC
+- **Alias integrity checks**: instruments_without_primary_alias + comma_separated_aliases in schema_integrity
+- **New task**: `mix backfill.aliases` (with `--dry-run`, `--variants`)
+- 685 tests, 0 failures
+- **Known issue**: `mix validate.data` crashes on nil amounts in find_outliers (pre-existing)
+
+**Previous session (2026-02-21 ISIN Backfill & Symbol Unification):**
 - **Canonical `symbol` on instruments**: 349/349 (100%) — from positions (178) + aliases (171)
 - **Sold position ISIN backfill**: 1,252→4,817/6,291 (77%) — symbol→ISIN lookup with currency disambiguation
 - **Currency backfill complete**: 349/349 (100%) — 13 remaining filled from trades+dividends
@@ -284,11 +297,13 @@ mix ecto.reset              # Drop + create + migrate
 - Corporate actions, NAV snapshots, borrow fees parsed from Activity Statements
 - Legacy instrument merge (`mix merge.legacy_instruments`)
 - **All 6 legacy tables dropped** — data migrated, schemas deleted, imports rewritten
-- SchemaIntegrity system (4 checks) + Oban daily worker
-- 674 tests + 21 Playwright E2E tests, 0 credo warnings
+- SchemaIntegrity system (5 checks: orphan, null field, FK integrity, duplicate, alias quality) + Oban daily worker
+- Deterministic alias system: 567 aliases, 349 primary, is_primary flag + priority ordering
+- 685 tests + 21 Playwright E2E tests, 0 credo warnings
 
 **Next priorities:**
-- Balance check remaining gap (6.77%) — likely FX effects on ~€330k multi-currency cash over 4 years; could track FX P&L on cash
+- Fix `mix validate.data` crash — nil amounts in `find_outliers/1` (ArithmeticError)
+- Balance check remaining gap (6.77%) — likely FX effects on ~€330k multi-currency cash over 4 years
 - Remaining 162 instruments without sector (delisted/unknown symbols — may need manual mapping)
 - Production deployment (Hetzner via docker-compose)
 - EODHD historical data backfill (30+ years available)

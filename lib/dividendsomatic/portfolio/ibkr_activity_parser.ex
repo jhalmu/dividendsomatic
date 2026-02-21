@@ -1194,6 +1194,7 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
              join: i in Instrument,
              on: a.instrument_id == i.id,
              select: i.id,
+             order_by: [desc: a.is_primary, desc: a.inserted_at],
              limit: 1
          ) do
       nil ->

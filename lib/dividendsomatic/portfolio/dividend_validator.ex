@@ -68,7 +68,7 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
       id: dp.id,
       symbol:
         fragment(
-          "(SELECT ia.symbol FROM instrument_aliases ia WHERE ia.instrument_id = ? LIMIT 1)",
+          "(SELECT ia.symbol FROM instrument_aliases ia WHERE ia.instrument_id = ? ORDER BY ia.is_primary DESC, ia.inserted_at DESC LIMIT 1)",
           i.id
         ),
       isin: i.isin,

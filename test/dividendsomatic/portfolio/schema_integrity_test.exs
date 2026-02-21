@@ -65,7 +65,7 @@ defmodule Dividendsomatic.Portfolio.SchemaIntegrityTest do
       assert Map.has_key?(result, :total_issues)
       assert Map.has_key?(result, :issues)
       assert Map.has_key?(result, :by_severity)
-      assert result.total_checks == 4
+      assert result.total_checks == 5
     end
   end
 

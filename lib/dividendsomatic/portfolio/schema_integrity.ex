@@ -34,13 +34,14 @@ defmodule Dividendsomatic.Portfolio.SchemaIntegrity do
       orphan_check(),
       null_field_check(),
       fk_integrity_check(),
-      duplicate_check()
+      duplicate_check(),
+      alias_quality_check()
     ]
 
     issues = List.flatten(checks)
 
     %{
-      total_checks: 4,
+      total_checks: 5,
       total_issues: length(issues),
       issues: issues,
       by_severity: Enum.frequencies_by(issues, & &1.severity),
@@ -426,6 +427,70 @@ defmodule Dividendsomatic.Portfolio.SchemaIntegrity do
         count: count,
         message: "#{count} duplicate #{field}s in #{label}"
       }
+    end
+  end
+
+  @doc """
+  Check alias quality: missing primary flags, comma-separated aliases.
+  """
+  def alias_quality_check do
+    issues = []
+
+    # Instruments with aliases but no primary alias
+    instruments_without_primary =
+      from(i in Instrument,
+        join: a in InstrumentAlias,
+        on: a.instrument_id == i.id,
+        left_join: pa in InstrumentAlias,
+        on: pa.instrument_id == i.id and pa.is_primary == true,
+        where: is_nil(pa.id),
+        select: %{isin: i.isin, symbol: i.symbol},
+        distinct: true
+      )
+      |> Repo.all()
+
+    issues =
+      if instruments_without_primary != [] do
+        count = length(instruments_without_primary)
+
+        [
+          %{
+            check: :instruments_without_primary_alias,
+            severity: :warning,
+            count: count,
+            message: "#{count} instruments have aliases but none marked primary",
+            details: Enum.take(instruments_without_primary, 10)
+          }
+          | issues
+        ]
+      else
+        issues
+      end
+
+    # Comma-separated aliases (should be 0 after backfill)
+    # Skip long names — commas in company names (e.g., "GROUP, LLC") are not delimiters
+    comma_aliases =
+      from(a in InstrumentAlias,
+        where: like(a.symbol, "%,%") and fragment("length(?)", a.symbol) <= 30,
+        select: %{symbol: a.symbol, source: a.source}
+      )
+      |> Repo.all()
+
+    if comma_aliases != [] do
+      count = length(comma_aliases)
+
+      [
+        %{
+          check: :comma_separated_aliases,
+          severity: :warning,
+          count: count,
+          message: "#{count} aliases contain commas (should be split)",
+          details: Enum.take(comma_aliases, 10)
+        }
+        | issues
+      ]
+    else
+      issues
     end
   end
 end
