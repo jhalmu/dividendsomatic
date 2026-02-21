@@ -99,7 +99,34 @@ defmodule Mix.Tasks.Backfill.Aliases do
     "WP CAREY INC" => "WPC",
     "WP CAREY INC - SPINOFF" => "NLOP",
     "ZIM INTEGRATED SHIPPING SERV" => "ZIM",
-    "ZOOM VIDEO COMMUNICATIONS-A" => "ZM"
+    "ZOOM VIDEO COMMUNICATIONS-A" => "ZM",
+    # Full company names → tickers (ETNs and ETFs)
+    "OAKTREE CAPITAL GROUP, LLC CLASS A UNITS REPRESENTING LIMITED LIABILITY COMPANY" => "OAK",
+    "ETRACS 2XLEVERAGED LONG WELLS FARGO BUSINESS DEVELOPMENT COMPANY INDEX" => "SMHB",
+    "ETRACS MONTHLY PAY 2XLEVERAGED WELLS FARGO MLP EX-ENERGY ETN" => "LMLP",
+    "ETRACS Monthly Pay 2XLeveraged Mortgage REIT ETN" => "MORL",
+    "InfraCap MLP ETF" => "AMZA",
+    # Comma-separated symbols
+    "GMLPF, GMLPP" => "GMLPP",
+    # Preferred shares / share classes (IBKR "SYM PRA" → "SYM-A")
+    "HMLP PRA" => "HMLP-A",
+    "GMRE PRA" => "GMRE-A",
+    "SACH PRA" => "SACH-A",
+    "CEQP PR" => "CEQP-P",
+    "CIM PRA" => "CIM-A",
+    "CIM PRB" => "CIM-B",
+    "RNR PRF" => "RNR-F",
+    "ARR PRC" => "ARR-C",
+    "TDS PRU" => "TDS-U",
+    "TDS PRV" => "TDS-V",
+    # Swedish B shares
+    "DIVIO B" => "DIVIO-B",
+    "TEL2 B" => "TEL2-B",
+    # Rights issues (expired)
+    "KIO RT" => "KIO-RT",
+    "ACP RT" => "ACP-RT",
+    # Brazilian preferred ADR
+    "PBR A" => "PBR-A"
   }
 
   @impl Mix.Task

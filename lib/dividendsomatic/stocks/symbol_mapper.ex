@@ -82,13 +82,99 @@ defmodule Dividendsomatic.Stocks.SymbolMapper do
     # Irish ETFs (London listing)
     "IE00B4L5YX21" => "SJPA.L",
     "IE00BKM4GZ66" => "EIMI.L",
-    # US stocks (delisted/renamed — use last known or successor ticker)
+    # Stockholm (SFB) — .ST suffix (additional)
+    "SE0005190238" => "TEL2-B.ST",
+    "SE0011311554" => "DIVIO-B.ST",
+    # Copenhagen (CSE) — .CO suffix
+    "DK0010244425" => "MAERSK-A.CO",
+    "DK0060534915" => "NOVO-B.CO",
+    # Frankfurt (FWB) — .DE suffix
+    "DE0005810055" => "DB1.DE",
+    "DE000BFB0019" => "B4B.DE",
+    "DE000A1X3YY0" => "BST.DE",
+    # Madrid (BME) — .MC suffix
+    "ES0173516115" => "REP.MC",
+    "ES0178430E18" => "TEF.MC",
+    # Paris (Euronext) — .PA suffix
+    "FR0000133308" => "ORA.PA",
+    "FR0013412293" => "PE500.PA",
+    # London (LSE) — .L suffix
+    "GB00BKFB1C65" => "MNG.L",
+    "GB00BGXQNP29" => "PHNX.L",
+    "JE00B4T3BW64" => "GLEN.L",
+    # Hong Kong (SEHK) — .HK suffix
+    "CNE100000Q43" => "1288.HK",
+    "CNE1000002F5" => "1800.HK",
+    "KYG1644A1004" => "1428.HK",
+    # Toronto (TSX) — .TO suffix
+    "CA13321L1085" => "CCJ.TO",
+    "CA29250N1050" => "ENB.TO",
+    "CA25537R1091" => "DFN.TO",
+    "CA25537W1086" => "DF.TO",
+    "CA25537Y1043" => "DGS.TO",
+    "CA31660A1030" => "FSZ.TO",
+    "CA37252B1022" => "MIC.TO",
+    "CA65685J3010" => "FFN.TO",
+    "CA7669101031" => "REI-UN.TO",
+    "CA85210A1049" => "U-UN.TO",
+    "CA91702V1013" => "UROY.TO",
+    # Canadian stocks listed on US exchanges (no suffix)
+    "CA0679011084" => "GOLD",
+    "CA2926717083" => "UUUU",
+    "CA60255C1095" => "MMED",
+    "CA91688R1082" => "URG",
+    # Bermuda (NYSE-listed, no suffix)
+    "BMG657731060" => "NAT",
+    "BMG7738W1064" => "SFL",
+    # Marshall Islands (NYSE-listed shipping, no suffix)
+    "MHY1968P1218" => "DAC",
+    "MHY2065G1219" => "DHT",
+    "MHY2685T1313" => "GNK",
+    "MHY271836006" => "GSL",
+    "MHY481251012" => "KNOP",
+    "MHY622674098" => "NMM",
+    "MHY8162K2046" => "SBLK",
+    "MHY7542C1306" => "STNG",
+    "MHY8564M1057" => "TGP",
+    # Singapore (NYSE-listed)
+    "SG9999019087" => "GRIN",
+    "SG9999012629" => "KEN",
+    # UK (NYSE-listed ADR)
+    "GB00BLP5YB54" => "AY",
+    # US stocks (Finnhub missed or delisted)
     "US23317H1023" => "SITC",
     "US6915431026" => "OXLC",
     "US72202D1063" => "PCI",
     "US76882G1647" => "RIV",
     "US91325V1089" => "UNIT",
-    "US98417P1057" => "XIN"
+    "US98417P1057" => "XIN",
+    "US00165C1045" => "AMC",
+    "US0357104092" => "NLY",
+    "US0030091070" => "FAX",
+    "US0030111035" => "IAF",
+    "US11135B1008" => "BRMK",
+    "US19249B1061" => "MIE",
+    "US19249X1081" => "PTA",
+    "US2263442087" => "CEQP",
+    "US27829M1036" => "EXD",
+    "US33731K1025" => "FEO",
+    "US33739M1009" => "FPL",
+    "US37954A2042" => "GMRE",
+    "US38983D3008" => "AJX",
+    "US40167B1008" => "GPM",
+    "US48661E1082" => "KMF",
+    "US55272X1028" => "MFA",
+    "US63253R2013" => "KAP",
+    "US67401P1084" => "OCSL",
+    "US6475811070" => "EDU",
+    "US79471V1052" => "SMM",
+    "US82575P1075" => "SBSW",
+    "US8793822086" => "TEF",
+    "US8816242098" => "TEVA",
+    "US90187B4086" => "TWO",
+    "US92838U1088" => "NCZ",
+    "US92838X1028" => "NCV",
+    "US9810641087" => "WF"
   }
 
   # ISINs that are definitively unmappable (index funds, structured products, delisted ETNs)
@@ -104,7 +190,40 @@ defmodule Dividendsomatic.Stocks.SymbolMapper do
     "US90267B7652" => "delisted ETN (ETRACS 2x BDC)",
     "US90269A3023" => "delisted ETN (ETRACS 2x Mortgage REIT)",
     "US90270L8422" => "delisted ETN (UBS AG London notes)",
-    "US90273A2078" => "delisted ETN (ETRACS 2x MLP)"
+    "US90273A2078" => "delisted ETN (ETRACS 2x MLP)",
+    # Preferred shares / rights (non-standard ISINs, no price data available)
+    "US0423155078" => "delisted preferred (ARR old class)",
+    "US0423156068" => "preferred share (ARR-C)",
+    "US2263443077" => "preferred share (CEQP-P)",
+    "US37957W2035" => "preferred share (GMRE-A)",
+    "US78590A5056" => "preferred share (SACH-A)",
+    "US6496048736" => "preferred share (NYMTM)",
+    "US3765368846" => "preferred share (GOODO)",
+    "US86164W1009" => "delisted fund (EDI, merged)",
+    "US16934Q3074" => "preferred share (CIM-A)",
+    "US16934Q4064" => "preferred share (CIM-B)",
+    "US75968N3098" => "preferred share (RNR-F)",
+    "US8794337878" => "preferred share (TDS-U)",
+    "US8794337613" => "preferred share (TDS-V)",
+    "MHY2745C1104" => "preferred share (GMLPP)",
+    "MHY3262R1181" => "preferred share (HMLP-A)",
+    "US0030571220" => "expired rights (ACP-RT)",
+    "US48249T1227" => "expired rights (KIO-RT)",
+    "US219RGT0243" => "expired rights (CLM.RTS)",
+    "US219RGT0573" => "expired rights (CLM.RTS)",
+    "US26924B30EX" => "expired rights (CLM subscription)",
+    "US768BAS0482" => "expired rights (OPP subscription)",
+    "US226PAY0161" => "corporate action (CEQP tender)",
+    "US226CON0148" => "corporate action (CEQP consent)",
+    "DE000KE2FEZ5" => "structured product (EUR/USD turbo)",
+    "XS1526243446" => "structured ETC (natural gas)",
+    "BMG9156K1018" => "delisted (2020 Bulkers, Oslo-listed)",
+    "US1514611003" => "delisted fund (Center Coast Brookfield)",
+    "US3682872078" => "delisted ADR (Gazprom, sanctions)",
+    "CA03765K1049" => "delisted (Aphria, acquired by Tilray)",
+    "CA1973091079" => "delisted (Columbia Care, acquired by Cresco Labs)",
+    "CA04016E2024" => "micro-cap venture (Argentina Lithium)",
+    "MU0456S00006" => "micro-cap (Alphamin Resources)"
   }
 
   @doc """

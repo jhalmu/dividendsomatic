@@ -8,6 +8,7 @@
 import Config
 
 config :dividendsomatic,
+  env: config_env(),
   ecto_repos: [Dividendsomatic.Repo],
   generators: [timestamp_type: :utc_datetime]
 

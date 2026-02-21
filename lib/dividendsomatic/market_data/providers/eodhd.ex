@@ -125,7 +125,14 @@ defmodule Dividendsomatic.MarketData.Providers.Eodhd do
   # --- Req builder ---
 
   defp build_req do
-    Req.new(base_url: @base_url, plug: {Req.Test, __MODULE__}, retry: false)
+    opts = [base_url: @base_url, retry: false]
+
+    opts =
+      if Application.get_env(:dividendsomatic, :env) == :test,
+        do: Keyword.put(opts, :plug, {Req.Test, __MODULE__}),
+        else: opts
+
+    Req.new(opts)
   end
 
   # --- Response handlers ---

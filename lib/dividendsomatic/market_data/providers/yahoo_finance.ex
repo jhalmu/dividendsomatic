@@ -42,12 +42,14 @@ defmodule Dividendsomatic.MarketData.Providers.YahooFinance do
     from_ts = date_to_unix(from_date)
     to_ts = date_to_unix(Date.add(to_date, 1))
 
-    Req.new(
-      base_url: @base_url,
-      headers: @headers,
-      plug: {Req.Test, __MODULE__},
-      retry: false
-    )
+    opts = [base_url: @base_url, headers: @headers, retry: false]
+
+    opts =
+      if Application.get_env(:dividendsomatic, :env) == :test,
+        do: Keyword.put(opts, :plug, {Req.Test, __MODULE__}),
+        else: opts
+
+    Req.new(opts)
     |> Req.get(
       url: "/#{URI.encode(yahoo_symbol)}",
       params: [period1: from_ts, period2: to_ts, interval: "1d"]
