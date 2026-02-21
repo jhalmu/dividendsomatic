@@ -203,28 +203,38 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
     recent = Enum.filter(group, fn d -> Date.compare(d.ex_date, cutoff) != :lt end)
     basis = if recent != [], do: recent, else: group
 
-    amounts = Enum.map(basis, fn d -> Decimal.to_float(d.amount) end) |> Enum.sort()
-    median = Enum.at(amounts, div(length(amounts), 2))
+    amounts =
+      basis
+      |> Enum.filter(fn d -> d.amount != nil end)
+      |> Enum.map(fn d -> Decimal.to_float(d.amount) end)
+      |> Enum.sort()
 
-    group
-    |> Enum.filter(fn d ->
-      val = Decimal.to_float(d.amount)
-      median > 0 && (val / median > 10 || median / val > 10)
-    end)
-    |> Enum.map(fn d ->
-      val = Decimal.to_float(d.amount)
-      # Small amounts (< median) are likely supplemental dividends, not data errors
-      severity = if val > median, do: :warning, else: :info
+    if amounts == [] do
+      []
+    else
+      median = Enum.at(amounts, div(length(amounts), 2))
 
-      %{
-        severity: severity,
-        type: :inconsistent_amount,
-        symbol: d.symbol,
-        isin: d.isin,
-        ex_date: d.ex_date,
-        detail: "Per-share amount #{d.amount} varies >10x from median for this stock"
-      }
-    end)
+      group
+      |> Enum.reject(fn d -> d.amount == nil end)
+      |> Enum.filter(fn d ->
+        val = Decimal.to_float(d.amount)
+        median > 0 && val > 0 && (val / median > 10 || median / val > 10)
+      end)
+      |> Enum.map(fn d ->
+        val = Decimal.to_float(d.amount)
+        # Small amounts (< median) are likely supplemental dividends, not data errors
+        severity = if val > median, do: :warning, else: :info
+
+        %{
+          severity: severity,
+          type: :inconsistent_amount,
+          symbol: d.symbol,
+          isin: d.isin,
+          ex_date: d.ex_date,
+          detail: "Per-share amount #{d.amount} varies >10x from median for this stock"
+        }
+      end)
+    end
   end
 
   @doc """
