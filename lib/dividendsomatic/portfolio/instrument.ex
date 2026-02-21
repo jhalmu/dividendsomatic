@@ -22,7 +22,14 @@ defmodule Dividendsomatic.Portfolio.Instrument do
     :industry,
     :country,
     :logo_url,
-    :web_url
+    :web_url,
+    :dividend_rate,
+    :dividend_yield,
+    :dividend_frequency,
+    :ex_dividend_date,
+    :payout_ratio,
+    :dividend_source,
+    :dividend_updated_at
   ]
 
   schema "instruments" do
@@ -42,6 +49,13 @@ defmodule Dividendsomatic.Portfolio.Instrument do
     field :country, :string
     field :logo_url, :string
     field :web_url, :string
+    field :dividend_rate, :decimal
+    field :dividend_yield, :decimal
+    field :dividend_frequency, :string
+    field :ex_dividend_date, :date
+    field :payout_ratio, :decimal
+    field :dividend_source, :string
+    field :dividend_updated_at, :utc_datetime
 
     has_many :aliases, Dividendsomatic.Portfolio.InstrumentAlias
     has_many :trades, Dividendsomatic.Portfolio.Trade

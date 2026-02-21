@@ -12,6 +12,7 @@ defmodule Dividendsomatic.Portfolio do
     DividendAnalytics,
     DividendPayment,
     FxRate,
+    Instrument,
     InstrumentAlias,
     MarginEquitySnapshot,
     MarginRates,
@@ -782,6 +783,7 @@ defmodule Dividendsomatic.Portfolio do
 
   defp compute_per_symbol_dividends(positions, all_dividends, positions_map) do
     current_symbols = MapSet.new(positions, & &1.symbol)
+    instrument_div_map = build_instrument_dividend_map()
 
     # ISIN-to-position-symbol map for cross-matching when adapted symbol differs
     isin_to_pos_symbol =
@@ -810,7 +812,7 @@ defmodule Dividendsomatic.Portfolio do
     Map.new(divs_by_symbol, fn {symbol, divs} ->
       pos = Map.get(pos_map, symbol)
       divs_with_income = build_divs_with_income(divs, positions_map)
-      {symbol, build_symbol_dividend_data(divs_with_income, divs, pos)}
+      {symbol, build_symbol_dividend_data(divs_with_income, divs, pos, instrument_div_map)}
     end)
   end
 
@@ -820,10 +822,14 @@ defmodule Dividendsomatic.Portfolio do
     end)
   end
 
-  defp build_symbol_dividend_data(divs_with_income, raw_divs, pos) do
+  defp build_symbol_dividend_data(divs_with_income, raw_divs, pos, instrument_div_map) do
     # Enrich total_net dividends that lack per_share: derive from net_amount / position qty
     enriched = enrich_missing_per_share(divs_with_income, pos)
-    annual_per_share = DividendAnalytics.compute_annual_dividend_per_share(enriched)
+    frequency = detect_payment_frequency(raw_divs)
+
+    {annual_per_share, source} =
+      compute_best_annual_per_share(enriched, raw_divs, pos, instrument_div_map, frequency)
+
     div_fx_rate = latest_dividend_fx_rate(raw_divs)
     yield_on_cost = symbol_yield_on_cost(annual_per_share, pos)
     projected_annual = symbol_projected_annual(annual_per_share, pos, div_fx_rate)
@@ -836,8 +842,47 @@ defmodule Dividendsomatic.Portfolio do
       est_remaining: symbol_est_remaining(projected_annual, ytd_paid),
       yield_on_cost: yield_on_cost,
       rule72: symbol_rule72(yield_on_cost),
-      payment_frequency: detect_payment_frequency(raw_divs)
+      payment_frequency: frequency,
+      dividend_source: source
     }
+  end
+
+  defp compute_best_annual_per_share(enriched, _raw_divs, pos, instrument_div_map, frequency) do
+    # 1. Try declared rate from instrument (Yahoo Finance)
+    isin = if pos, do: pos.isin, else: nil
+    instrument_data = if isin, do: Map.get(instrument_div_map, isin), else: nil
+
+    declared_rate =
+      if instrument_data do
+        instrument_data.dividend_rate
+      else
+        nil
+      end
+
+    if declared_rate && Decimal.compare(declared_rate, Decimal.new("0")) == :gt do
+      {declared_rate, "declared"}
+    else
+      # 2. Fallback: TTM with frequency extrapolation
+      ttm = DividendAnalytics.compute_annual_dividend_per_share(enriched, frequency)
+
+      source =
+        if frequency in [:monthly, :quarterly, :semi_annual],
+          do: "ttm_extrapolated",
+          else: "ttm_sum"
+
+      {ttm, source}
+    end
+  end
+
+  defp build_instrument_dividend_map do
+    Instrument
+    |> where([i], not is_nil(i.dividend_rate))
+    |> select(
+      [i],
+      {i.isin, %{dividend_rate: i.dividend_rate, dividend_frequency: i.dividend_frequency}}
+    )
+    |> Repo.all()
+    |> Map.new()
   end
 
   defp detect_payment_frequency(divs) when length(divs) < 3, do: :unknown

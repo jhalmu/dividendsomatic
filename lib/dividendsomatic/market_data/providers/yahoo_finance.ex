@@ -144,17 +144,17 @@ defmodule Dividendsomatic.MarketData.Providers.YahooFinance do
     end
   end
 
-  defp fetch_summary(yahoo_symbol, cookie, crumb) do
+  defp fetch_summary(yahoo_symbol, cookie, crumb, modules \\ "assetProfile") do
     case Req.new(
            headers: @headers ++ [{"cookie", cookie}],
            retry: false
          )
          |> Req.get(
            url: "#{@summary_url}/#{URI.encode(yahoo_symbol)}",
-           params: [modules: "assetProfile", crumb: crumb]
+           params: [modules: modules, crumb: crumb]
          ) do
       {:ok, %{status: 200, body: body}} ->
-        parse_profile(body)
+        parse_summary(body, modules)
 
       {:ok, %{status: 403}} ->
         {:error, :forbidden}
@@ -164,6 +164,14 @@ defmodule Dividendsomatic.MarketData.Providers.YahooFinance do
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  defp parse_summary(body, modules) do
+    if String.contains?(modules, "summaryDetail") do
+      parse_dividend_info(body)
+    else
+      parse_profile(body)
     end
   end
 
@@ -186,4 +194,85 @@ defmodule Dividendsomatic.MarketData.Providers.YahooFinance do
   end
 
   defp parse_profile(_), do: {:error, :invalid_response}
+
+  # --- Dividend Info via summaryDetail ---
+
+  @doc """
+  Fetches dividend information for a Yahoo Finance symbol.
+
+  Returns `{:ok, map}` with dividend_rate, dividend_yield, ex_dividend_date,
+  payout_ratio, and derived dividend_frequency, or `{:error, reason}`.
+  """
+  def fetch_dividend_info(yahoo_symbol) do
+    with {:ok, cookie, crumb} <- get_crumb(),
+         {:ok, data} <- fetch_summary(yahoo_symbol, cookie, crumb, "summaryDetail") do
+      {:ok, data}
+    else
+      {:error, reason} ->
+        Logger.debug("Yahoo dividend info fetch failed for #{yahoo_symbol}: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  defp parse_dividend_info(%{"quoteSummary" => %{"result" => [result | _]}}) do
+    detail = result["summaryDetail"] || %{}
+
+    dividend_rate = extract_raw(detail, "dividendRate")
+    dividend_yield = extract_raw(detail, "dividendYield")
+    trailing_rate = extract_raw(detail, "trailingAnnualDividendRate")
+    payout_ratio = extract_raw(detail, "payoutRatio")
+    ex_date_ts = extract_raw(detail, "exDividendDate")
+
+    ex_dividend_date =
+      if is_number(ex_date_ts) and ex_date_ts > 0 do
+        DateTime.from_unix!(trunc(ex_date_ts)) |> DateTime.to_date()
+      else
+        nil
+      end
+
+    frequency = derive_frequency(dividend_rate, trailing_rate)
+
+    {:ok,
+     %{
+       dividend_rate: safe_decimal(dividend_rate),
+       dividend_yield: safe_decimal(dividend_yield),
+       ex_dividend_date: ex_dividend_date,
+       payout_ratio: safe_decimal(payout_ratio),
+       dividend_frequency: frequency
+     }}
+  end
+
+  defp parse_dividend_info(_), do: {:error, :invalid_response}
+
+  # Yahoo wraps numeric values in {"raw": 1.44, "fmt": "1.44"}
+  defp extract_raw(map, key) do
+    case Map.get(map, key) do
+      %{"raw" => raw} when is_number(raw) -> raw
+      raw when is_number(raw) -> raw
+      _ -> nil
+    end
+  end
+
+  defp safe_decimal(nil), do: nil
+  defp safe_decimal(val) when is_float(val), do: Decimal.from_float(val)
+  defp safe_decimal(val) when is_integer(val), do: Decimal.new(val)
+
+  # Derive frequency by comparing declared annual rate vs trailing annual rate.
+  # If trailing ≈ rate, it's annual. If trailing ≈ rate/2, semi-annual, etc.
+  defp derive_frequency(nil, _), do: nil
+  defp derive_frequency(rate, _) when rate <= 0, do: nil
+
+  defp derive_frequency(rate, trailing) when is_number(trailing) and trailing > 0 do
+    ratio = rate / trailing
+
+    cond do
+      ratio > 1.8 -> "monthly"
+      ratio > 1.3 -> "quarterly"
+      ratio > 0.7 -> "annual"
+      true -> "quarterly"
+    end
+  end
+
+  # When trailing is unavailable, assume quarterly (most common for US stocks)
+  defp derive_frequency(_rate, _), do: "quarterly"
 end

@@ -12,11 +12,49 @@ mix validate.data              # Run all 7 checks
 mix validate.data --suggest    # Suggest threshold adjustments
 mix validate.data --export     # Export timestamped snapshot + latest
 mix validate.data --compare    # Compare current vs latest snapshot
-mix check.all                  # Validation + gap analysis in one pass
+mix check.all                  # Validation + gap analysis + schema integrity
 mix report.gaps                # Data gap analysis only
 ```
 
-## The 7 Checks
+## Legacy Table Status
+
+All 6 legacy tables have been **dropped** (2026-02-21):
+- `legacy_holdings` → migrated to `positions`
+- `legacy_portfolio_snapshots` → migrated to `portfolio_snapshots`
+- `legacy_symbol_mappings` → migrated to `instrument_aliases`
+- `legacy_dividends` → broker records to `dividend_payments`, yfinance archived to JSON
+- `legacy_broker_transactions` → `trades`, `dividend_payments`, `cash_flows`, `corporate_actions`
+- `legacy_costs` → interest/fees to `cash_flows` (commissions already on trades, taxes on dividend_payments)
+
+## Schema Integrity Checks (NEW)
+
+`mix check.all` now includes 4 schema-level checks via `SchemaIntegrity`:
+
+### 1. Orphan Check
+- Instruments with no trades or dividend payments
+- Positions with no parent snapshot
+- Instrument aliases with no parent instrument
+
+### 2. Null Field Check
+- Dividend payments missing `amount_eur`
+- Non-EUR dividend payments missing `fx_rate`
+- Instruments missing `currency`
+- Sold positions missing ISIN
+
+### 3. FK Integrity Check
+- Trades pointing to non-existent instruments
+- Dividend payments pointing to non-existent instruments
+- Corporate actions pointing to non-existent instruments
+
+### 4. Duplicate Check
+- Duplicate `external_id` in trades, dividend_payments, cash_flows
+- Duplicate snapshot dates
+
+## Oban Worker
+
+`IntegrityCheckWorker` runs daily at 06:00 UTC via Oban cron. Runs the same SchemaIntegrity checks and logs warnings if issues are found.
+
+## The 7 Dividend Validation Checks
 
 ### 1. Invalid Currencies (`invalid_currencies`)
 - **Severity**: warning
@@ -27,34 +65,28 @@ mix report.gaps                # Data gap analysis only
 - **Severity**: info
 - **What**: ISIN country prefix doesn't match dividend currency
 - **Triage**: Check `@isin_currency_map`. Known exception: IE ISINs can pay USD (Irish-domiciled ETFs)
-- **False positives**: IE ISINs paying USD is normal (e.g., CSPX, VUSA)
 
 ### 3. Suspicious Amounts (`suspicious_amounts`)
 - **Severity**: warning
 - **What**: Per-share amount exceeds ~$50 USD equivalent threshold for its currency
-- **Triage**: Check if record is actually total_net misclassified as per_share. BDC special dividends (ARCC, MAIN, AGNC) can be legitimately high
-- **False positives**: BDC special dividends, return-of-capital distributions
+- **Triage**: Check if record is actually total_net misclassified as per_share
 
 ### 4. Inconsistent Amounts (`inconsistent_amounts_per_stock`)
 - **Severity**: warning
 - **What**: Per-share amounts for same ISIN vary >10x from median
-- **Triage**: Usually a total_net amount mixed in as per_share. Check the outlier record's source CSV
+- **Triage**: Usually a total_net amount mixed in as per_share
 
 ### 5. Mixed Amount Types (`mixed_amount_types_per_stock`)
 - **Severity**: info
 - **What**: Same stock has both per_share and total_net records
-- **Triage**: This is informational. The UI handles both types. Only investigate if amounts look wrong
 
 ### 6. Cross-Source Duplicates (`cross_source_duplicates`)
 - **Severity**: warning
 - **What**: Same ISIN+date appears in multiple records
-- **Triage**: Different sources (ibkr vs yfinance) may both have the dividend. Keep the more detailed one (usually ibkr)
 
 ### 7. Missing FX Conversion (`missing_fx_conversion`)
 - **Severity**: warning
 - **What**: `total_net` dividend in non-EUR currency has nil or 1.0 `fx_rate`
-- **Triage**: Income will be inflated (e.g., 400 SEK treated as 400 EUR). Backfill fx_rate from matching position data or correct manually
-- **Fix script**: `priv/scripts/backfill_fx_rate.exs` — matches position fx_rate where dividend currency == position currency
 
 ## Currency Threshold Reference
 
@@ -76,43 +108,18 @@ mix report.gaps                # Data gap analysis only
 | DKK      | 350       | $50             |
 | TWD      | 1600      | $50             |
 
-## Cross-Source Duplicate Pattern: per_share vs total_net
-
-When a stock has both Yahoo (per_share, uses ex-date) and IBKR (total_net, uses pay-date) records, the same dividend can appear twice with different dates (±30 days apart). This causes **double-counting in income calculations**.
-
-### How to detect
-```elixir
-# For each total_net record, check if a per_share exists within ±30 days
-for t <- total_net_records,
-    Enum.any?(per_share_records, fn p -> abs(Date.diff(p.ex_date, t.ex_date)) <= 30 end),
-    do: t  # these are duplicates
-```
-
-### Resolution
-- **Delete the total_net** when a matching per_share exists (per_share is preferred — has per-share rate, works with quantity for income calc)
-- **Keep total_net** when no per_share exists (stocks only in IBKR, no Yahoo data)
-- **Fix script**: `priv/scripts/delete_duplicate_total_net.exs`
-
-### Known affected stocks (historical)
-ORC (15), AGNC (12), HRZN (8), PFLT (5), SAR (3), CSWC (2), MVO (2), plus 9 others with 1 each. Total: 56 duplicates removed Feb 2026.
-
-### Prevention
-The `mixed_amount_types_per_stock` check (info severity) flags stocks with both types. When investigating, use the ±30 day overlap test above to determine if duplicates exist.
-
-## Discovering New Patterns
-
-Use `mix validate.data --suggest` to see if any currency thresholds need adjustment based on actual data (uses 95th percentile * 1.2).
-
 ## Adding New Rules
 
-1. Add check function in `lib/dividendsomatic/portfolio/dividend_validator.ex`
-2. Wire it into `validate/0` issues list
-3. Add tests in `test/dividendsomatic/portfolio/dividend_validator_test.exs`
-4. Update this skill with the new check description
+1. For dividend checks: add in `dividend_validator.ex`, wire into `validate/0`
+2. For schema checks: add in `schema_integrity.ex`, wire into `check_all/0`
+3. Add tests
+4. Update this skill
 
 ## Key Files
 
-- `lib/dividendsomatic/portfolio/dividend_validator.ex` - All validation logic
-- `lib/mix/tasks/validate_data.ex` - CLI task
+- `lib/dividendsomatic/portfolio/dividend_validator.ex` - Dividend validation
+- `lib/dividendsomatic/portfolio/schema_integrity.ex` - Schema integrity checks
+- `lib/dividendsomatic/portfolio/data_gap_analyzer.ex` - Gap analysis
+- `lib/dividendsomatic/workers/integrity_check_worker.ex` - Daily Oban worker
+- `lib/mix/tasks/validate_data.ex` - CLI validation task
 - `lib/mix/tasks/check_all.ex` - Unified integrity check
-- `test/dividendsomatic/portfolio/dividend_validator_test.exs` - Tests

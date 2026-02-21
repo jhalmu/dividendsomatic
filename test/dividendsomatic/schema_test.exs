@@ -1,7 +1,7 @@
 defmodule Dividendsomatic.SchemaTest do
   use Dividendsomatic.DataCase
 
-  alias Dividendsomatic.Portfolio.{Dividend, PortfolioSnapshot, Position, SoldPosition}
+  alias Dividendsomatic.Portfolio.{PortfolioSnapshot, Position, SoldPosition}
 
   describe "PortfolioSnapshot changeset" do
     test "should require date and source" do
@@ -114,102 +114,6 @@ defmodule Dividendsomatic.SchemaTest do
 
       changeset = Position.changeset(%Position{}, attrs)
       assert changeset.valid?
-    end
-  end
-
-  describe "Dividend changeset" do
-    test "should require symbol, ex_date, amount" do
-      changeset = Dividend.changeset(%Dividend{}, %{})
-
-      refute changeset.valid?
-      assert "can't be blank" in errors_on(changeset).symbol
-      assert "can't be blank" in errors_on(changeset).ex_date
-      assert "can't be blank" in errors_on(changeset).amount
-    end
-
-    test "should validate amount is greater than 0" do
-      attrs = %{
-        symbol: "KESKOB",
-        ex_date: ~D[2026-01-15],
-        amount: Decimal.new("0"),
-        currency: "EUR"
-      }
-
-      changeset = Dividend.changeset(%Dividend{}, attrs)
-
-      refute changeset.valid?
-      assert "must be greater than 0" in errors_on(changeset).amount
-    end
-
-    test "should reject negative amount" do
-      attrs = %{
-        symbol: "KESKOB",
-        ex_date: ~D[2026-01-15],
-        amount: Decimal.new("-1.00"),
-        currency: "EUR"
-      }
-
-      changeset = Dividend.changeset(%Dividend{}, attrs)
-
-      refute changeset.valid?
-    end
-
-    test "should accept valid dividend" do
-      attrs = %{
-        symbol: "KESKOB",
-        ex_date: ~D[2026-01-15],
-        pay_date: ~D[2026-02-01],
-        amount: Decimal.new("0.50"),
-        currency: "EUR",
-        source: "Interactive Brokers"
-      }
-
-      changeset = Dividend.changeset(%Dividend{}, attrs)
-      assert changeset.valid?
-    end
-
-    test "should default currency to EUR" do
-      dividend = %Dividend{}
-      assert dividend.currency == "EUR"
-    end
-
-    test "should persist dividend" do
-      attrs = %{
-        symbol: "KESKOB",
-        ex_date: ~D[2026-01-15],
-        amount: Decimal.new("0.50"),
-        currency: "EUR"
-      }
-
-      {:ok, dividend} =
-        %Dividend{}
-        |> Dividend.changeset(attrs)
-        |> Repo.insert()
-
-      assert dividend.symbol == "KESKOB"
-      assert Decimal.equal?(dividend.amount, Decimal.new("0.50"))
-    end
-
-    test "should enforce unique constraint on symbol+ex_date+amount" do
-      attrs = %{
-        symbol: "KESKOB",
-        ex_date: ~D[2026-01-15],
-        amount: Decimal.new("0.50"),
-        currency: "EUR"
-      }
-
-      {:ok, _} =
-        %Dividend{}
-        |> Dividend.changeset(attrs)
-        |> Repo.insert()
-
-      # Second insert with same key fields should fail
-      {:error, changeset} =
-        %Dividend{}
-        |> Dividend.changeset(attrs)
-        |> Repo.insert()
-
-      assert {"has already been taken", _} = changeset.errors[:symbol]
     end
   end
 

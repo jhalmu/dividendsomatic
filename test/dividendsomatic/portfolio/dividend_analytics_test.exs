@@ -69,6 +69,141 @@ defmodule Dividendsomatic.Portfolio.DividendAnalyticsTest do
     end
   end
 
+  describe "compute_annual_dividend_per_share/2 with frequency extrapolation" do
+    test "should extrapolate quarterly payer with 2 TTM payments to 4×" do
+      today = Date.utc_today()
+
+      divs = [
+        %{
+          dividend: %{
+            ex_date: Date.add(today, -90),
+            amount: Decimal.new("0.36"),
+            amount_type: "per_share",
+            gross_rate: nil,
+            quantity_at_record: nil
+          },
+          income: Decimal.new("360")
+        },
+        %{
+          dividend: %{
+            ex_date: Date.add(today, -180),
+            amount: Decimal.new("0.36"),
+            amount_type: "per_share",
+            gross_rate: nil,
+            quantity_at_record: nil
+          },
+          income: Decimal.new("360")
+        }
+      ]
+
+      result = DividendAnalytics.compute_annual_dividend_per_share(divs, :quarterly)
+      # 2 payments of 0.36, average = 0.36, expected 4/yr → 0.36 × 4 = 1.44
+      assert Decimal.equal?(result, Decimal.new("1.44"))
+    end
+
+    test "should extrapolate monthly payer with 4 TTM payments to 12×" do
+      today = Date.utc_today()
+
+      divs =
+        for i <- 1..4 do
+          %{
+            dividend: %{
+              ex_date: Date.add(today, -30 * i),
+              amount: Decimal.new("0.12"),
+              amount_type: "per_share",
+              gross_rate: nil,
+              quantity_at_record: nil
+            },
+            income: Decimal.new("120")
+          }
+        end
+
+      result = DividendAnalytics.compute_annual_dividend_per_share(divs, :monthly)
+      # 4 payments of 0.12, expected 12/yr → 0.12 × 12 = 1.44
+      assert Decimal.equal?(result, Decimal.new("1.44"))
+    end
+
+    test "should not extrapolate when payment count meets expected annual" do
+      today = Date.utc_today()
+
+      divs =
+        for i <- 1..4 do
+          %{
+            dividend: %{
+              ex_date: Date.add(today, -90 * i),
+              amount: Decimal.new("0.50"),
+              amount_type: "per_share",
+              gross_rate: nil,
+              quantity_at_record: nil
+            },
+            income: Decimal.new("500")
+          }
+        end
+
+      result = DividendAnalytics.compute_annual_dividend_per_share(divs, :quarterly)
+      # 4 payments of 0.50 = 2.00 (full year), no extrapolation
+      assert Decimal.equal?(result, Decimal.new("2.00"))
+    end
+
+    test "should not extrapolate for unknown frequency" do
+      today = Date.utc_today()
+
+      divs = [
+        %{
+          dividend: %{
+            ex_date: Date.add(today, -90),
+            amount: Decimal.new("0.50"),
+            amount_type: "per_share",
+            gross_rate: nil,
+            quantity_at_record: nil
+          },
+          income: Decimal.new("500")
+        }
+      ]
+
+      result = DividendAnalytics.compute_annual_dividend_per_share(divs, :unknown)
+      assert Decimal.equal?(result, Decimal.new("0.50"))
+    end
+
+    test "should handle string frequency values" do
+      today = Date.utc_today()
+
+      divs = [
+        %{
+          dividend: %{
+            ex_date: Date.add(today, -90),
+            amount: Decimal.new("0.36"),
+            amount_type: "per_share",
+            gross_rate: nil,
+            quantity_at_record: nil
+          },
+          income: Decimal.new("360")
+        }
+      ]
+
+      result = DividendAnalytics.compute_annual_dividend_per_share(divs, "quarterly")
+      # 1 payment of 0.36, expected 4/yr → 0.36 × 4 = 1.44
+      assert Decimal.equal?(result, Decimal.new("1.44"))
+    end
+  end
+
+  describe "frequency_to_count/1" do
+    test "should return correct counts for atom frequencies" do
+      assert DividendAnalytics.frequency_to_count(:monthly) == 12
+      assert DividendAnalytics.frequency_to_count(:quarterly) == 4
+      assert DividendAnalytics.frequency_to_count(:semi_annual) == 2
+      assert DividendAnalytics.frequency_to_count(:annual) == 1
+      assert DividendAnalytics.frequency_to_count(:unknown) == 0
+    end
+
+    test "should return correct counts for string frequencies" do
+      assert DividendAnalytics.frequency_to_count("monthly") == 12
+      assert DividendAnalytics.frequency_to_count("quarterly") == 4
+      assert DividendAnalytics.frequency_to_count("semi_annual") == 2
+      assert DividendAnalytics.frequency_to_count("annual") == 1
+    end
+  end
+
   describe "compute_dividend_yield/2" do
     test "should return nil when quote_data is nil" do
       assert DividendAnalytics.compute_dividend_yield(Decimal.new("1.00"), nil) == nil

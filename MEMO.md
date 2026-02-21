@@ -26,13 +26,6 @@ When user says **"EOD"**: Execute immediately without confirmation:
 # Development
 mix phx.server              # Start server (localhost:4000)
 mix import.csv path/to.csv  # Import CSV data
-mix import.nordnet           # Import Nordnet CSV
-mix import.nordnet --9a path # Import 9A tax report
-mix import.ibkr              # Import IBKR CSV/PDF
-
-# Data pipeline
-mix process.data --scan              # Report what would be processed
-mix process.data --all               # Run full import pipeline
 mix import.flex_div_csv path.csv     # Import Flex dividend CSV (11-col)
 mix import.flex_trades path.csv      # Import Flex trades CSV (14-col)
 mix check.integrity path.csv         # Check integrity vs Actions.csv
@@ -50,7 +43,6 @@ mix backfill.instruments --currency  # Only currency
 mix backfill.instruments --company   # Only company profiles
 mix import.fx_rates                  # Import FX rates from all CSV sources
 mix backfill.fx_rates                # Backfill fx_rate + amount_eur
-mix compare.legacy                   # Compare legacy vs new tables
 
 # Historical data
 mix fetch.historical_prices              # Full pipeline
@@ -73,15 +65,26 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.35.0 (Legacy Instrument Merge)
-**Status:** LEGACY instruments merged, dividend_payments linked to real ISINs, legacy schema references cleaned up
+**Version:** 0.36.0 (Legacy Tables Dropped)
+**Status:** All 6 legacy tables dropped, data migrated to clean schemas, integrity checks system built
 **Branch:** `main`
 
-**Latest session (2026-02-21 Legacy Instrument Merge):**
+**Latest session (2026-02-21 Database Cleanup & Integrity):**
+- **Dropped all 6 legacy tables**: legacy_holdings, legacy_portfolio_snapshots, legacy_symbol_mappings, legacy_dividends, legacy_broker_transactions, legacy_costs
+- **4 migration tasks created**: `migrate.symbol_mappings` (34 resolved), `migrate.legacy_dividends` (15 new broker + 5,835 yfinance archived), `migrate.legacy_transactions` (3,818 trades, 25 dividends, 257 cash flows, 159 interest, 98 corporate actions), `migrate.legacy_costs` (158 interest)
+- **Deleted 13 obsolete modules**: 6 schema files + 7 import tasks/processors referencing legacy schemas
+- **SchemaIntegrity system**: 4 checks (orphan, null field, FK integrity, duplicate) in `schema_integrity.ex`
+- **Oban IntegrityCheckWorker**: daily at 06:00 UTC
+- **IntegrityChecker rewritten**: uses DividendPayment/Trade/Instrument instead of legacy schemas
+- **DataGapAnalyzer rewritten**: uses DividendPayment/Trade instead of legacy schemas
+- **SymbolMapper + Stocks rewritten**: uses InstrumentAlias instead of SymbolMapping
+- **CSV/PDF archive**: 345MB zip at `../dividendsomatic_data_2026-02-21.zip`
+- 666 tests, 0 failures, 0 credo warnings
+
+**Previous session (2026-02-21 Legacy Instrument Merge):**
 - **`mix merge.legacy_instruments`** — merged 24/29 LEGACY: instruments into proper counterparts, deduped 27 dividend_payments
 - **Legacy schema cleanup** — rewrote 8 files from Dividend/BrokerTransaction to DividendPayment/Trade+Instrument joins
 - **Deleted** `migrate_legacy_dividends.ex`, `compare_legacy.ex` (superseded by merge task)
-- **Deferred** legacy table drop — 7 import tasks still reference legacy schemas
 - Positions view now shows dividend data (est_monthly, projected_annual, yield_on_cost)
 - 716 tests, 0 failures, 12 pre-existing credo issues
 
@@ -263,15 +266,17 @@ mix ecto.reset              # Drop + create + migrate
 - Enhanced navigation: week/month/year jumps, date picker, chart presets
 - Dividend diagnostics for IEx verification
 - FX rates table (607 records, 9 currencies, 2021-2026) with EUR conversion on dividends + cash flows
-- 716 tests + 21 Playwright E2E tests, 12 pre-existing credo issues
+- 666 tests + 21 Playwright E2E tests, 0 credo warnings
 - Multi-provider market data: Finnhub + Yahoo Finance + EODHD with fallback chains
 - All instrument currencies populated (336/336)
 - Corporate actions, NAV snapshots, borrow fees parsed from Activity Statements
 - Legacy instrument merge (`mix merge.legacy_instruments`)
+- **All 6 legacy tables dropped** — data migrated, schemas deleted, imports rewritten
+- SchemaIntegrity system (4 checks) + Oban daily worker
+- 666 tests + 21 Playwright E2E tests, 0 credo warnings
 
 **Next priorities:**
-- Drop legacy tables — rewrite 7 import tasks (import_lynx_data, import_flex_dividends, import_yahoo_dividends, import_nordnet, import_ibkr, backfill_isin, migrate_to_unified) to use new schemas, then drop 6 legacy tables
-- Balance check remaining gap (12.66%) — likely FX effects on ~€330k multi-currency cash over 4 years; could track FX P&L on cash
+- Balance check remaining gap (6.77%) — likely FX effects on ~€330k multi-currency cash over 4 years; could track FX P&L on cash
 - Fetch missing company profiles (~293 instruments without sector/industry) via Finnhub/Yahoo
 - Production deployment (Hetzner via docker-compose)
 - EODHD historical data backfill (30+ years available)
@@ -295,7 +300,7 @@ All issues (#1-#22) closed.
 - [x] Chart reconstruction N+1 queries fixed (3,700+ → 3 queries + persistent_term cache)
 - [x] Multi-provider market data architecture (Finnhub + Yahoo + EODHD)
 - [x] IBKR dividend recovery: PIL fallback, Foreign Tax filter, 73 new dividends
-- [x] Test coverage: 688 tests + 21 Playwright E2E
+- [x] Test coverage: 666 tests + 21 Playwright E2E
 - [x] Data consolidation: all instrument currencies, corporate actions, NAV snapshots, borrow fees
 - [ ] ~293 instruments missing company profiles (sector/industry/country)
 - [x] Historical prices: 53/63 stocks + 7 forex pairs fetched

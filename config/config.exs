@@ -68,7 +68,8 @@ config :dividendsomatic, Oban,
     {Oban.Plugins.Cron,
      crontab: [
        {"0 13 * * 1-6", Dividendsomatic.Workers.DataImportWorker,
-        args: %{"source" => "csv_directory"}}
+        args: %{"source" => "csv_directory"}},
+       {"0 6 * * *", Dividendsomatic.Workers.IntegrityCheckWorker}
      ]}
   ],
   queues: [default: 10, gmail_import: 1, data_import: 1]

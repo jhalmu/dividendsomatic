@@ -12,10 +12,9 @@ defmodule Dividendsomatic.Stocks.SymbolMapper do
   import Ecto.Query
   require Logger
 
-  alias Dividendsomatic.Portfolio.Position
+  alias Dividendsomatic.Portfolio.{Instrument, InstrumentAlias, Position}
   alias Dividendsomatic.Repo
   alias Dividendsomatic.Stocks
-  alias Dividendsomatic.Stocks.SymbolMapping
 
   # IB exchange → Finnhub symbol suffix mapping
   @exchange_suffix %{
@@ -154,36 +153,48 @@ defmodule Dividendsomatic.Stocks.SymbolMapper do
   end
 
   @doc """
-  Re-resolves all pending ISINs using Finnhub API lookup.
+  Re-resolves all instruments without a finnhub alias using Finnhub API lookup.
 
   Rate-limited to ~1 request/second. Returns `{resolved, unmappable, still_pending}` counts.
   """
   def resolve_pending do
-    pending =
-      SymbolMapping
-      |> where([m], m.status == "pending")
-      |> order_by([m], asc: m.isin)
+    # Find instruments that have no finnhub/symbol_mapping alias
+    resolved_isins =
+      from(a in InstrumentAlias,
+        join: i in Instrument,
+        on: a.instrument_id == i.id,
+        where: a.source in ["finnhub", "symbol_mapping"],
+        select: i.isin
+      )
       |> Repo.all()
+      |> MapSet.new()
+
+    pending =
+      Instrument
+      |> where([i], not is_nil(i.isin))
+      |> order_by([i], asc: i.isin)
+      |> Repo.all()
+      |> Enum.reject(fn i -> MapSet.member?(resolved_isins, i.isin) end)
 
     Logger.info(
       "SymbolMapper: attempting to resolve #{length(pending)} pending ISINs via Finnhub"
     )
 
-    Enum.reduce(pending, {0, 0, 0}, fn mapping, {res, unmap, pend} ->
+    Enum.reduce(pending, {0, 0, 0}, fn instrument, {res, unmap, pend} ->
       # Rate limit: 1 request per 1.1 seconds (safe margin for 60/min)
       Process.sleep(1_100)
 
-      case resolve_fresh(mapping.isin, mapping.security_name) do
+      case resolve_fresh(instrument.isin, instrument.name) do
         {:ok, symbol} ->
-          Logger.info("  ✓ #{mapping.isin} → #{symbol}")
+          Logger.info("  ✓ #{instrument.isin} → #{symbol}")
           {res + 1, unmap, pend}
 
         {:unmappable, reason} ->
-          Logger.info("  ✗ #{mapping.isin} — #{reason}")
+          Logger.info("  ✗ #{instrument.isin} — #{reason}")
           {res, unmap + 1, pend}
 
         {:pending, _} ->
-          Logger.info("  ? #{mapping.isin} — still pending")
+          Logger.info("  ? #{instrument.isin} — still pending")
           {res, unmap, pend + 1}
       end
     end)
@@ -206,21 +217,23 @@ defmodule Dividendsomatic.Stocks.SymbolMapper do
   end
 
   @doc """
-  Returns all resolved symbol mappings.
+  Returns all resolved symbol mappings as maps with :isin and :finnhub_symbol keys.
   """
   def list_resolved do
-    SymbolMapping
-    |> where([m], m.status == "resolved")
+    from(a in InstrumentAlias,
+      join: i in Instrument,
+      on: a.instrument_id == i.id,
+      where: a.source in ["finnhub", "symbol_mapping"],
+      select: %{isin: i.isin, finnhub_symbol: a.symbol, exchange: a.exchange}
+    )
     |> Repo.all()
   end
 
   @doc """
-  Returns all symbol mappings.
+  Returns all symbol mappings (resolved aliases).
   """
   def list_all do
-    SymbolMapping
-    |> order_by([m], asc: m.isin)
-    |> Repo.all()
+    list_resolved()
   end
 
   @doc """
@@ -228,17 +241,29 @@ defmodule Dividendsomatic.Stocks.SymbolMapper do
   """
   def exchange_suffix_map, do: @exchange_suffix
 
-  # Step 1: Check cached result in symbol_mappings table
+  # Step 1: Check cached result in instrument_aliases table
   defp check_cache(isin) do
-    case Repo.get_by(SymbolMapping, isin: isin) do
-      %SymbolMapping{status: "resolved", finnhub_symbol: symbol} ->
-        {:ok, symbol}
+    # Check known unmappable ISINs first
+    case Map.get(@unmappable_isins, isin) do
+      nil ->
+        # Look for a finnhub/symbol_mapping alias via instrument
+        result =
+          from(a in InstrumentAlias,
+            join: i in Instrument,
+            on: a.instrument_id == i.id,
+            where: i.isin == ^isin and a.source in ["finnhub", "symbol_mapping"],
+            limit: 1,
+            select: a.symbol
+          )
+          |> Repo.one()
 
-      %SymbolMapping{status: "unmappable", notes: notes} ->
-        {:unmappable, notes || "cached unmappable"}
+        case result do
+          nil -> {:miss, isin}
+          symbol -> {:ok, symbol}
+        end
 
-      _ ->
-        {:miss, isin}
+      reason ->
+        {:unmappable, reason}
     end
   end
 
@@ -348,44 +373,53 @@ defmodule Dividendsomatic.Stocks.SymbolMapper do
     symbol <> suffix
   end
 
-  # Cache the resolution result
-  defp cache_result(isin, security_name, result) do
-    attrs =
-      case result do
-        {:ok, symbol} ->
-          %{
-            isin: isin,
-            finnhub_symbol: symbol,
-            security_name: security_name,
-            status: "resolved"
-          }
-
-        {:unmappable, reason} ->
-          %{
-            isin: isin,
-            security_name: security_name,
-            status: "unmappable",
-            notes: reason
-          }
-
-        {:pending, _} ->
-          %{
-            isin: isin,
-            security_name: security_name,
-            status: "pending"
-          }
-      end
-
-    case Repo.get_by(SymbolMapping, isin: isin) do
+  # Cache the resolution result in instrument_aliases (only for resolved symbols)
+  defp cache_result(isin, _security_name, {:ok, symbol}) do
+    case Repo.get_by(Instrument, isin: isin) do
       nil ->
-        %SymbolMapping{}
-        |> SymbolMapping.changeset(attrs)
-        |> Repo.insert(on_conflict: :nothing, conflict_target: [:isin])
+        # No instrument for this ISIN, can't cache
+        :ok
 
-      existing ->
-        existing
-        |> SymbolMapping.changeset(attrs)
-        |> Repo.update()
+      instrument ->
+        {base_symbol, exchange} = split_finnhub_symbol(symbol)
+
+        existing =
+          Repo.one(
+            from(a in InstrumentAlias,
+              where:
+                a.instrument_id == ^instrument.id and a.source in ["finnhub", "symbol_mapping"],
+              limit: 1
+            )
+          )
+
+        alias_attrs = %{
+          instrument_id: instrument.id,
+          symbol: base_symbol,
+          exchange: exchange,
+          source: "finnhub"
+        }
+
+        case existing do
+          nil ->
+            %InstrumentAlias{}
+            |> InstrumentAlias.changeset(alias_attrs)
+            |> Repo.insert(on_conflict: :nothing)
+
+          record ->
+            record
+            |> InstrumentAlias.changeset(alias_attrs)
+            |> Repo.update()
+        end
+    end
+  end
+
+  defp cache_result(_isin, _security_name, _other), do: :ok
+
+  # "KESKOB.HE" -> {"KESKOB", "HE"}, "AAPL" -> {"AAPL", nil}
+  defp split_finnhub_symbol(symbol) do
+    case String.split(symbol, ".") do
+      [base, exchange] -> {base, exchange}
+      _ -> {symbol, nil}
     end
   end
 

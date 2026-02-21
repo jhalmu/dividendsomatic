@@ -9,8 +9,12 @@ defmodule Dividendsomatic.Portfolio.DividendAnalytics do
   @doc """
   Compute trailing 12-month annual dividend per share.
   Expects a list of `%{dividend: %{ex_date: Date, ...}, ...}` entries.
+
+  When `frequency` is provided (:monthly, :quarterly, :semi_annual),
+  and TTM data has fewer payments than expected, extrapolates the average
+  per-payment to a full year.
   """
-  def compute_annual_dividend_per_share(dividends_with_income) do
+  def compute_annual_dividend_per_share(dividends_with_income, frequency \\ :unknown) do
     cutoff = Date.add(Date.utc_today(), -365)
 
     recent =
@@ -21,11 +25,36 @@ defmodule Dividendsomatic.Portfolio.DividendAnalytics do
     if recent == [] do
       Decimal.new("0")
     else
-      Enum.reduce(recent, Decimal.new("0"), fn entry, acc ->
-        Decimal.add(acc, per_share_amount(entry.dividend))
-      end)
+      per_share_values =
+        Enum.map(recent, fn entry -> per_share_amount(entry.dividend) end)
+        |> Enum.reject(fn ps -> Decimal.compare(ps, Decimal.new("0")) == :eq end)
+
+      ttm_sum = Enum.reduce(per_share_values, Decimal.new("0"), &Decimal.add/2)
+      payment_count = length(per_share_values)
+      expected_annual = frequency_to_count(frequency)
+
+      if expected_annual > 0 and payment_count > 0 and payment_count < expected_annual do
+        # Extrapolate: average per payment × expected annual count
+        avg_per_payment = Decimal.div(ttm_sum, Decimal.new(payment_count))
+        Decimal.mult(avg_per_payment, Decimal.new(expected_annual))
+      else
+        ttm_sum
+      end
     end
   end
+
+  @doc """
+  Returns the expected number of payments per year for a frequency.
+  """
+  def frequency_to_count(:monthly), do: 12
+  def frequency_to_count(:quarterly), do: 4
+  def frequency_to_count(:semi_annual), do: 2
+  def frequency_to_count(:annual), do: 1
+  def frequency_to_count("monthly"), do: 12
+  def frequency_to_count("quarterly"), do: 4
+  def frequency_to_count("semi_annual"), do: 2
+  def frequency_to_count("annual"), do: 1
+  def frequency_to_count(_), do: 0
 
   @doc """
   Dividend yield = annual_per_share / price * 100.

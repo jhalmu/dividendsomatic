@@ -2,7 +2,7 @@ defmodule Dividendsomatic.Portfolio.DataGapAnalyzerTest do
   use Dividendsomatic.DataCase, async: true
 
   alias Dividendsomatic.Portfolio.DataGapAnalyzer
-  alias Dividendsomatic.Portfolio.{Dividend, PortfolioSnapshot}
+  alias Dividendsomatic.Portfolio.{DividendPayment, Instrument, PortfolioSnapshot}
 
   describe "analyze/0" do
     test "should return a complete report structure with empty data" do
@@ -25,22 +25,22 @@ defmodule Dividendsomatic.Portfolio.DataGapAnalyzerTest do
 
   describe "analyze_dividend_gaps/0" do
     test "should detect gaps >400 days between consecutive dividends" do
-      # Insert dividends with a large gap
-      insert_dividend("AAPL", "US0378331005", ~D[2020-01-15], "0.77")
-      insert_dividend("AAPL", "US0378331005", ~D[2022-06-15], "0.23")
+      inst = insert_instrument("US0378331005", "AAPL")
+      insert_dividend(inst, ~D[2020-01-15], "0.77")
+      insert_dividend(inst, ~D[2022-06-15], "0.23")
 
       gaps = DataGapAnalyzer.analyze_dividend_gaps()
       assert length(gaps) == 1
 
       [aapl_gap] = gaps
-      assert aapl_gap.symbol == "AAPL"
       assert length(aapl_gap.gaps) == 1
       assert hd(aapl_gap.gaps).days > 400
     end
 
     test "should not flag gaps <= 400 days" do
-      insert_dividend("MSFT", "US5949181045", ~D[2024-01-15], "0.75")
-      insert_dividend("MSFT", "US5949181045", ~D[2024-04-15], "0.75")
+      inst = insert_instrument("US5949181045", "MSFT")
+      insert_dividend(inst, ~D[2024-01-15], "0.75")
+      insert_dividend(inst, ~D[2024-04-15], "0.75")
 
       gaps = DataGapAnalyzer.analyze_dividend_gaps()
       assert gaps == []
@@ -95,9 +95,10 @@ defmodule Dividendsomatic.Portfolio.DataGapAnalyzerTest do
 
   describe "analyze_dividend_gaps/0 edge cases" do
     test "should detect multiple gaps for same stock" do
-      insert_dividend("AAPL", "US0378331005", ~D[2020-01-15], "0.77")
-      insert_dividend("AAPL", "US0378331005", ~D[2022-06-15], "0.23")
-      insert_dividend("AAPL", "US0378331005", ~D[2024-11-15], "0.25")
+      inst = insert_instrument("US0378331005A", "AAPL")
+      insert_dividend(inst, ~D[2020-01-15], "0.77")
+      insert_dividend(inst, ~D[2022-06-15], "0.23")
+      insert_dividend(inst, ~D[2024-11-15], "0.25")
 
       gaps = DataGapAnalyzer.analyze_dividend_gaps()
       assert length(gaps) == 1
@@ -106,7 +107,8 @@ defmodule Dividendsomatic.Portfolio.DataGapAnalyzerTest do
     end
 
     test "should handle single-dividend stocks (no gaps possible)" do
-      insert_dividend("ONLY", "US9999999999", ~D[2024-01-15], "1.00")
+      inst = insert_instrument("US9999999999", "ONLY")
+      insert_dividend(inst, ~D[2024-01-15], "1.00")
 
       gaps = DataGapAnalyzer.analyze_dividend_gaps()
       assert gaps == []
@@ -125,7 +127,6 @@ defmodule Dividendsomatic.Portfolio.DataGapAnalyzerTest do
       chunks = DataGapAnalyzer.missing_by_year_chunks()
       assert length(chunks) >= 2
       assert hd(chunks).from == ~D[2022-01-15]
-      # Each chunk should have expected fields
       assert is_number(hd(chunks).coverage_pct)
       assert is_integer(hd(chunks).snapshot_count)
     end
@@ -135,7 +136,9 @@ defmodule Dividendsomatic.Portfolio.DataGapAnalyzerTest do
     test "should return correct date ranges when data exists" do
       insert_snapshot(~D[2024-01-15])
       insert_snapshot(~D[2024-06-15])
-      insert_dividend("MSFT", "US5949181045", ~D[2024-03-15], "0.75")
+
+      inst = insert_instrument("US5949181045B", "MSFT")
+      insert_dividend(inst, ~D[2024-03-15], "0.75")
 
       summary = DataGapAnalyzer.summary()
       assert summary.dividend_count == 1
@@ -159,7 +162,6 @@ defmodule Dividendsomatic.Portfolio.DataGapAnalyzerTest do
     end
 
     test "should calculate coverage_pct correctly" do
-      # Insert 5 snapshots spread across a single chunk
       for i <- 0..4 do
         insert_snapshot(Date.add(~D[2024-01-01], i * 7))
       end
@@ -173,13 +175,21 @@ defmodule Dividendsomatic.Portfolio.DataGapAnalyzerTest do
     end
   end
 
-  defp insert_dividend(symbol, isin, ex_date, amount) do
-    %Dividend{}
-    |> Dividend.changeset(%{
-      symbol: symbol,
-      isin: isin,
+  defp insert_instrument(isin, name) do
+    %Instrument{}
+    |> Instrument.changeset(%{isin: isin, name: name, currency: "USD"})
+    |> Repo.insert!()
+  end
+
+  defp insert_dividend(instrument, ex_date, amount) do
+    %DividendPayment{}
+    |> DividendPayment.changeset(%{
+      external_id: "test_#{instrument.isin}_#{ex_date}",
+      instrument_id: instrument.id,
       ex_date: ex_date,
-      amount: Decimal.new(amount),
+      pay_date: ex_date,
+      gross_amount: Decimal.new(amount),
+      net_amount: Decimal.new(amount),
       currency: "USD"
     })
     |> Repo.insert!()

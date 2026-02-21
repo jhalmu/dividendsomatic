@@ -8,7 +8,7 @@ defmodule Dividendsomatic.Portfolio.DataGapAnalyzer do
 
   import Ecto.Query
 
-  alias Dividendsomatic.Portfolio.{BrokerTransaction, Dividend, PortfolioSnapshot}
+  alias Dividendsomatic.Portfolio.{DividendPayment, Instrument, PortfolioSnapshot, Trade}
   alias Dividendsomatic.Repo
 
   @chunk_days 364
@@ -43,8 +43,17 @@ defmodule Dividendsomatic.Portfolio.DataGapAnalyzer do
   Flags stocks where >400 days pass between consecutive dividends.
   """
   def analyze_dividend_gaps do
-    Dividend
-    |> order_by([d], asc: d.ex_date)
+    from(dp in DividendPayment,
+      join: i in Instrument,
+      on: dp.instrument_id == i.id,
+      where: not is_nil(dp.ex_date),
+      order_by: [asc: dp.ex_date],
+      select: %{
+        isin: i.isin,
+        symbol: i.name,
+        ex_date: dp.ex_date
+      }
+    )
     |> Repo.all()
     |> Enum.group_by(fn d -> d.isin || d.symbol end)
     |> Enum.map(fn {key, divs} ->
@@ -53,7 +62,9 @@ defmodule Dividendsomatic.Portfolio.DataGapAnalyzer do
       gaps =
         sorted
         |> Enum.chunk_every(2, 1, :discard)
-        |> Enum.filter(fn [a, b] -> Date.diff(b.ex_date, a.ex_date) > 400 end)
+        |> Enum.filter(fn [a, b] ->
+          a.ex_date && b.ex_date && Date.diff(b.ex_date, a.ex_date) > 400
+        end)
         |> Enum.map(fn [a, b] ->
           %{from: a.ex_date, to: b.ex_date, days: Date.diff(b.ex_date, a.ex_date)}
         end)
@@ -99,12 +110,12 @@ defmodule Dividendsomatic.Portfolio.DataGapAnalyzer do
   Returns summary statistics.
   """
   def summary do
-    dividend_count = Repo.aggregate(Dividend, :count)
+    dividend_count = Repo.aggregate(DividendPayment, :count)
     snapshot_count = Repo.aggregate(PortfolioSnapshot, :count)
-    txn_count = Repo.aggregate(BrokerTransaction, :count)
+    trade_count = Repo.aggregate(Trade, :count)
 
     dividend_range =
-      Dividend
+      DividendPayment
       |> select([d], %{min: min(d.ex_date), max: max(d.ex_date)})
       |> Repo.one()
 
@@ -116,15 +127,15 @@ defmodule Dividendsomatic.Portfolio.DataGapAnalyzer do
     %{
       dividend_count: dividend_count,
       snapshot_count: snapshot_count,
-      transaction_count: txn_count,
+      transaction_count: trade_count,
       dividend_range: dividend_range,
       snapshot_range: snapshot_range
     }
   end
 
   defp data_date_range do
-    txn_range =
-      BrokerTransaction
+    trade_range =
+      Trade
       |> select([t], %{min: min(t.trade_date), max: max(t.trade_date)})
       |> Repo.one()
 
@@ -134,12 +145,12 @@ defmodule Dividendsomatic.Portfolio.DataGapAnalyzer do
       |> Repo.one()
 
     min_date =
-      [txn_range.min, snap_range.min]
+      [trade_range.min, snap_range.min]
       |> Enum.reject(&is_nil/1)
       |> Enum.min(Date, fn -> nil end)
 
     max_date =
-      [txn_range.max, snap_range.max]
+      [trade_range.max, snap_range.max]
       |> Enum.reject(&is_nil/1)
       |> Enum.max(Date, fn -> nil end)
 
@@ -166,17 +177,16 @@ defmodule Dividendsomatic.Portfolio.DataGapAnalyzer do
       |> Repo.aggregate(:count)
 
     dividend_count =
-      Dividend
+      DividendPayment
       |> where([d], d.ex_date >= ^from and d.ex_date <= ^to)
       |> Repo.aggregate(:count)
 
-    txn_count =
-      BrokerTransaction
+    trade_count =
+      Trade
       |> where([t], t.trade_date >= ^from and t.trade_date <= ^to)
       |> Repo.aggregate(:count)
 
     calendar_days = Date.diff(to, from) + 1
-    # Rough estimate: ~252 trading days per 365 calendar days
     expected_trading_days = round(calendar_days * 252 / 365)
 
     sources =
@@ -200,7 +210,7 @@ defmodule Dividendsomatic.Portfolio.DataGapAnalyzer do
       expected_trading_days: expected_trading_days,
       snapshot_count: snapshot_count,
       dividend_count: dividend_count,
-      transaction_count: txn_count,
+      transaction_count: trade_count,
       sources: sources,
       coverage_pct: coverage
     }

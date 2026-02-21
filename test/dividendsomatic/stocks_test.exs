@@ -9,9 +9,10 @@ defmodule Dividendsomatic.StocksTest do
     CompanyProfile,
     HistoricalPrice,
     StockMetric,
-    StockQuote,
-    SymbolMapping
+    StockQuote
   }
+
+  alias Dividendsomatic.Portfolio.{Instrument, InstrumentAlias}
 
   describe "stock quote schema" do
     test "should reject empty changeset" do
@@ -379,16 +380,21 @@ defmodule Dividendsomatic.StocksTest do
 
   describe "batch_symbol_mappings/1" do
     test "should return resolved mappings keyed by ISIN" do
-      Repo.insert!(%SymbolMapping{
-        isin: "FI0009000202",
-        finnhub_symbol: "KESKOB.HE",
-        status: "resolved"
+      inst1 = Repo.insert!(%Instrument{isin: "FI0009000202", name: "Kesko B", currency: "EUR"})
+      inst2 = Repo.insert!(%Instrument{isin: "SE0000667925", name: "Telia", currency: "SEK"})
+
+      Repo.insert!(%InstrumentAlias{
+        instrument_id: inst1.id,
+        symbol: "KESKOB.HE",
+        exchange: "HE",
+        source: "finnhub"
       })
 
-      Repo.insert!(%SymbolMapping{
-        isin: "SE0000667925",
-        finnhub_symbol: "TELIA1.ST",
-        status: "resolved"
+      Repo.insert!(%InstrumentAlias{
+        instrument_id: inst2.id,
+        symbol: "TELIA1.ST",
+        exchange: "ST",
+        source: "finnhub"
       })
 
       result = Stocks.batch_symbol_mappings(["FI0009000202", "SE0000667925"])
@@ -398,10 +404,17 @@ defmodule Dividendsomatic.StocksTest do
       assert result["SE0000667925"].finnhub_symbol == "TELIA1.ST"
     end
 
-    test "should exclude non-resolved mappings" do
-      Repo.insert!(%SymbolMapping{isin: "FI0009000202", status: "resolved", finnhub_symbol: "X"})
-      Repo.insert!(%SymbolMapping{isin: "SE0000667925", status: "pending"})
-      Repo.insert!(%SymbolMapping{isin: "US0000000000", status: "unmappable"})
+    test "should exclude instruments without finnhub/symbol_mapping aliases" do
+      inst1 = Repo.insert!(%Instrument{isin: "FI0009000202", name: "Kesko B", currency: "EUR"})
+      _inst2 = Repo.insert!(%Instrument{isin: "SE0000667925", name: "Telia", currency: "SEK"})
+      _inst3 = Repo.insert!(%Instrument{isin: "US0000000000", name: "Test", currency: "USD"})
+
+      Repo.insert!(%InstrumentAlias{
+        instrument_id: inst1.id,
+        symbol: "KESKOB.HE",
+        exchange: "HE",
+        source: "finnhub"
+      })
 
       result = Stocks.batch_symbol_mappings(["FI0009000202", "SE0000667925", "US0000000000"])
 

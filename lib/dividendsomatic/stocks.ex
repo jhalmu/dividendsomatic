@@ -24,9 +24,10 @@ defmodule Dividendsomatic.Stocks do
     CompanyProfile,
     HistoricalPrice,
     StockMetric,
-    StockQuote,
-    SymbolMapping
+    StockQuote
   }
+
+  alias Dividendsomatic.Portfolio.{Instrument, InstrumentAlias}
 
   @quote_cache_seconds 900
   @profile_cache_seconds 604_800
@@ -410,15 +411,19 @@ defmodule Dividendsomatic.Stocks do
   ## Batch Queries (for chart reconstruction)
 
   @doc """
-  Loads all symbol mappings for a list of ISINs in a single query.
+  Loads all finnhub symbol mappings for a list of ISINs via instrument_aliases.
 
-  Returns `%{isin => %SymbolMapping{}}`.
+  Returns `%{isin => %{finnhub_symbol: symbol, isin: isin}}`.
   """
   def batch_symbol_mappings(isins) when is_list(isins) do
-    SymbolMapping
-    |> where([m], m.isin in ^isins and m.status == "resolved")
+    from(a in InstrumentAlias,
+      join: i in Instrument,
+      on: a.instrument_id == i.id,
+      where: i.isin in ^isins and a.source in ["finnhub", "symbol_mapping"],
+      select: {i.isin, %{finnhub_symbol: a.symbol, isin: i.isin, exchange: a.exchange}}
+    )
     |> Repo.all()
-    |> Map.new(fn m -> {m.isin, m} end)
+    |> Map.new()
   end
 
   @doc """
@@ -457,40 +462,76 @@ defmodule Dividendsomatic.Stocks do
     end) || {:error, :no_price}
   end
 
-  ## Symbol Mappings (CRUD)
+  ## Symbol Mappings (via instrument_aliases)
 
   @doc """
-  Gets a symbol mapping by ISIN.
+  Gets a finnhub symbol mapping by ISIN via instrument_aliases.
   """
   def get_symbol_mapping(isin) do
-    Repo.get_by(SymbolMapping, isin: isin)
+    from(a in InstrumentAlias,
+      join: i in Instrument,
+      on: a.instrument_id == i.id,
+      where: i.isin == ^isin and a.source in ["finnhub", "symbol_mapping"],
+      limit: 1,
+      select: %{isin: i.isin, finnhub_symbol: a.symbol, exchange: a.exchange, status: "resolved"}
+    )
+    |> Repo.one()
   end
 
   @doc """
-  Creates or updates a symbol mapping.
+  Creates or updates a finnhub symbol alias for an instrument identified by ISIN.
   """
   def upsert_symbol_mapping(attrs) do
     isin = attrs[:isin] || attrs["isin"]
+    symbol = attrs[:finnhub_symbol] || attrs["finnhub_symbol"]
+    exchange = attrs[:exchange] || attrs["exchange"]
 
-    case get_symbol_mapping(isin) do
+    case Repo.get_by(Instrument, isin: isin) do
       nil ->
-        %SymbolMapping{}
-        |> SymbolMapping.changeset(attrs)
-        |> Repo.insert()
+        {:error, :instrument_not_found}
 
-      existing ->
-        existing
-        |> SymbolMapping.changeset(attrs)
-        |> Repo.update()
+      instrument ->
+        existing =
+          Repo.one(
+            from(a in InstrumentAlias,
+              where:
+                a.instrument_id == ^instrument.id and a.source in ["finnhub", "symbol_mapping"],
+              limit: 1
+            )
+          )
+
+        alias_attrs = %{
+          instrument_id: instrument.id,
+          symbol: symbol,
+          exchange: exchange,
+          source: "finnhub"
+        }
+
+        case existing do
+          nil ->
+            %InstrumentAlias{}
+            |> InstrumentAlias.changeset(alias_attrs)
+            |> Repo.insert()
+
+          record ->
+            record
+            |> InstrumentAlias.changeset(alias_attrs)
+            |> Repo.update()
+        end
     end
   end
 
   @doc """
-  Lists all symbol mappings.
+  Lists all finnhub symbol mappings.
   """
   def list_symbol_mappings do
-    SymbolMapping
-    |> order_by([m], asc: m.isin)
+    from(a in InstrumentAlias,
+      join: i in Instrument,
+      on: a.instrument_id == i.id,
+      where: a.source in ["finnhub", "symbol_mapping"],
+      order_by: [asc: i.isin],
+      select: %{isin: i.isin, finnhub_symbol: a.symbol, exchange: a.exchange, status: "resolved"}
+    )
     |> Repo.all()
   end
 

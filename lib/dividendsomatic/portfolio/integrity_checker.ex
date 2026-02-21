@@ -8,7 +8,7 @@ defmodule Dividendsomatic.Portfolio.IntegrityChecker do
 
   import Ecto.Query
 
-  alias Dividendsomatic.Portfolio.{BrokerTransaction, Dividend, FlexActionsCsvParser}
+  alias Dividendsomatic.Portfolio.{DividendPayment, FlexActionsCsvParser, Instrument, Trade}
   alias Dividendsomatic.Repo
 
   @type check_result :: %{
@@ -94,7 +94,7 @@ defmodule Dividendsomatic.Portfolio.IntegrityChecker do
   defp count_db_dividends(_from, nil), do: 0
 
   defp count_db_dividends(from_date, to_date) do
-    Dividend
+    DividendPayment
     |> where([d], d.ex_date >= ^from_date and d.ex_date <= ^to_date)
     |> Repo.aggregate(:count)
   end
@@ -146,9 +146,7 @@ defmodule Dividendsomatic.Portfolio.IntegrityChecker do
   defp count_db_trades(_from, nil), do: 0
 
   defp count_db_trades(from_date, to_date) do
-    BrokerTransaction
-    |> where([t], t.broker == "ibkr")
-    |> where([t], t.transaction_type in ["buy", "sell"])
+    Trade
     |> where([t], t.trade_date >= ^from_date and t.trade_date <= ^to_date)
     |> Repo.aggregate(:count)
   end
@@ -169,22 +167,14 @@ defmodule Dividendsomatic.Portfolio.IntegrityChecker do
       |> Enum.reject(fn isin -> is_nil(isin) or isin == "" end)
       |> Enum.uniq()
 
-    # Check which ISINs exist in dividends or broker_transactions
-    existing_dividend_isins =
-      Dividend
-      |> where([d], d.isin in ^actions_isins)
-      |> select([d], d.isin)
+    # Check which ISINs exist in instruments
+    known_isins =
+      Instrument
+      |> where([i], i.isin in ^actions_isins)
+      |> select([i], i.isin)
       |> Repo.all()
       |> MapSet.new()
 
-    existing_txn_isins =
-      BrokerTransaction
-      |> where([t], t.isin in ^actions_isins)
-      |> select([t], t.isin)
-      |> Repo.all()
-      |> MapSet.new()
-
-    known_isins = MapSet.union(existing_dividend_isins, existing_txn_isins)
     missing = Enum.reject(actions_isins, &MapSet.member?(known_isins, &1))
 
     isin_to_symbol = Map.new(transactions, fn txn -> {txn.isin, txn.symbol} end)
