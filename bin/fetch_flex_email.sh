@@ -2,19 +2,16 @@
 #
 # fetch_flex_email.sh — Extract IBKR Flex CSV attachments from Mail.app
 #
-# Replicates the Automator "HaePortolioMailit" workflow:
+# DEPRECATED: Replaced by GmailImportWorker (Oban cron, Mon-Sat 12:00 UTC).
+# The launchd scheduler cannot access Dropbox paths due to macOS sandboxing.
+# Kept for manual one-off use only: bin/fetch_flex_email.sh
+#
+# What it does:
 # 1. Tell Mail.app to check for new mail (Google account)
 # 2. Wait for sync
 # 3. Search Flex mailboxes for messages from last 2 days
-#    - "Activity Flex" (Portfolio.csv — daily)
-#    - "Dividend Flex" (Dividends.csv — weekly)
-#    - "Trades Flex" (Trades.csv — weekly)
-#    - "Actions Flex" (Actions.csv — monthly)
 # 4. Save .csv attachments to csv_data/
 # 5. Skip files that already exist (idempotent)
-#
-# Usage: bin/fetch_flex_email.sh
-# Scheduled via launchd: Mon-Sat 12:00 local (Helsinki)
 
 set -euo pipefail
 

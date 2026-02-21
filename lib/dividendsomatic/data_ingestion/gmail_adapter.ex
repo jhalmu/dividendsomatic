@@ -34,9 +34,9 @@ defmodule Dividendsomatic.DataIngestion.GmailAdapter do
   end
 
   defp extract_date_from_subject(subject) do
-    # Pattern: "Activity Flex for DD/MM/YYYY"
+    # Pattern: "Activity Flex for MM/DD/YYYY" (IBKR US date format)
     case Regex.run(~r/(\d{2})\/(\d{2})\/(\d{4})/, subject) do
-      [_, day, month, year] ->
+      [_, month, day, year] ->
         Date.new(String.to_integer(year), String.to_integer(month), String.to_integer(day))
 
       nil ->

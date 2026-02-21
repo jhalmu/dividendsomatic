@@ -15,8 +15,8 @@ defmodule Dividendsomatic.Gmail do
 
   require Logger
 
-  alias Dividendsomatic.Portfolio
-  alias Dividendsomatic.Portfolio.{FlexCsvRouter, IntegrityChecker}
+  alias Dividendsomatic.DataIngestion.FlexImportOrchestrator
+  alias Dividendsomatic.Portfolio.FlexCsvRouter
 
   @gmail_api_base "https://gmail.googleapis.com/gmail/v1/users/me"
   @ib_sender "donotreply@interactivebrokers.com"
@@ -167,10 +167,8 @@ defmodule Dividendsomatic.Gmail do
     case get_csv_from_email(email_id) do
       {:ok, csv_data} ->
         csv_type = FlexCsvRouter.detect_csv_type(csv_data)
-        report_date = extract_date_from_subject(subject)
-
-        Logger.info("Gmail: #{subject} → type=#{csv_type}, date=#{report_date}")
-        route_by_type(csv_type, csv_data, report_date, subject)
+        Logger.info("Gmail: #{subject} → type=#{csv_type}")
+        import_via_orchestrator(csv_data, subject)
 
       {:error, reason} ->
         Logger.error("Gmail: failed to fetch #{subject}: #{inspect(reason)}")
@@ -178,54 +176,30 @@ defmodule Dividendsomatic.Gmail do
     end
   end
 
-  defp route_by_type(:portfolio, csv_data, report_date, subject) do
-    if Portfolio.get_snapshot_by_date(report_date) do
-      Logger.info("Gmail: snapshot #{report_date} exists, skipping")
-      {:skipped, report_date}
-    else
-      case Portfolio.create_snapshot_from_csv(csv_data, report_date) do
-        {:ok, snapshot} ->
-          Logger.info(
-            "Gmail: imported snapshot #{report_date} (#{snapshot.positions_count} positions)"
-          )
+  defp import_via_orchestrator(csv_data, subject) do
+    # Write to temp file so FlexImportOrchestrator can handle all types
+    # (activity_statement and actions parsers need a file path)
+    tmp_path = Path.join(System.tmp_dir!(), "gmail_#{:erlang.unique_integer([:positive])}.csv")
 
-          {:ok, report_date}
+    try do
+      File.write!(tmp_path, csv_data)
+
+      case FlexImportOrchestrator.import_file(tmp_path, subject) do
+        {:ok, type, details} ->
+          Logger.info("Gmail: #{subject} imported as #{type}: #{inspect(details)}")
+          {:ok, subject}
+
+        {:skipped, type, reason} ->
+          Logger.info("Gmail: #{subject} skipped (#{type}): #{reason}")
+          {:skipped, subject}
 
         {:error, reason} ->
-          Logger.error("Gmail: snapshot import failed for #{subject}: #{inspect(reason)}")
+          Logger.error("Gmail: #{subject} import failed: #{inspect(reason)}")
           {:error, {subject, reason}}
       end
+    after
+      File.rm(tmp_path)
     end
-  end
-
-  defp route_by_type(:dividends, _csv_data, _report_date, subject) do
-    Logger.info("Gmail: #{subject} — legacy dividend import disabled, use mix import.activity")
-    {:skipped, subject}
-  end
-
-  defp route_by_type(:trades, _csv_data, _report_date, subject) do
-    Logger.info("Gmail: #{subject} — legacy trade import disabled, use mix import.activity")
-    {:skipped, subject}
-  end
-
-  defp route_by_type(:actions, csv_data, _report_date, subject) do
-    case IntegrityChecker.run_all_from_string(csv_data) do
-      {:ok, checks} ->
-        pass = Enum.count(checks, &(&1.status == :pass))
-        fail = Enum.count(checks, &(&1.status == :fail))
-        warn = Enum.count(checks, &(&1.status == :warn))
-        Logger.info("Gmail: #{subject} integrity → #{pass} PASS, #{warn} WARN, #{fail} FAIL")
-        {:ok, subject}
-
-      {:error, reason} ->
-        Logger.error("Gmail: integrity check failed for #{subject}: #{inspect(reason)}")
-        {:error, {subject, reason}}
-    end
-  end
-
-  defp route_by_type(:unknown, _csv_data, _report_date, subject) do
-    Logger.warning("Gmail: #{subject} has unknown CSV type, skipping")
-    {:skipped, subject}
   end
 
   defp search_or_empty(token, query, max_results) do
