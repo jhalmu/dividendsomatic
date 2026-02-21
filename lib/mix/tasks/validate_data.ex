@@ -170,6 +170,10 @@ defmodule Mix.Tasks.Validate.Data do
     Enum.each(checks, fn check ->
       c = check.components
 
+      if Map.get(c, :margin_mode) do
+        Mix.shell().info("  Mode:             Margin account (NLV-based)")
+      end
+
       Mix.shell().info("  Initial capital:  €#{format_decimal(c.initial_capital)}")
       Mix.shell().info("  + Cash deposits:  €#{format_decimal(c.total_deposits)}")
       Mix.shell().info("  - Withdrawals:    €#{format_decimal(c.total_withdrawals)}")
@@ -198,7 +202,7 @@ defmodule Mix.Tasks.Validate.Data do
         "  Difference:       €#{format_decimal(check.difference)} (#{check.difference_pct}%)"
       )
 
-      Mix.shell().info("  Status:           #{status_icon(check.status)}")
+      Mix.shell().info("  Status:           #{status_icon(check.status, c)}")
     end)
   end
 
@@ -208,9 +212,23 @@ defmodule Mix.Tasks.Validate.Data do
     |> Decimal.to_string()
   end
 
-  defp status_icon(:pass), do: "✓ PASS (within 1% tolerance)"
-  defp status_icon(:warning), do: "⚠ WARNING (1-5% difference)"
-  defp status_icon(:fail), do: "✗ FAIL (>5% difference)"
+  defp status_icon(:pass, c) do
+    if Map.get(c, :margin_mode),
+      do: "✓ PASS (within 5% tolerance, margin account)",
+      else: "✓ PASS (within 1% tolerance)"
+  end
+
+  defp status_icon(:warning, c) do
+    if Map.get(c, :margin_mode),
+      do: "⚠ WARNING (5-20% difference, margin account)",
+      else: "⚠ WARNING (1-5% difference)"
+  end
+
+  defp status_icon(:fail, c) do
+    if Map.get(c, :margin_mode),
+      do: "✗ FAIL (>20% difference, margin account)",
+      else: "✗ FAIL (>5% difference)"
+  end
 
   defp serialize_report(report) do
     %{

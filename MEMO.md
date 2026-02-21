@@ -73,11 +73,21 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.33.0 (FX Rates & EUR Conversion)
-**Status:** FX rates populated, all amounts EUR-converted, honest balance check
+**Version:** 0.34.0 (NLV-Based Balance Check)
+**Status:** Margin-aware validator, NLV-based accounting, direct EUR dividend sum
 **Branch:** `main`
 
-**Latest session (2026-02-20 FX Rates):**
+**Latest session (2026-02-20 Balance Check Fix):**
+- **NLV-based balance check** — validator uses net liquidation value for margin accounts instead of gross position_value/cost_basis
+- **Initial capital fix** — NLV at start (€107k) instead of cost_basis (€389k) which included margin-funded positions
+- **Current value fix** — NLV now (€86k) instead of position_value (€310k) which ignored -€264k margin loan
+- **Unrealized P&L EUR-converted** — multiplied by position fx_rate (€2,525 EUR vs old mixed-currency €1,265)
+- **Direct EUR dividend sum** — `SUM(COALESCE(amount_eur, net_amount))` = €83,871 vs pipeline €78,812 (recovered €5k zeroed by cross-currency fx_rate=0)
+- **Margin-aware thresholds** — <5% pass, 5-20% warning, >20% fail (vs 1%/5% for cash accounts)
+- Balance check: 12.13% FAIL → **16.30% WARNING** — honest NLV-based gap, remaining €14k from FX effects on cash balances
+- 705 tests (3 new), 0 failures, 5 pre-existing credo issues
+
+**Previous session (2026-02-20 FX Rates):**
 - **fx_rates table** — 607 rate records, 9 currencies (USD, CAD, NOK, JPY, SEK, HKD, GBP, TRY, CHF), 2021-2026
 - **FxRate schema + lookup** — `get_fx_rate/2` with nearest-preceding-date fallback, `upsert_fx_rate/1`
 - **`mix import.fx_rates`** — imports from 163 Flex CSVs (FXRateToBase) + 8 Activity Statements (M2M Forex + Base Currency Exchange Rate)
@@ -245,14 +255,14 @@ mix ecto.reset              # Drop + create + migrate
 - Enhanced navigation: week/month/year jumps, date picker, chart presets
 - Dividend diagnostics for IEx verification
 - FX rates table (607 records, 9 currencies, 2021-2026) with EUR conversion on dividends + cash flows
-- 702 tests + 21 Playwright E2E tests, 2 pre-existing credo suggestions
+- 705 tests + 21 Playwright E2E tests, 5 pre-existing credo issues
 - Multi-provider market data: Finnhub + Yahoo Finance + EODHD with fallback chains
 - All instrument currencies populated (336/336)
 - Corporate actions, NAV snapshots, borrow fees parsed from Activity Statements
 - Legacy comparison diagnostic (`mix compare.legacy`)
 
 **Next priorities:**
-- Balance check gap (12.13%) — validator only counts 841 IBKR dividends; include all-source dividends or adjust scope
+- Balance check remaining gap (16.3%) — likely FX effects on ~€330k multi-currency cash over 4 years; could track FX P&L on cash
 - Fetch missing company profiles (~293 instruments without sector/industry) via Finnhub/Yahoo
 - Production deployment (Hetzner via docker-compose)
 - EODHD historical data backfill (30+ years available)

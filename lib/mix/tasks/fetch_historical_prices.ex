@@ -15,7 +15,7 @@ defmodule Mix.Tasks.Fetch.HistoricalPrices do
 
   import Ecto.Query
 
-  alias Dividendsomatic.Portfolio.BrokerTransaction
+  alias Dividendsomatic.Portfolio.{Instrument, Trade}
   alias Dividendsomatic.Repo
   alias Dividendsomatic.Stocks
   alias Dividendsomatic.Stocks.SymbolMapper
@@ -210,30 +210,30 @@ defmodule Mix.Tasks.Fetch.HistoricalPrices do
     end
   end
 
-  # Build a map of ISIN → %{first_date, last_date} from broker_transactions
+  # Build a map of ISIN → %{first_date, last_date} from trades
   defp build_date_ranges do
-    BrokerTransaction
-    |> where([t], not is_nil(t.isin) and t.transaction_type in ["buy", "sell"])
-    |> group_by([t], t.isin)
-    |> select([t], {t.isin, %{first_date: min(t.trade_date), last_date: max(t.trade_date)}})
+    Trade
+    |> join(:inner, [t], i in Instrument, on: t.instrument_id == i.id)
+    |> where([t, i], not is_nil(i.isin))
+    |> group_by([t, i], i.isin)
+    |> select([t, i], {i.isin, %{first_date: min(t.trade_date), last_date: max(t.trade_date)}})
     |> Repo.all()
     |> Map.new()
   end
 
-  # Get the global date range across all transactions
+  # Get the global date range across all trades
   defp global_date_range do
     result =
-      BrokerTransaction
-      |> where([t], t.transaction_type in ["buy", "sell"])
+      Trade
       |> select([t], %{min_date: min(t.trade_date), max_date: max(t.trade_date)})
       |> Repo.one()
 
     {result.min_date, result.max_date}
   end
 
-  # Get distinct currencies used in broker transactions
+  # Get distinct currencies used in trades
   defp currencies_in_use do
-    BrokerTransaction
+    Trade
     |> where([t], not is_nil(t.currency))
     |> distinct(true)
     |> select([t], t.currency)

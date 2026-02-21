@@ -389,14 +389,15 @@ defmodule Dividendsomatic.Stocks.SymbolMapper do
     end
   end
 
-  # Get distinct ISINs with security names from broker_transactions
+  # Get distinct ISINs with security names from trades + instruments
   defp distinct_isins do
-    alias Dividendsomatic.Portfolio.BrokerTransaction
+    alias Dividendsomatic.Portfolio.{Instrument, Trade}
 
-    BrokerTransaction
-    |> where([t], not is_nil(t.isin) and t.transaction_type in ["buy", "sell"])
-    |> group_by([t], [t.isin, t.security_name])
-    |> select([t], {t.isin, max(t.security_name)})
+    Trade
+    |> join(:inner, [t], i in Instrument, on: t.instrument_id == i.id)
+    |> where([t, i], not is_nil(i.isin))
+    |> group_by([t, i], [i.isin, i.name])
+    |> select([t, i], {i.isin, max(i.name)})
     |> Repo.all()
   end
 end

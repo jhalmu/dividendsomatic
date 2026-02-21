@@ -9,7 +9,7 @@ defmodule Dividendsomatic.Portfolio.PositionReconstructor do
 
   import Ecto.Query
 
-  alias Dividendsomatic.Portfolio.BrokerTransaction
+  alias Dividendsomatic.Portfolio.{Instrument, Trade}
   alias Dividendsomatic.Repo
 
   @doc """
@@ -42,19 +42,30 @@ defmodule Dividendsomatic.Portfolio.PositionReconstructor do
   Excludes leveraged/structured products.
   """
   def active_isins do
-    BrokerTransaction
-    |> where([t], not is_nil(t.isin) and t.transaction_type in ["buy", "sell"])
-    |> group_by([t], [t.isin, t.security_name])
-    |> select([t], %{isin: t.isin, security_name: max(t.security_name)})
+    Trade
+    |> join(:inner, [t], i in Instrument, on: t.instrument_id == i.id)
+    |> where([t, i], not is_nil(i.isin))
+    |> group_by([t, i], [i.isin, i.name])
+    |> select([t, i], %{isin: i.isin, security_name: max(i.name)})
     |> Repo.all()
     |> Enum.reject(&leveraged_product?/1)
   end
 
-  # Load buy/sell transactions ordered chronologically
+  # Load trades ordered chronologically, with instrument ISIN/name
   defp load_transactions do
-    BrokerTransaction
-    |> where([t], t.transaction_type in ["buy", "sell"] and not is_nil(t.isin))
+    Trade
+    |> join(:inner, [t], i in Instrument, on: t.instrument_id == i.id)
+    |> where([t, i], not is_nil(i.isin))
     |> order_by([t], asc: t.trade_date)
+    |> select([t, i], %{
+      isin: i.isin,
+      trade_date: t.trade_date,
+      quantity: t.quantity,
+      price: t.price,
+      currency: t.currency,
+      security_name: i.name,
+      transaction_type: fragment("CASE WHEN ? > 0 THEN 'buy' ELSE 'sell' END", t.quantity)
+    })
     |> Repo.all()
   end
 

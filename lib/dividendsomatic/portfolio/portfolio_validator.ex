@@ -4,6 +4,11 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
 
   Checks the accounting identity: current_value ≈ net_invested + total_return
 
+  For margin accounts (when margin_equity_snapshots exist), uses NLV
+  (net liquidation value) for both start and end points instead of
+  position_value/cost_basis. This correctly accounts for margin-funded
+  positions and cash balances.
+
   Scoped to IBKR data only. Cash flows and positions are IBKR-sourced,
   so realized P&L is filtered to source="ibkr" to avoid counting
   Nordnet/Lynx 9A trades that lack corresponding deposit records.
@@ -15,6 +20,7 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
 
   alias Dividendsomatic.Portfolio.{
     CashFlow,
+    DividendPayment,
     MarginEquitySnapshot,
     PortfolioSnapshot,
     SoldPosition
@@ -22,8 +28,14 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
 
   alias Dividendsomatic.Repo
 
+  # Thresholds for cash/simple accounts (no margin data)
   @warn_threshold Decimal.new("1")
   @fail_threshold Decimal.new("5")
+
+  # Wider thresholds for margin accounts — FX effects on cash balances,
+  # corporate actions, and timing differences cause legitimate gaps
+  @margin_warn_threshold Decimal.new("5")
+  @margin_fail_threshold Decimal.new("20")
 
   @doc """
   Runs all portfolio validations and returns a report.
@@ -50,33 +62,27 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
       snapshot ->
         zero = Decimal.new("0")
 
-        position_value =
-          Enum.reduce(snapshot.positions, zero, fn pos, acc ->
-            fx = pos.fx_rate || Decimal.new("1")
-            val = pos.value || zero
-            Decimal.add(acc, Decimal.mult(val, fx))
-          end)
+        position_value = compute_position_value(snapshot.positions, zero)
 
-        unrealized_pnl =
-          Enum.reduce(snapshot.positions, zero, fn pos, acc ->
-            pnl = pos.unrealized_pnl || zero
-            Decimal.add(acc, pnl)
-          end)
+        # EUR-converted unrealized P&L (multiply by fx_rate per position)
+        unrealized_pnl = compute_unrealized_pnl(snapshot.positions, zero)
 
         # Cash balance from latest margin equity snapshot (informational)
         cash_balance = latest_cash_balance()
 
-        # Use position value as current_value for the balance check.
-        # The cash_balance is shown separately for transparency but not added
-        # to the equation — positions already reflect margin-funded holdings,
-        # and the negative cash (margin loan) is a liability, not a loss.
-        current_value = position_value
+        # Initial capital + date boundary from first IBKR Flex snapshot.
+        # For margin accounts, uses NLV from nearest margin equity snapshot
+        # instead of cost_basis (which includes margin-funded positions).
+        {initial_capital, ibkr_start_date, margin_mode} =
+          initial_capital_and_date(zero)
 
-        # Initial capital + date boundary from first IBKR Flex snapshot
-        {initial_capital, ibkr_start_date} =
-          case first_ibkr_snapshot() do
-            {cost, date} -> {cost, date}
-            nil -> {zero, nil}
+        # For margin accounts, use NLV as current_value (accounts for cash/margin).
+        # For simple accounts, use position_value (no margin data available).
+        current_value =
+          if margin_mode do
+            latest_nlv() || position_value
+          else
+            position_value
           end
 
         # Cash flows AFTER the first IBKR snapshot (avoid double-counting)
@@ -94,8 +100,10 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
         fee_costs = Map.get(costs_by_type, "fee", zero)
         total_costs = Decimal.add(interest_costs, fee_costs)
 
-        # Dividends
-        total_dividends = portfolio_total_dividends()
+        # Dividends — direct EUR sum from dividend_payments table.
+        # More accurate than the compute_dividend_income pipeline which
+        # zeroes out cross-currency dividends without position fx_rate.
+        total_dividends = total_dividends_eur()
 
         # IBKR-only realized P&L
         realized_pnl = ibkr_realized_pnl()
@@ -120,7 +128,7 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
             zero
           end
 
-        status = determine_status(difference_pct)
+        status = determine_status(difference_pct, margin_mode)
 
         %{
           name: :balance_check,
@@ -129,7 +137,7 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
           actual: current_value,
           difference: difference,
           difference_pct: difference_pct,
-          tolerance_pct: @warn_threshold,
+          tolerance_pct: if(margin_mode, do: @margin_warn_threshold, else: @warn_threshold),
           components: %{
             initial_capital: initial_capital,
             net_invested: net_invested,
@@ -144,10 +152,27 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
             total_return: total_return,
             position_value: position_value,
             cash_balance: cash_balance,
-            current_value: current_value
+            current_value: current_value,
+            margin_mode: margin_mode
           }
         }
     end
+  end
+
+  defp compute_position_value(positions, zero) do
+    Enum.reduce(positions, zero, fn pos, acc ->
+      fx = pos.fx_rate || Decimal.new("1")
+      val = pos.value || zero
+      Decimal.add(acc, Decimal.mult(val, fx))
+    end)
+  end
+
+  defp compute_unrealized_pnl(positions, zero) do
+    Enum.reduce(positions, zero, fn pos, acc ->
+      pnl = pos.unrealized_pnl || zero
+      fx = pos.fx_rate || Decimal.new("1")
+      Decimal.add(acc, Decimal.mult(pnl, fx))
+    end)
   end
 
   defp latest_cash_balance do
@@ -163,18 +188,16 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
     end
   end
 
-  defp portfolio_total_dividends do
-    zero = Decimal.new("0")
-
-    Portfolio.dividend_years()
-    |> Enum.reduce(zero, fn year, acc ->
-      Decimal.add(acc, Portfolio.total_dividends_for_year(year))
-    end)
+  # Direct EUR sum from dividend_payments — more accurate than the
+  # compute_dividend_income pipeline which zeroes out cross-currency
+  # dividends without matching position fx_rate.
+  defp total_dividends_eur do
+    DividendPayment
+    |> select([d], sum(fragment("COALESCE(?, ?)", d.amount_eur, d.net_amount)))
+    |> Repo.one() || Decimal.new("0")
   end
 
   # Returns {cost_basis, date} from the first IBKR Flex snapshot.
-  # Cost basis represents positions transferred in-kind + cash deposits
-  # up to that date. Cash flows after this date are counted separately.
   defp first_ibkr_snapshot do
     PortfolioSnapshot
     |> where([s], s.source == "ibkr_flex")
@@ -182,6 +205,39 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
     |> limit(1)
     |> select([s], {s.total_cost, s.date})
     |> Repo.one()
+  end
+
+  # Determines initial capital and whether to use margin (NLV) mode.
+  # For margin accounts, NLV is the correct starting equity (not cost_basis,
+  # which includes margin-funded positions).
+  defp initial_capital_and_date(zero) do
+    case first_ibkr_snapshot() do
+      {cost_basis, ibkr_date} ->
+        case margin_equity_near_date(ibkr_date) do
+          %{net_liquidation_value: nlv} when not is_nil(nlv) ->
+            {nlv, ibkr_date, true}
+
+          _ ->
+            {cost_basis, ibkr_date, false}
+        end
+
+      nil ->
+        {zero, nil, false}
+    end
+  end
+
+  defp margin_equity_near_date(date) do
+    Portfolio.get_margin_equity_nearest_date(date)
+  end
+
+  defp latest_nlv do
+    Repo.one(
+      from(m in MarginEquitySnapshot,
+        order_by: [desc: m.date],
+        limit: 1,
+        select: m.net_liquidation_value
+      )
+    )
   end
 
   # Returns {deposits, withdrawals} for cash flows after the given date.
@@ -220,10 +276,15 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
     |> Repo.one() || Decimal.new("0")
   end
 
-  defp determine_status(pct) do
+  defp determine_status(pct, margin_mode) do
+    {warn, fail} =
+      if margin_mode,
+        do: {@margin_warn_threshold, @margin_fail_threshold},
+        else: {@warn_threshold, @fail_threshold}
+
     cond do
-      Decimal.compare(pct, @warn_threshold) == :lt -> :pass
-      Decimal.compare(pct, @fail_threshold) == :lt -> :warning
+      Decimal.compare(pct, warn) == :lt -> :pass
+      Decimal.compare(pct, fail) == :lt -> :warning
       true -> :fail
     end
   end

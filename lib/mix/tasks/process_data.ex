@@ -19,9 +19,9 @@ defmodule Mix.Tasks.Process.Data do
 
   require Logger
 
-  alias Dividendsomatic.Portfolio.BrokerTransaction
-  alias Dividendsomatic.Portfolio.Dividend
+  alias Dividendsomatic.Portfolio.DividendPayment
   alias Dividendsomatic.Portfolio.PortfolioSnapshot
+  alias Dividendsomatic.Portfolio.Trade
   alias Dividendsomatic.Portfolio.Processors.DividendProcessor
   alias Dividendsomatic.Repo
 
@@ -51,14 +51,14 @@ defmodule Mix.Tasks.Process.Data do
     scan_dir(flex_snap_dir, "Archive flex snapshot CSVs", ".csv")
 
     # Count existing data
-    dividend_count = Repo.aggregate(Dividend, :count)
+    dividend_count = Repo.aggregate(DividendPayment, :count)
     snapshot_count = Repo.aggregate(PortfolioSnapshot, :count)
-    txn_count = Repo.aggregate(BrokerTransaction, :count)
+    trade_count = Repo.aggregate(Trade, :count)
 
     Mix.shell().info("\n=== Current Database ===")
     Mix.shell().info("  Dividends:     #{dividend_count}")
     Mix.shell().info("  Snapshots:     #{snapshot_count}")
-    Mix.shell().info("  Transactions:  #{txn_count}")
+    Mix.shell().info("  Trades:        #{trade_count}")
   end
 
   defp scan_dir(dir, label, ext) do
@@ -89,8 +89,8 @@ defmodule Mix.Tasks.Process.Data do
     Mix.Task.rerun("import.batch", ["csv_data/archive/flex"])
 
     Mix.shell().info("\n=== Pipeline Complete ===")
-    dividend_count = Repo.aggregate(Dividend, :count)
-    Mix.shell().info("Total dividends in database: #{dividend_count}")
+    dividend_count = Repo.aggregate(DividendPayment, :count)
+    Mix.shell().info("Total dividend payments in database: #{dividend_count}")
   end
 
   defp archive do

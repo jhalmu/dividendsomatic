@@ -435,24 +435,30 @@
                           N/A
                         </span>
                       <% else %>
-                        {format_decimal(pos.value)}
+                        {format_decimal(Decimal.mult(pos.value, pos.fx_rate || Decimal.new("1")))}
                       <% end %>
                     </td>
                     <td
                       class="terminal-number"
                       style="color: var(--terminal-dim); text-align: right;"
                     >
-                      {format_decimal(pos.cost_basis)}
+                      {format_decimal(
+                        pos.cost_basis &&
+                          Decimal.mult(pos.cost_basis, pos.fx_rate || Decimal.new("1"))
+                      )}
                     </td>
+                    <% pnl_eur =
+                      pos.unrealized_pnl &&
+                        Decimal.mult(pos.unrealized_pnl, pos.fx_rate || Decimal.new("1")) %>
                     <td class="terminal-number">
                       <span
-                        class={pnl_badge_class(pos.unrealized_pnl)}
-                        aria-label={"#{if pnl_positive?(pos.unrealized_pnl), do: "Gain", else: "Loss"}: #{format_decimal(pos.unrealized_pnl)}"}
+                        class={pnl_badge_class(pnl_eur)}
+                        aria-label={"#{if pnl_positive?(pnl_eur), do: "Gain", else: "Loss"}: #{format_decimal(pnl_eur)}"}
                       >
-                        <%= if pnl_positive?(pos.unrealized_pnl) do %>
+                        <%= if pnl_positive?(pnl_eur) do %>
                           +
                         <% end %>
-                        {format_decimal(pos.unrealized_pnl)}
+                        {format_decimal(pnl_eur)}
                       </span>
                     </td>
                     <td class="terminal-number">

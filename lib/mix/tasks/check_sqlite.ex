@@ -76,9 +76,9 @@ defmodule Mix.Tasks.Check.Sqlite do
 
         # Compare with PostgreSQL
         pg_count =
-          Dividendsomatic.Repo.aggregate(Dividendsomatic.Portfolio.Dividend, :count)
+          Dividendsomatic.Repo.aggregate(Dividendsomatic.Portfolio.DividendPayment, :count)
 
-        Mix.shell().info("  PostgreSQL dividends: #{pg_count}")
+        Mix.shell().info("  PostgreSQL dividend_payments: #{pg_count}")
 
       _ ->
         :ok

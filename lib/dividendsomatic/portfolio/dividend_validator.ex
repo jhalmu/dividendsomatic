@@ -4,11 +4,14 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
 
   Checks currency codes, ISIN-currency consistency, amount reasonableness,
   and cross-source duplicate detection.
+
+  Operates on dividend_payments (joined with instruments for ISIN/symbol),
+  adapted into a flat validation shape.
   """
 
   import Ecto.Query
 
-  alias Dividendsomatic.Portfolio.Dividend
+  alias Dividendsomatic.Portfolio.{DividendPayment, Instrument}
   alias Dividendsomatic.Repo
 
   @valid_currencies ~w(USD EUR CAD GBP GBp JPY HKD NOK SEK DKK CHF AUD NZD SGD TWD)
@@ -35,7 +38,7 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
   Runs all validations and returns a report.
   """
   def validate do
-    dividends = Dividend |> order_by([d], asc: d.ex_date) |> Repo.all()
+    dividends = load_dividends()
 
     issues = [
       invalid_currencies(dividends),
@@ -55,6 +58,42 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
       issues: all_issues,
       by_severity: group_by_severity(all_issues)
     }
+  end
+
+  defp load_dividends do
+    DividendPayment
+    |> join(:inner, [dp], i in Instrument, on: dp.instrument_id == i.id)
+    |> order_by([dp], asc: dp.pay_date)
+    |> select([dp, i], %{
+      id: dp.id,
+      symbol:
+        fragment(
+          "(SELECT ia.symbol FROM instrument_aliases ia WHERE ia.instrument_id = ? LIMIT 1)",
+          i.id
+        ),
+      isin: i.isin,
+      ex_date: dp.pay_date,
+      pay_date: dp.pay_date,
+      amount: dp.per_share,
+      net_amount: dp.net_amount,
+      currency: dp.currency,
+      amount_type:
+        fragment(
+          "CASE WHEN ? IS NOT NULL THEN 'per_share' ELSE 'total_net' END",
+          dp.per_share
+        ),
+      fx_rate: dp.fx_rate,
+      gross_rate: dp.per_share,
+      quantity_at_record: dp.quantity
+    })
+    |> Repo.all()
+    |> Enum.map(fn d ->
+      # For total_net records where per_share is nil, use net_amount as the amount
+      amount = d.amount || d.net_amount
+      # Resolve symbol from instrument name if alias lookup returned nil
+      symbol = d.symbol || "unknown"
+      %{d | amount: amount, symbol: symbol}
+    end)
   end
 
   @doc """
@@ -79,7 +118,9 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
   """
   def isin_currency_mismatches(dividends) do
     dividends
-    |> Enum.filter(&(&1.isin && byte_size(&1.isin) >= 2))
+    |> Enum.filter(
+      &(&1.isin && byte_size(&1.isin) >= 2 && not String.starts_with?(&1.isin, "LEGACY:"))
+    )
     |> Enum.reject(fn d ->
       country = String.slice(d.isin, 0, 2)
       expected = Map.get(@isin_currency_map, country)
@@ -246,19 +287,20 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
   Detects duplicate ISIN+date records across different sources.
   """
   def cross_source_duplicates do
-    Dividend
-    |> where([d], not is_nil(d.isin))
-    |> group_by([d], [d.isin, d.ex_date])
-    |> having([d], count(d.id) > 1)
-    |> select([d], %{isin: d.isin, ex_date: d.ex_date, count: count(d.id)})
+    DividendPayment
+    |> join(:inner, [dp], i in Instrument, on: dp.instrument_id == i.id)
+    |> where([dp, i], not is_nil(i.isin) and not like(i.isin, "LEGACY:%"))
+    |> group_by([dp, i], [i.isin, dp.pay_date])
+    |> having([dp], count(dp.id) > 1)
+    |> select([dp, i], %{isin: i.isin, pay_date: dp.pay_date, count: count(dp.id)})
     |> Repo.all()
     |> Enum.map(fn dup ->
       %{
         severity: :warning,
         type: :duplicate,
         isin: dup.isin,
-        ex_date: dup.ex_date,
-        detail: "#{dup.count} records for ISIN #{dup.isin} on #{dup.ex_date}"
+        ex_date: dup.pay_date,
+        detail: "#{dup.count} records for ISIN #{dup.isin} on #{dup.pay_date}"
       }
     end)
   end
@@ -268,10 +310,7 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
   with 3+ flags. Uses 95th percentile * 1.2 as the suggested threshold.
   """
   def suggest_threshold_adjustments do
-    dividends =
-      Dividend
-      |> where([d], d.amount_type == "per_share")
-      |> Repo.all()
+    dividends = load_dividends() |> Enum.filter(&(&1.amount_type == "per_share"))
 
     flagged = suspicious_amounts(dividends)
 

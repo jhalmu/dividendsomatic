@@ -3,6 +3,9 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidatorTest do
 
   alias Dividendsomatic.Portfolio.{
     CashFlow,
+    DividendPayment,
+    Instrument,
+    MarginEquitySnapshot,
     PortfolioSnapshot,
     PortfolioValidator,
     Position,
@@ -32,6 +35,8 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidatorTest do
       assert check.status == :pass
       assert check.components.net_invested == Decimal.new("100000")
       assert check.components.current_value == Decimal.new("110000")
+      # No margin equity data → margin_mode is false
+      assert check.components.margin_mode == false
     end
 
     test "should warn when difference is between 1% and 5%" do
@@ -87,19 +92,64 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidatorTest do
       assert Map.has_key?(check.components, :position_value)
       assert Map.has_key?(check.components, :cash_balance)
       assert Map.has_key?(check.components, :current_value)
+      assert Map.has_key?(check.components, :margin_mode)
     end
 
-    test "should expose cash balance from margin equity snapshots" do
-      alias Dividendsomatic.Portfolio.MarginEquitySnapshot
+    test "should use NLV for current_value in margin mode" do
+      # First IBKR Flex snapshot
+      {:ok, _first_snapshot} =
+        %PortfolioSnapshot{}
+        |> PortfolioSnapshot.changeset(%{
+          date: ~D[2022-01-04],
+          total_value: Decimal.new("200000"),
+          total_cost: Decimal.new("190000"),
+          source: "ibkr_flex",
+          data_quality: "actual"
+        })
+        |> Repo.insert()
 
-      setup_balanced_portfolio(
-        deposits: "100000",
-        current_value: "105000",
-        unrealized_pnl: "10000",
-        cost_basis: "95000"
-      )
+      # Latest snapshot with positions
+      {:ok, latest_snapshot} =
+        %PortfolioSnapshot{}
+        |> PortfolioSnapshot.changeset(%{
+          date: ~D[2024-06-15],
+          total_value: Decimal.new("105000"),
+          total_cost: Decimal.new("95000"),
+          source: "ibkr_flex",
+          data_quality: "actual"
+        })
+        |> Repo.insert()
 
-      # Add a margin equity snapshot with cash balance
+      %Position{}
+      |> Position.changeset(%{
+        portfolio_snapshot_id: latest_snapshot.id,
+        date: ~D[2024-06-15],
+        symbol: "TEST",
+        name: "Test Stock",
+        isin: "US0000000000",
+        quantity: Decimal.new("1000"),
+        price: Decimal.new("105"),
+        value: Decimal.new("105000"),
+        cost_basis: Decimal.new("95000"),
+        cost_price: Decimal.new("95"),
+        currency: "EUR",
+        fx_rate: Decimal.new("1"),
+        unrealized_pnl: Decimal.new("10000")
+      })
+      |> Repo.insert!()
+
+      # Margin equity snapshot near start (activates margin mode)
+      %MarginEquitySnapshot{}
+      |> MarginEquitySnapshot.changeset(%{
+        date: ~D[2021-12-31],
+        cash_balance: Decimal.new("-100000"),
+        net_liquidation_value: Decimal.new("90000"),
+        own_equity: Decimal.new("90000"),
+        source: "test"
+      })
+      |> Repo.insert!()
+
+      # Latest margin equity snapshot
       %MarginEquitySnapshot{}
       |> MarginEquitySnapshot.changeset(%{
         date: ~D[2024-06-15],
@@ -113,11 +163,89 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidatorTest do
       result = PortfolioValidator.validate()
       check = hd(result.checks)
 
-      # Cash balance is exposed for display but not added to current_value
+      # Margin mode active — uses NLV
+      assert check.components.margin_mode == true
+      # initial_capital = NLV near start (90000), not cost_basis (190000)
+      assert Decimal.equal?(check.components.initial_capital, Decimal.new("90000"))
+      # current_value = latest NLV (110000), not position_value (105000)
+      assert Decimal.equal?(check.components.current_value, Decimal.new("110000"))
+      # position_value still exposed for transparency
       assert Decimal.equal?(check.components.position_value, Decimal.new("105000"))
       assert Decimal.equal?(check.components.cash_balance, Decimal.new("5000"))
-      # current_value = position_value only (cash is informational)
-      assert Decimal.equal?(check.components.current_value, Decimal.new("105000"))
+    end
+
+    test "should use wider thresholds in margin mode" do
+      # First IBKR snapshot
+      {:ok, _} =
+        %PortfolioSnapshot{}
+        |> PortfolioSnapshot.changeset(%{
+          date: ~D[2022-01-04],
+          total_value: Decimal.new("200000"),
+          total_cost: Decimal.new("190000"),
+          source: "ibkr_flex",
+          data_quality: "actual"
+        })
+        |> Repo.insert()
+
+      # Latest snapshot
+      {:ok, latest_snapshot} =
+        %PortfolioSnapshot{}
+        |> PortfolioSnapshot.changeset(%{
+          date: ~D[2024-06-15],
+          total_value: Decimal.new("100000"),
+          total_cost: Decimal.new("90000"),
+          source: "ibkr_flex",
+          data_quality: "actual"
+        })
+        |> Repo.insert()
+
+      %Position{}
+      |> Position.changeset(%{
+        portfolio_snapshot_id: latest_snapshot.id,
+        date: ~D[2024-06-15],
+        symbol: "TEST",
+        name: "Test",
+        isin: "US0000000000",
+        quantity: Decimal.new("1000"),
+        price: Decimal.new("100"),
+        value: Decimal.new("100000"),
+        cost_basis: Decimal.new("90000"),
+        cost_price: Decimal.new("90"),
+        currency: "EUR",
+        fx_rate: Decimal.new("1"),
+        unrealized_pnl: Decimal.new("10000")
+      })
+      |> Repo.insert!()
+
+      # Margin equity (activates margin mode)
+      %MarginEquitySnapshot{}
+      |> MarginEquitySnapshot.changeset(%{
+        date: ~D[2021-12-31],
+        net_liquidation_value: Decimal.new("100000"),
+        cash_balance: Decimal.new("-90000"),
+        own_equity: Decimal.new("100000"),
+        source: "test"
+      })
+      |> Repo.insert!()
+
+      # Latest NLV has a 10% gap from expected — warning in margin mode, fail in normal
+      %MarginEquitySnapshot{}
+      |> MarginEquitySnapshot.changeset(%{
+        date: ~D[2024-06-15],
+        net_liquidation_value: Decimal.new("122000"),
+        cash_balance: Decimal.new("5000"),
+        own_equity: Decimal.new("122000"),
+        source: "test"
+      })
+      |> Repo.insert!()
+
+      result = PortfolioValidator.validate()
+      check = hd(result.checks)
+
+      # 10% gap = warning in margin mode (threshold 5-20%)
+      assert check.components.margin_mode == true
+      assert check.status == :warning
+      assert Decimal.equal?(check.tolerance_pct, Decimal.new("5"))
     end
 
     test "should split costs into interest and fees" do
@@ -313,16 +441,134 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidatorTest do
       result = PortfolioValidator.validate()
       check = hd(result.checks)
 
-      # initial_capital = first ibkr_flex snapshot cost basis = 190000
-      # deposits after 2022-01-04 = 50000 (the 99999 is before, excluded)
-      # net_invested = 190000 + 50000 = 240000
-      # total_return = unrealized_pnl(10000) = 10000
-      # expected = 240000 + 10000 = 250000
-      # actual = 250000
+      # No margin equity data → uses cost_basis from first ibkr_flex snapshot
+      assert check.components.margin_mode == false
       assert check.status == :pass
       assert Decimal.equal?(check.components.initial_capital, Decimal.new("190000"))
       assert Decimal.equal?(check.components.total_deposits, Decimal.new("50000"))
       assert Decimal.equal?(check.components.net_invested, Decimal.new("240000"))
+    end
+
+    test "should EUR-convert unrealized P&L using position fx_rate" do
+      {:ok, snapshot} =
+        %PortfolioSnapshot{}
+        |> PortfolioSnapshot.changeset(%{
+          date: ~D[2024-06-15],
+          total_value: Decimal.new("100000"),
+          source: "test",
+          data_quality: "actual"
+        })
+        |> Repo.insert()
+
+      # USD position: unrealized = 1000 USD, fx_rate = 0.92
+      %Position{}
+      |> Position.changeset(%{
+        portfolio_snapshot_id: snapshot.id,
+        date: ~D[2024-06-15],
+        symbol: "USD-STOCK",
+        name: "USD Stock",
+        isin: "US1111111111",
+        quantity: Decimal.new("100"),
+        price: Decimal.new("500"),
+        value: Decimal.new("50000"),
+        cost_basis: Decimal.new("49000"),
+        cost_price: Decimal.new("490"),
+        currency: "USD",
+        fx_rate: Decimal.new("0.92"),
+        unrealized_pnl: Decimal.new("1000")
+      })
+      |> Repo.insert!()
+
+      # EUR position: unrealized = 2000 EUR, fx_rate = 1
+      %Position{}
+      |> Position.changeset(%{
+        portfolio_snapshot_id: snapshot.id,
+        date: ~D[2024-06-15],
+        symbol: "EUR-STOCK",
+        name: "EUR Stock",
+        isin: "FI2222222222",
+        quantity: Decimal.new("100"),
+        price: Decimal.new("500"),
+        value: Decimal.new("50000"),
+        cost_basis: Decimal.new("48000"),
+        cost_price: Decimal.new("480"),
+        currency: "EUR",
+        fx_rate: Decimal.new("1"),
+        unrealized_pnl: Decimal.new("2000")
+      })
+      |> Repo.insert!()
+
+      # Need a deposit to create net_invested
+      %CashFlow{}
+      |> CashFlow.changeset(%{
+        external_id: "test-deposit-fx",
+        flow_type: "deposit",
+        date: ~D[2024-01-01],
+        amount: Decimal.new("90000"),
+        currency: "EUR"
+      })
+      |> Repo.insert!()
+
+      result = PortfolioValidator.validate()
+      check = hd(result.checks)
+
+      # unrealized = 1000 * 0.92 + 2000 * 1 = 920 + 2000 = 2920 EUR
+      assert Decimal.equal?(check.components.unrealized_pnl, Decimal.new("2920.00"))
+    end
+
+    test "should include dividend_payments in total_dividends via direct EUR sum" do
+      setup_balanced_portfolio(
+        deposits: "100000",
+        current_value: "115000",
+        unrealized_pnl: "10000",
+        cost_basis: "100000"
+      )
+
+      # Create instrument for dividend
+      {:ok, instrument} =
+        %Instrument{}
+        |> Instrument.changeset(%{
+          name: "Test Corp",
+          isin: "US9999999999",
+          currency: "EUR"
+        })
+        |> Repo.insert()
+
+      # EUR dividend with amount_eur
+      %DividendPayment{}
+      |> DividendPayment.changeset(%{
+        external_id: "test-div-eur",
+        instrument_id: instrument.id,
+        pay_date: ~D[2024-06-01],
+        currency: "EUR",
+        gross_amount: Decimal.new("3500"),
+        net_amount: Decimal.new("3000"),
+        amount_eur: Decimal.new("3000"),
+        fx_rate: Decimal.new("1"),
+        source: "test"
+      })
+      |> Repo.insert!()
+
+      # USD dividend with EUR conversion
+      %DividendPayment{}
+      |> DividendPayment.changeset(%{
+        external_id: "test-div-usd",
+        instrument_id: instrument.id,
+        pay_date: ~D[2024-07-01],
+        currency: "USD",
+        gross_amount: Decimal.new("1200"),
+        net_amount: Decimal.new("1000"),
+        amount_eur: Decimal.new("920"),
+        fx_rate: Decimal.new("0.92"),
+        source: "test"
+      })
+      |> Repo.insert!()
+
+      result = PortfolioValidator.validate()
+      check = hd(result.checks)
+
+      # Direct EUR sum: 3000 + 920 = 3920
+      assert Decimal.equal?(check.components.total_dividends, Decimal.new("3920"))
     end
   end
 
