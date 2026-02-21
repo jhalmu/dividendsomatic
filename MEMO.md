@@ -65,11 +65,22 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.36.0 (Legacy Tables Dropped)
-**Status:** All 6 legacy tables dropped, data migrated to clean schemas, integrity checks system built
+**Version:** 0.37.0 (ISIN Backfill & Symbol Unification)
+**Status:** Canonical symbol on all instruments, sold_position ISINs backfilled 20%→77%, all currencies filled
 **Branch:** `main`
 
-**Latest session (2026-02-21 Database Cleanup & Integrity):**
+**Latest session (2026-02-21 ISIN Backfill & Symbol Unification):**
+- **Canonical `symbol` on instruments**: 349/349 (100%) — from positions (178) + aliases (171)
+- **Sold position ISIN backfill**: 1,252→4,817/6,291 (77%) — symbol→ISIN lookup with currency disambiguation
+- **Currency backfill complete**: 349/349 (100%) — 13 remaining filled from trades+dividends
+- **Sector/industry enrichment**: 39→187/349 (54%) — API fetch via Finnhub/Yahoo/EODHD
+- **Display code updated**: `payment_symbol/1` prefers `instrument.symbol` over aliases
+- **Integrity checks extended**: `null_instrument_symbol` (info), `null_sold_isin` escalated to warning
+- **New task**: `mix backfill.sold_position_isins` (with `--dry-run`)
+- **Extended task**: `mix backfill.instruments --symbol`
+- 674 tests, 0 failures, no new credo issues
+
+**Previous session (2026-02-21 Database Cleanup & Integrity):**
 - **Dropped all 6 legacy tables**: legacy_holdings, legacy_portfolio_snapshots, legacy_symbol_mappings, legacy_dividends, legacy_broker_transactions, legacy_costs
 - **4 migration tasks created**: `migrate.symbol_mappings` (34 resolved), `migrate.legacy_dividends` (15 new broker + 5,835 yfinance archived), `migrate.legacy_transactions` (3,818 trades, 25 dividends, 257 cash flows, 159 interest, 98 corporate actions), `migrate.legacy_costs` (158 interest)
 - **Deleted 13 obsolete modules**: 6 schema files + 7 import tasks/processors referencing legacy schemas
@@ -266,18 +277,19 @@ mix ecto.reset              # Drop + create + migrate
 - Enhanced navigation: week/month/year jumps, date picker, chart presets
 - Dividend diagnostics for IEx verification
 - FX rates table (607 records, 9 currencies, 2021-2026) with EUR conversion on dividends + cash flows
-- 666 tests + 21 Playwright E2E tests, 0 credo warnings
+- 674 tests + 21 Playwright E2E tests, 0 credo warnings
 - Multi-provider market data: Finnhub + Yahoo Finance + EODHD with fallback chains
-- All instrument currencies populated (336/336)
+- All instrument currencies populated (349/349), all symbols populated (349/349)
+- Sold position ISIN coverage: 4,817/6,291 (77%)
 - Corporate actions, NAV snapshots, borrow fees parsed from Activity Statements
 - Legacy instrument merge (`mix merge.legacy_instruments`)
 - **All 6 legacy tables dropped** — data migrated, schemas deleted, imports rewritten
 - SchemaIntegrity system (4 checks) + Oban daily worker
-- 666 tests + 21 Playwright E2E tests, 0 credo warnings
+- 674 tests + 21 Playwright E2E tests, 0 credo warnings
 
 **Next priorities:**
 - Balance check remaining gap (6.77%) — likely FX effects on ~€330k multi-currency cash over 4 years; could track FX P&L on cash
-- Fetch missing company profiles (~293 instruments without sector/industry) via Finnhub/Yahoo
+- Remaining 162 instruments without sector (delisted/unknown symbols — may need manual mapping)
 - Production deployment (Hetzner via docker-compose)
 - EODHD historical data backfill (30+ years available)
 
@@ -302,7 +314,7 @@ All issues (#1-#22) closed.
 - [x] IBKR dividend recovery: PIL fallback, Foreign Tax filter, 73 new dividends
 - [x] Test coverage: 666 tests + 21 Playwright E2E
 - [x] Data consolidation: all instrument currencies, corporate actions, NAV snapshots, borrow fees
-- [ ] ~293 instruments missing company profiles (sector/industry/country)
+- [ ] ~162 instruments missing company profiles (delisted/unknown symbols)
 - [x] Historical prices: 53/63 stocks + 7 forex pairs fetched
 - [x] Symbol resolution: 64 resolved, 44 unmappable, 0 pending
 

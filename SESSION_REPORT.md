@@ -1,92 +1,80 @@
-# Session Report — 2026-02-21 (Database Cleanup & Integrity System)
+# Session Report — 2026-02-21 (ISIN Backfill & Instrument Symbol Unification)
 
 ## Overview
 
-Complete database cleanup: dropped all 6 legacy tables after migrating their data to clean normalized schemas. Built persistent integrity check system with Oban daily worker. Archived CSV/PDF data files.
+Drove toward ISIN-as-primary-identifier everywhere: added canonical `symbol` to instruments, backfilled sold_position ISINs via symbol→ISIN lookup, backfilled remaining currency/sector gaps, updated display code and integrity checks.
 
-## Legacy Table Migration & Drop
+## Changes
 
-### Tables Dropped
+### Step 1: Migration — `symbol` column on instruments
+- Added nullable indexed `symbol` column to `instruments` table
+- Updated `Instrument` schema with `:symbol` in `@optional_fields`
 
-| Table | Rows | Action |
-|-------|------|--------|
-| `legacy_holdings` | 10,088 | All in `positions` — **dropped** |
-| `legacy_portfolio_snapshots` | 781 | All in `portfolio_snapshots` — **dropped** |
-| `legacy_symbol_mappings` | 115 | 34 resolved → `instrument_aliases`, 38 no instrument, 43 unmappable — **dropped** |
-| `legacy_dividends` | 6,167 | 15 new broker → `dividend_payments`, 285 dups skipped, 5,835 yfinance → JSON archive — **dropped** |
-| `legacy_broker_transactions` | 7,407 | 3,818 trades, 25 dividends, 257 cash flows, 159 interest, 98 corporate actions — **dropped** |
-| `legacy_costs` | 4,598 | 158 interest → `cash_flows`, rest already on trades/dividends — **dropped** |
+### Step 2: Backfill instruments.symbol (349/349)
+- Extended `mix backfill.instruments` with `--symbol` flag
+- Cascading resolution: positions (178) → aliases (171) → name (0)
+- **Result: 349/349 instruments have canonical symbol**
 
-### Migration Tasks Created
+### Step 3: Backfill sold_positions.isin (1,252 → 4,817)
+- New `mix backfill.sold_position_isins` task
+- Builds symbol→ISIN lookup from instruments + aliases + positions
+- Disambiguates multi-ISIN symbols by currency match
+- Recalculates `identifier_key` (ISIN takes priority)
+- **Result: 4,817/6,291 (76.6%) have ISIN, up from 1,252 (19.9%)**
+- 1,474 unresolved: mostly Nordnet-only symbols not in IBKR data
 
-| Task | Purpose |
-|------|---------|
-| `mix migrate.symbol_mappings` | Resolved mappings → instrument_aliases |
-| `mix migrate.legacy_dividends` | Broker dividends → dividend_payments, yfinance → JSON |
-| `mix migrate.legacy_transactions` | buy/sell → trades, dividends → dividend_payments, etc. |
-| `mix migrate.legacy_costs` | Interest/fees → cash_flows |
+### Step 4: Backfill instruments.currency (13 → 0)
+- Ran existing cascade: 12 from trades, 1 from dividends
+- **Result: 349/349 instruments have currency**
 
-### Modules Deleted (13)
+### Step 5: Backfill instruments.sector/industry (39 → 187)
+- Extended `--company` flag to fetch new profiles via Finnhub/Yahoo/EODHD API
+- 1 from cached profiles, 155 from API, 154 API errors (delisted/unknown)
+- **Result: 187/349 instruments have sector** (162 remain — delisted symbols)
 
-**Schemas (6):** `holding.ex`, `legacy_portfolio_snapshot.ex`, `dividend.ex`, `broker_transaction.ex`, `cost.ex`, `symbol_mapping.ex`
+### Step 6: Update display code
+- `payment_symbol/1` now prefers `instrument.symbol` → aliases → name
 
-**Import tasks/processors (7):** `import_ibkr.ex`, `import_nordnet.ex`, `import_flex_dividends.ex`, `import_yahoo_dividends.ex`, `import_lynx_data.ex`, `process_data.ex`, `backfill_isin.ex`, `merge_legacy_instruments.ex`, `migrate_to_unified.ex`, `dividend_processor.ex`, `cost_processor.ex`, `sold_position_processor.ex`
+### Step 7: Update integrity checks
+- Added `null_instrument_symbol` check (info severity)
+- Escalated `null_sold_isin` from info → warning severity
 
-### Modules Rewritten
+### Step 8: Tests (+8 new)
+- `instrument_test.exs` — symbol field acceptance, persistence (3 tests)
+- `sold_position_test.exs` — identifier_key computation, ISIN backfill matching (4 tests)
+- `schema_integrity_test.exs` — null_instrument_symbol detection (1 test)
 
-| Module | Change |
-|--------|--------|
-| `integrity_checker.ex` | `BrokerTransaction` + `Dividend` → `Trade` + `DividendPayment` + `Instrument` |
-| `data_gap_analyzer.ex` | `BrokerTransaction` + `Dividend` → `Trade` + `DividendPayment` |
-| `symbol_mapper.ex` | `SymbolMapping` → `InstrumentAlias` |
-| `stocks.ex` | `SymbolMapping` → `Instrument` + `InstrumentAlias` |
+## Verification Summary
 
-## Schema Integrity System (NEW)
+### Test Suite
+- **674 tests, 0 failures** (25 excluded: playwright/external/auth)
+- Credo: 24 refactoring + 6 readability — all pre-existing, none from this session
 
-### `SchemaIntegrity` module — 4 checks
+### Data Validation
+- Dividend validation: 2,178 checked, 696 issues (373 info, 323 warning)
+- Balance check: 6.77% WARNING (margin account, NLV-based)
+- Schema integrity: 4 checks, 4 issues (11 orphan instruments, 1,474 sold ISINs, 767 missing fx_rate, 787 missing amount_eur)
 
-1. **Orphan check** — instruments with no trades/dividend_payments, positions with no snapshot, aliases with no instrument
-2. **Null field check** — dividend_payments missing amount_eur/fx_rate/per_share, instruments missing currency, sold_positions missing ISIN
-3. **FK integrity check** — trades/dividends/corporate_actions pointing to non-existent instruments
-4. **Duplicate check** — duplicate external_ids in trades/dividends/cash_flows, duplicate snapshot dates
+### Coverage Summary
 
-### Oban IntegrityCheckWorker
+| Metric | Before | After |
+|--------|--------|-------|
+| instruments.symbol | 0/349 (0%) | **349/349 (100%)** |
+| instruments.currency | 336/349 (96%) | **349/349 (100%)** |
+| instruments.sector | 39/349 (11%) | **187/349 (54%)** |
+| sold_positions.isin | 1,252/6,291 (20%) | **4,817/6,291 (77%)** |
 
-- Runs daily at 06:00 UTC
-- Logs results and warns on new issues
-- Wired into `config/config.exs` crontab
+## Files Changed
 
-### Current integrity status
+### New files
+- `priv/repo/migrations/20260221151253_add_symbol_to_instruments.exs`
+- `lib/mix/tasks/backfill_sold_position_isins.ex`
+- `test/dividendsomatic/portfolio/instrument_test.exs`
+- `test/dividendsomatic/portfolio/sold_position_test.exs`
 
-- 11 orphan instruments (info)
-- 5,039 sold positions missing ISIN (info)
-- 13 instruments missing currency (warning)
-- 767 non-EUR dividends missing fx_rate (warning)
-- 787 dividends missing amount_eur (info)
-
-## Data Archive
-
-- Archived `csv_data/` + `data_archive/` → `../dividendsomatic_data_2026-02-21.zip` (345MB)
-- YFinance dividend history exported to `data_archive/yfinance_dividend_history.json` (5,835 records)
-
-## Test Suite
-
-- **666 tests, 0 failures** (25 excluded Playwright)
-- Deleted 5 obsolete test files (broker_transaction, cost, processors, yahoo_dividend_parser, ibkr_flex_dividend_parser, import_nordnet)
-- Created 2 new test files (schema_integrity_test, integrity_check_worker_test)
-- Fixed tests: schema_test (Dividend removed), stocks_test (SymbolMapping → InstrumentAlias), data_gap_analyzer_test (new schemas)
-
-## Validation Summary
-
-- **Dividend validation**: 2,178 checked, 696 issues (323 warnings, 373 info)
-- **Balance check**: 6.77% WARNING (margin account, NLV-based)
-- **Schema integrity**: 4 checks, 5 issues (2 warnings, 3 info)
-
-## Migrations
-
-| File | Purpose |
-|------|---------|
-| `20260221130400_drop_empty_legacy_tables.exs` | Drop legacy_holdings, legacy_portfolio_snapshots |
-| `20260221130500_drop_legacy_symbol_mappings.exs` | Drop legacy_symbol_mappings |
-| `20260221130600_drop_legacy_dividends.exs` | Drop legacy_dividends |
-| `20260221131500_drop_legacy_costs_and_broker_transactions.exs` | Drop legacy_costs + legacy_broker_transactions |
+### Modified files
+- `lib/dividendsomatic/portfolio/instrument.ex` — added `:symbol` field
+- `lib/mix/tasks/backfill_instruments.ex` — `--symbol` flag, API company fetch, credo fixes
+- `lib/dividendsomatic/portfolio.ex` — `payment_symbol/1` prefers instrument.symbol
+- `lib/dividendsomatic/portfolio/schema_integrity.ex` — null_instrument_symbol check
+- `test/dividendsomatic/portfolio/schema_integrity_test.exs` — new test, removed unused alias
