@@ -183,11 +183,12 @@ defmodule Dividendsomatic.DataIngestion.FlexImportOrchestrator do
 
   defp maybe_archive(_archive?, _result, _path, _dir), do: :noop
 
-  defp archive_file(path, dir) do
-    archive_dir = Path.join([dir, "archive", "flex"])
+  defp archive_file(path, _dir) do
+    archive_dir = Path.join([File.cwd!(), "data_archive", "flex"])
 
     with :ok <- File.mkdir_p(archive_dir) do
       dest = Path.join(archive_dir, Path.basename(path))
+      Logger.info("FlexImportOrchestrator: archiving #{Path.basename(path)} → data_archive/flex/")
       File.rename(path, dest)
     end
   end

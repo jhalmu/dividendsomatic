@@ -18,7 +18,7 @@ defmodule Dividendsomatic.Workers.DataImportWorker do
 
     dir = Application.get_env(:dividendsomatic, :csv_import_dir, "csv_data")
 
-    case FlexImportOrchestrator.import_all(dir: dir) do
+    case FlexImportOrchestrator.import_all(dir: dir, archive: true) do
       {:ok, summary} ->
         Logger.info("DataImportWorker: #{inspect(summary)}")
         run_post_import_validation()

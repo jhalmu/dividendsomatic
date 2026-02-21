@@ -58,12 +58,11 @@ defmodule Dividendsomatic.DataIngestion.CsvDirectory do
   @doc """
   Moves a processed CSV file to the archive directory.
 
-  Files are archived to `csv_data/archive/flex/` to keep the inbox clean.
+  Files are archived to `data_archive/flex/` to keep the inbox clean.
   Returns `:ok` or `{:error, reason}`.
   """
-  def archive_file(path, opts \\ []) do
-    dir = Keyword.get(opts, :dir, @default_dir)
-    archive_dir = Path.join([dir, "archive", "flex"])
+  def archive_file(path, _opts \\ []) do
+    archive_dir = Path.join([File.cwd!(), "data_archive", "flex"])
 
     with :ok <- File.mkdir_p(archive_dir) do
       dest = Path.join(archive_dir, Path.basename(path))
