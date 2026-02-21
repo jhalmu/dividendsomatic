@@ -253,19 +253,30 @@ defmodule Dividendsomatic.Stocks.SymbolMapper do
             on: a.instrument_id == i.id,
             where: i.isin == ^isin and a.source in ["finnhub", "symbol_mapping"],
             limit: 1,
-            select: a.symbol
+            select: {a.symbol, a.exchange}
           )
           |> Repo.one()
 
         case result do
           nil -> {:miss, isin}
-          symbol -> {:ok, symbol}
+          {symbol, exchange} -> {:ok, qualify_symbol(symbol, exchange)}
         end
 
       reason ->
         {:unmappable, reason}
     end
   end
+
+  # Reconstruct exchange-qualified symbol (e.g., "AKTIA" + "HE" → "AKTIA.HE")
+  defp qualify_symbol(symbol, exchange) when is_binary(exchange) and exchange != "" do
+    if String.contains?(symbol, ".") do
+      symbol
+    else
+      "#{symbol}.#{exchange}"
+    end
+  end
+
+  defp qualify_symbol(symbol, _exchange), do: symbol
 
   # Step 2: Check positions table for IBKR data (has isin + symbol + exchange)
   defp check_holdings(isin) do

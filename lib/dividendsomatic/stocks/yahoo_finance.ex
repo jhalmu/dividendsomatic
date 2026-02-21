@@ -78,7 +78,9 @@ defmodule Dividendsomatic.Stocks.YahooFinance do
   Applies overrides for tickers that differ between Finnhub and Yahoo.
   """
   def to_yahoo_symbol(symbol) do
-    Map.get(@yahoo_overrides, symbol, symbol)
+    symbol
+    |> then(&Map.get(@yahoo_overrides, &1, &1))
+    |> String.replace(" ", "-")
   end
 
   @doc """
