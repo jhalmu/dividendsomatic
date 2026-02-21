@@ -1,20 +1,21 @@
 defmodule Mix.Tasks.Backfill.Instruments do
   @moduledoc """
-  Backfill missing instrument data (currency, company info).
+  Backfill missing instrument data (currency, company info, symbol).
 
   ## Usage
 
       mix backfill.instruments           # Run all backfills
       mix backfill.instruments --currency # Only backfill currency
       mix backfill.instruments --company  # Only backfill company data
+      mix backfill.instruments --symbol   # Only backfill canonical symbol
   """
 
   use Mix.Task
 
   import Ecto.Query
 
+  alias Dividendsomatic.Portfolio.{DividendPayment, Instrument, InstrumentAlias, Position, Trade}
   alias Dividendsomatic.Repo
-  alias Dividendsomatic.Portfolio.{DividendPayment, Instrument, Trade}
 
   require Logger
 
@@ -25,17 +26,152 @@ defmodule Mix.Tasks.Backfill.Instruments do
     Mix.Task.run("app.start")
     Logger.configure(level: :info)
 
-    {opts, _, _} = OptionParser.parse(args, switches: [currency: :boolean, company: :boolean])
+    {opts, _, _} =
+      OptionParser.parse(args,
+        switches: [currency: :boolean, company: :boolean, symbol: :boolean]
+      )
 
-    run_all = !opts[:currency] && !opts[:company]
+    run_all = !opts[:currency] && !opts[:company] && !opts[:symbol]
 
+    if run_all || opts[:symbol], do: backfill_symbol()
     if run_all || opts[:currency], do: backfill_currency()
     if run_all || opts[:company], do: backfill_company_data()
 
-    null_count =
+    null_currency =
       Repo.one(from(i in Instrument, where: is_nil(i.currency), select: count(i.id)))
 
-    Mix.shell().info("\nRemaining instruments with NULL currency: #{null_count}")
+    null_symbol =
+      Repo.one(from(i in Instrument, where: is_nil(i.symbol), select: count(i.id)))
+
+    Mix.shell().info("\nRemaining instruments with NULL currency: #{null_currency}")
+    Mix.shell().info("Remaining instruments with NULL symbol: #{null_symbol}")
+  end
+
+  # --- Symbol Backfill ---
+
+  defp backfill_symbol do
+    Mix.shell().info("=== Backfilling instrument symbol ===\n")
+
+    null_before =
+      Repo.one(from(i in Instrument, where: is_nil(i.symbol), select: count(i.id)))
+
+    Mix.shell().info("Instruments with NULL symbol: #{null_before}")
+
+    # Step 1: From positions (most authoritative — IBKR-supplied)
+    from_positions = backfill_symbol_from_positions()
+    Mix.shell().info("  From positions: #{from_positions} updated")
+
+    # Step 2: From instrument_aliases (prefer finnhub source, then most recent)
+    from_aliases = backfill_symbol_from_aliases()
+    Mix.shell().info("  From aliases: #{from_aliases} updated")
+
+    # Step 3: From instrument name (last resort — short all-caps names)
+    from_name = backfill_symbol_from_name()
+    Mix.shell().info("  From name: #{from_name} updated")
+
+    total = from_positions + from_aliases + from_name
+    Mix.shell().info("\nTotal symbol updates: #{total}")
+  end
+
+  defp backfill_symbol_from_positions do
+    null_ids =
+      Repo.all(from(i in Instrument, where: is_nil(i.symbol), select: {i.id, i.isin}))
+
+    if null_ids == [] do
+      0
+    else
+      isin_to_id =
+        Map.new(null_ids, fn {id, isin} -> {isin, id} end)
+
+      # For each ISIN, find the most recent position symbol
+      symbol_map =
+        from(p in Position,
+          where: p.isin in ^Map.keys(isin_to_id),
+          where: not is_nil(p.symbol),
+          distinct: p.isin,
+          order_by: [desc: p.date],
+          select: {p.isin, p.symbol}
+        )
+        |> Repo.all()
+        |> Map.new(fn {isin, symbol} -> {Map.get(isin_to_id, isin), symbol} end)
+        |> Enum.reject(fn {id, _} -> is_nil(id) end)
+        |> Map.new()
+
+      update_symbols(symbol_map)
+    end
+  end
+
+  defp backfill_symbol_from_aliases do
+    null_ids =
+      Repo.all(from(i in Instrument, where: is_nil(i.symbol), select: i.id))
+
+    if null_ids == [] do
+      0
+    else
+      # Prefer finnhub source, then ibkr, then most recent
+      aliases =
+        from(a in InstrumentAlias,
+          where: a.instrument_id in ^null_ids,
+          order_by: [
+            asc:
+              fragment(
+                "CASE WHEN ? = 'finnhub' THEN 0 WHEN ? = 'ibkr' THEN 1 ELSE 2 END",
+                a.source,
+                a.source
+              ),
+            desc: a.inserted_at
+          ],
+          select: {a.instrument_id, a.symbol}
+        )
+        |> Repo.all()
+
+      # Take the first (best) symbol per instrument
+      symbol_map =
+        aliases
+        |> Enum.reduce(%{}, fn {instrument_id, symbol}, acc ->
+          Map.put_new(acc, instrument_id, symbol)
+        end)
+
+      update_symbols(symbol_map)
+    end
+  end
+
+  defp backfill_symbol_from_name do
+    null_instruments =
+      Repo.all(
+        from(i in Instrument,
+          where: is_nil(i.symbol) and not is_nil(i.name),
+          select: {i.id, i.name}
+        )
+      )
+
+    symbol_map =
+      null_instruments
+      |> Enum.reduce(%{}, fn {id, name}, acc ->
+        # Only use name if it looks like a ticker: all-caps, 1-6 chars, letters only
+        trimmed = String.trim(name)
+
+        if trimmed =~ ~r/^[A-Z]{1,6}$/ do
+          Map.put(acc, id, trimmed)
+        else
+          acc
+        end
+      end)
+
+    update_symbols(symbol_map)
+  end
+
+  defp update_symbols(symbol_map) when map_size(symbol_map) == 0, do: 0
+
+  defp update_symbols(symbol_map) do
+    Enum.reduce(symbol_map, 0, fn {instrument_id, symbol}, count ->
+      {updated, _} =
+        Instrument
+        |> where([i], i.id == ^instrument_id and is_nil(i.symbol))
+        |> Repo.update_all(set: [symbol: symbol, updated_at: DateTime.utc_now()])
+
+      count + updated
+    end)
   end
 
   # --- Currency Backfill ---
@@ -340,14 +476,87 @@ defmodule Mix.Tasks.Backfill.Instruments do
   # --- Company Data Backfill ---
 
   defp backfill_company_data do
-    Mix.shell().info("\n=== Backfilling company data from profiles ===\n")
+    Mix.shell().info("\n=== Backfilling company data ===\n")
 
     # Check if instruments has the enrichment columns yet
-    if has_enrichment_columns?() do
-      backfill_from_company_profiles()
-    else
+    unless has_enrichment_columns?() do
       Mix.shell().info("  Enrichment columns not yet added. Run migration first.")
       return_count(0)
+    end
+
+    # Step 1: Fill from already-cached company_profiles
+    from_cached = backfill_from_company_profiles()
+
+    # Step 2: Fetch from API for instruments still missing sector
+    from_api = backfill_company_from_api()
+
+    Mix.shell().info("\n  Total company data updates: #{from_cached + from_api}")
+  end
+
+  defp backfill_company_from_api do
+    alias Dividendsomatic.Stocks
+
+    # Find instruments still missing sector, that have a symbol to look up
+    missing =
+      Repo.all(
+        from(i in Instrument,
+          where: is_nil(i.sector) and not is_nil(i.symbol),
+          select: {i.id, i.symbol}
+        )
+      )
+
+    Mix.shell().info("  Instruments still missing sector (with symbol): #{length(missing)}")
+
+    if missing == [] do
+      0
+    else
+      Mix.shell().info("  Fetching company profiles from API (1s between calls)...")
+
+      {updated, errors} =
+        Enum.reduce(missing, {0, 0}, fn {id, symbol}, acc ->
+          fetch_and_update_profile(id, symbol, acc)
+        end)
+
+      Mix.shell().info("  From API: #{updated} updated, #{errors} errors")
+      updated
+    end
+  end
+
+  defp fetch_and_update_profile(id, symbol, {ok_count, err_count}) do
+    alias Dividendsomatic.Stocks
+
+    case Stocks.get_company_profile(symbol) do
+      {:ok, profile} ->
+        count = apply_profile_updates(id, profile)
+        Process.sleep(1000)
+        {ok_count + count, err_count}
+
+      {:error, _reason} ->
+        Process.sleep(1000)
+        {ok_count, err_count + 1}
+    end
+  end
+
+  defp apply_profile_updates(id, profile) do
+    updates =
+      [
+        sector: profile.sector,
+        industry: profile.industry,
+        country: profile.country,
+        logo_url: profile.logo_url,
+        web_url: profile.web_url,
+        updated_at: DateTime.utc_now()
+      ]
+      |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" end)
+
+    if updates != [] do
+      Instrument
+      |> where([i], i.id == ^id)
+      |> Repo.update_all(set: updates)
+
+      1
+    else
+      0
     end
   end
 

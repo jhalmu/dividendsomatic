@@ -203,6 +203,26 @@ defmodule Dividendsomatic.Portfolio.SchemaIntegrity do
         issues
       end
 
+    # Instruments missing symbol
+    inst_no_symbol =
+      from(i in Instrument, where: is_nil(i.symbol), select: count())
+      |> Repo.one()
+
+    issues =
+      if inst_no_symbol > 0 do
+        [
+          %{
+            check: :null_instrument_symbol,
+            severity: :info,
+            count: inst_no_symbol,
+            message: "#{inst_no_symbol} instruments missing symbol"
+          }
+          | issues
+        ]
+      else
+        issues
+      end
+
     # Sold positions missing ISIN
     sold_no_isin =
       from(sp in SoldPosition, where: is_nil(sp.isin), select: count())
@@ -212,7 +232,7 @@ defmodule Dividendsomatic.Portfolio.SchemaIntegrity do
       [
         %{
           check: :null_sold_isin,
-          severity: :info,
+          severity: :warning,
           count: sold_no_isin,
           message: "#{sold_no_isin} sold positions missing ISIN"
         }

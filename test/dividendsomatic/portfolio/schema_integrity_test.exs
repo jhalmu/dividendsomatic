@@ -6,7 +6,6 @@ defmodule Dividendsomatic.Portfolio.SchemaIntegrityTest do
   alias Dividendsomatic.Portfolio.{
     DividendPayment,
     Instrument,
-    PortfolioSnapshot,
     Trade
   }
 
@@ -109,6 +108,19 @@ defmodule Dividendsomatic.Portfolio.SchemaIntegrityTest do
       assert currency_issue
       assert currency_issue.severity == :warning
       assert currency_issue.count >= 1
+    end
+
+    test "should detect instruments missing symbol" do
+      %Instrument{}
+      |> Ecto.Changeset.change(%{isin: "XX0000000099", name: "No Symbol"})
+      |> Repo.insert!()
+
+      issues = SchemaIntegrity.null_field_check()
+      symbol_issue = Enum.find(issues, &(&1.check == :null_instrument_symbol))
+
+      assert symbol_issue
+      assert symbol_issue.severity == :info
+      assert symbol_issue.count >= 1
     end
 
     test "should detect non-EUR dividends missing fx_rate" do

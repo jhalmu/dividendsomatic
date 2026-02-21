@@ -698,10 +698,11 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   defp payment_symbol(payment) do
-    case payment.instrument.aliases do
-      [alias_record | _] -> alias_record.symbol
-      [] -> payment.instrument.name
-    end
+    payment.instrument.symbol ||
+      case payment.instrument.aliases do
+        [alias_record | _] -> alias_record.symbol
+        [] -> payment.instrument.name
+      end
   end
 
   defp filter_date_range(dividends, from, to) do

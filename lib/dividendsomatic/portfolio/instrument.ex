@@ -12,6 +12,7 @@ defmodule Dividendsomatic.Portfolio.Instrument do
     :conid,
     :figi,
     :name,
+    :symbol,
     :asset_category,
     :listing_exchange,
     :currency,
@@ -38,6 +39,7 @@ defmodule Dividendsomatic.Portfolio.Instrument do
     field :conid, :integer
     field :figi, :string
     field :name, :string
+    field :symbol, :string
     field :asset_category, :string
     field :listing_exchange, :string
     field :currency, :string
