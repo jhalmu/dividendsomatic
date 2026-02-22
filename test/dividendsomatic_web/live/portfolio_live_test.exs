@@ -221,7 +221,10 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-27])
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      # Switch to performance tab to see the chart
+      html = render_click(view, "switch_tab", %{"tab" => "performance"})
 
       assert html =~ "Portfolio Performance"
       assert html =~ "Value"
@@ -231,7 +234,10 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     test "should not show chart with single snapshot", %{conn: conn} do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      # Switch to performance tab — chart shouldn't appear with single snapshot
+      html = render_click(view, "switch_tab", %{"tab" => "performance"})
 
       refute html =~ "Portfolio Performance"
     end
@@ -240,7 +246,10 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-27])
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      # Switch to performance tab to see the chart
+      html = render_click(view, "switch_tab", %{"tab" => "performance"})
 
       assert html =~ "trading days"
     end
@@ -383,48 +392,6 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
 
       html = render_hook(view, "pnl_show_all", %{})
       assert html =~ "Show all"
-    end
-  end
-
-  describe "cash flow summary (Feature 5)" do
-    test "should show cash flow section when dividends exist", %{conn: conn} do
-      today = Date.utc_today()
-
-      {:ok, snapshot} =
-        %Portfolio.PortfolioSnapshot{}
-        |> Portfolio.PortfolioSnapshot.changeset(%{
-          date: Date.new!(today.year, 1, 10),
-          source: "ibkr_flex"
-        })
-        |> Dividendsomatic.Repo.insert()
-
-      %Portfolio.Position{}
-      |> Portfolio.Position.changeset(%{
-        portfolio_snapshot_id: snapshot.id,
-        date: Date.new!(today.year, 1, 10),
-        symbol: "KESKOB",
-        currency: "EUR",
-        quantity: "1000",
-        price: "21",
-        value: "21000",
-        cost_price: "18",
-        cost_basis: "18000",
-        weight: "100",
-        exchange: "HEX",
-        asset_class: "STK",
-        fx_rate: "1"
-      })
-      |> Dividendsomatic.Repo.insert!()
-
-      # Insert dividend via new tables
-      {instrument, _alias} = get_or_create_instrument("KESKOB", "FI0009000202")
-      insert_dividend_payment(instrument.id, Date.new!(today.year, 1, 15), "500", "EUR")
-
-      {:ok, view, _html} = live(conn, ~p"/")
-
-      html = render_hook(view, "switch_tab", %{"tab" => "income"})
-      assert html =~ "Dividend Cash Flow"
-      assert html =~ "cash-flow"
     end
   end
 

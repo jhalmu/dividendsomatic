@@ -88,7 +88,10 @@ defmodule Mix.Tasks.Fix.PositionSymbols do
     Mix.shell().info("=== Fixing position symbols ===\n")
 
     isin_count = remap_stale_isins(dry_run)
-    Mix.shell().info("Step 1: Remapped #{isin_count} position ISINs (#{map_size(@isin_remappings)} old→new pairs)")
+
+    Mix.shell().info(
+      "Step 1: Remapped #{isin_count} position ISINs (#{map_size(@isin_remappings)} old→new pairs)"
+    )
 
     pos_count = normalize_position_symbols(dry_run)
     Mix.shell().info("Step 2: Normalized #{pos_count} position symbols via instrument lookup")

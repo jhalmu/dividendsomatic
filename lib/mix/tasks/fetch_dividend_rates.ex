@@ -24,6 +24,13 @@ defmodule Mix.Tasks.Fetch.DividendRates do
   @shortdoc "Fetch dividend rates from Yahoo Finance"
   @rate_limit_ms 500
 
+  # ISINs where Yahoo Finance returns incorrect dividend data.
+  # These are skipped during fetch and should use manual or TTM-computed rates.
+  @yahoo_isin_blacklist MapSet.new([
+                          "SE0000667925",
+                          "US8964423086"
+                        ])
+
   def run(args) do
     Mix.Task.run("app.start")
 
@@ -51,6 +58,16 @@ defmodule Mix.Tasks.Fetch.DividendRates do
 
   defp fetch_one({isin, yahoo_symbol, name}, {f, s, fl}) do
     IO.write("  #{yahoo_symbol} (#{name || isin})...")
+
+    if MapSet.member?(@yahoo_isin_blacklist, isin) do
+      IO.puts(" BLACKLISTED — skipping (use mix backfill.dividend_rates for manual/TTM)")
+      {f, s + 1, fl}
+    else
+      fetch_one_yahoo({isin, yahoo_symbol}, {f, s, fl})
+    end
+  end
+
+  defp fetch_one_yahoo({isin, yahoo_symbol}, {f, s, fl}) do
     Process.sleep(@rate_limit_ms)
 
     case fetch_and_update(isin, yahoo_symbol) do
@@ -73,6 +90,7 @@ defmodule Mix.Tasks.Fetch.DividendRates do
       {:ok, data} ->
         case update_instrument(isin, data) do
           {:ok, _} -> {:ok, data}
+          {:skip, reason} -> {:skip, reason}
           {:error, reason} -> {:fail, reason}
         end
 
@@ -177,20 +195,24 @@ defmodule Mix.Tasks.Fetch.DividendRates do
         {:error, :instrument_not_found}
 
       instrument ->
-        attrs =
-          %{
-            dividend_rate: data.dividend_rate,
-            dividend_yield: data.dividend_yield,
-            dividend_frequency: data.dividend_frequency,
-            ex_dividend_date: data.ex_dividend_date,
-            payout_ratio: data.payout_ratio,
-            dividend_source: "yahoo",
-            dividend_updated_at: DateTime.utc_now() |> DateTime.truncate(:second)
-          }
+        if instrument.dividend_source in ["manual", "ttm_computed"] do
+          {:skip, :protected_source}
+        else
+          attrs =
+            %{
+              dividend_rate: data.dividend_rate,
+              dividend_yield: data.dividend_yield,
+              dividend_frequency: data.dividend_frequency,
+              ex_dividend_date: data.ex_dividend_date,
+              payout_ratio: data.payout_ratio,
+              dividend_source: "yahoo",
+              dividend_updated_at: DateTime.utc_now() |> DateTime.truncate(:second)
+            }
 
-        instrument
-        |> Instrument.changeset(attrs)
-        |> Repo.update()
+          instrument
+          |> Instrument.changeset(attrs)
+          |> Repo.update()
+        end
     end
   end
 end

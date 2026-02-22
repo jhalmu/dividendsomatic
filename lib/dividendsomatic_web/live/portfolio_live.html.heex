@@ -87,7 +87,7 @@
           </button>
 
           <%!-- Quick-jump pills --%>
-          <div class="hidden sm:flex items-center gap-1">
+          <div class="hidden sm:flex items-center gap-[var(--space-inline)]">
             <button
               phx-click="navigate"
               phx-value-direction="back_year"
@@ -124,6 +124,8 @@
                 type="date"
                 name="date"
                 value={Date.to_iso8601(@current_snapshot.date)}
+                phx-hook="DatePickerSubmit"
+                id="snapshot-date-picker"
                 aria-label="Select snapshot date"
                 class="bg-transparent border-none text-center cursor-pointer"
                 style="font-family: var(--font-display); font-size: 1.125rem; font-weight: 500; color: var(--terminal-text); letter-spacing: 0.02em; width: auto;"
@@ -131,13 +133,15 @@
             </form>
             <div class="terminal-nav-date-sub">
               {Calendar.strftime(@current_snapshot.date, "%A")}
-              <span class="mx-1.5 opacity-30">|</span>
+              <span class="mx-[var(--space-inline)]" style="opacity: 0.5;" aria-hidden="true">
+                |
+              </span>
               {@snapshot_position}/{@total_snapshots}
             </div>
           </div>
 
           <%!-- Quick-jump pills (forward) --%>
-          <div class="hidden sm:flex items-center gap-1">
+          <div class="hidden sm:flex items-center gap-[var(--space-inline)]">
             <button
               phx-click="navigate"
               phx-value-direction="forward_week"
@@ -214,7 +218,7 @@
 
         <%!-- Mobile quick-jump (visible on small screens) --%>
         <div
-          class="flex sm:hidden items-center justify-center gap-1 mt-1"
+          class="flex sm:hidden items-center justify-center gap-[var(--space-inline)] mt-[var(--space-inline)]"
           style="font-size: 0.625rem;"
         >
           <button
@@ -299,7 +303,7 @@
           <div class="terminal-stat-value">
             {format_euro(@total_value)}
           </div>
-          <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);">
+          <div class="terminal-stat-sub">
             Costs: {format_euro_decimal(@costs_this_year)}
           </div>
         </div>
@@ -310,10 +314,7 @@
           <div class={"terminal-stat-value #{if pnl_positive?(@total_return), do: "gain", else: "loss"}"}>
             {format_euro_signed(@total_return)}
           </div>
-          <div
-            class="mt-[var(--space-xs)]"
-            style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);"
-          >
+          <div class="terminal-stat-sub">
             <div>P&amp;L: {format_euro_signed(@realized_pnl_total)}</div>
             <div>Dividends: {format_euro_decimal(@dividend_total)}</div>
           </div>
@@ -335,40 +336,10 @@
       </div>
 
       <%!-- Holdings --%>
-      <%!-- Reconstruction Banner --%>
-      <%= if @is_reconstructed do %>
-        <div
-          class="mb-[var(--space-xs)]"
-          style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-muted); background: var(--terminal-elevated); border: 1px solid var(--terminal-border); border-radius: 8px; padding: 0.375rem 0.5rem; display: flex; align-items: center; gap: 0.375rem;"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke-width="1.5"
-            stroke="currentColor"
-            class="w-3.5 h-3.5"
-            style="flex-shrink: 0; opacity: 0.6;"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z"
-            />
-          </svg>
-          <span>
-            Reconstructed from Nordnet transactions
-            <%= if @missing_price_count > 0 do %>
-              — {@missing_price_count} positions with unavailable prices
-            <% end %>
-          </span>
-        </div>
-      <% end %>
-
       <div class="terminal-card mb-[var(--space-xs)] animate-fade-in animate-delay-2">
         <div class="p-[var(--space-sm)] pb-0">
           <div class="flex items-center justify-between mb-[var(--space-xs)]">
-            <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+            <div class="terminal-section-label-inline">
               Positions
             </div>
             <span class="terminal-holdings-count">
@@ -379,7 +350,7 @@
 
         <div class="overflow-x-auto">
           <div class="min-w-[1100px]">
-            <table class="terminal-table">
+            <table class="terminal-table" aria-label="Portfolio holdings">
               <thead>
                 <tr>
                   <th scope="col">Symbol</th>
@@ -403,12 +374,20 @@
                       <.link
                         navigate={~p"/stocks/#{pos.symbol}"}
                         class="terminal-symbol hover:underline"
+                        title={pos.symbol}
                       >
-                        {pos.symbol}
+                        <%= if String.length(pos.symbol) > 6 do %>
+                          {String.slice(pos.symbol, 0, 6)}<span
+                            style="opacity: 0.5;"
+                            aria-hidden="true"
+                          >..</span>
+                        <% else %>
+                          {pos.symbol}
+                        <% end %>
                       </.link>
                       <%= if Decimal.compare(pos.quantity, Decimal.new("0")) == :lt do %>
                         <span
-                          style="display: inline-block; background: var(--loss); color: #fff; font-size: 0.45rem; font-weight: 700; padding: 0px 4px; border-radius: 3px; margin-left: 4px; vertical-align: middle; letter-spacing: 0.05em;"
+                          style="display: inline-block; background: var(--loss); color: white; font-size: 0.45rem; font-weight: 700; padding: 0px 4px; border-radius: 3px; margin-left: 4px; vertical-align: middle; letter-spacing: 0.05em;"
                           data-testid="short-badge"
                         >
                           SHORT
@@ -481,7 +460,12 @@
                           </span>
                         <% end %>
                       <% else %>
-                        <span style="color: var(--terminal-dim); opacity: 0.4;">-</span>
+                        <span
+                          style="color: var(--terminal-dim); opacity: 0.6;"
+                          aria-label="No data"
+                        >
+                          -
+                        </span>
                       <% end %>
                     </td>
                     <td class="terminal-number" style="text-align: right;">
@@ -490,7 +474,12 @@
                           {format_decimal(sym_div.projected_annual)}
                         </span>
                       <% else %>
-                        <span style="color: var(--terminal-dim); opacity: 0.4;">-</span>
+                        <span
+                          style="color: var(--terminal-dim); opacity: 0.6;"
+                          aria-label="No data"
+                        >
+                          -
+                        </span>
                       <% end %>
                     </td>
                     <td class="terminal-number" style="text-align: right;">
@@ -499,7 +488,12 @@
                           {Decimal.to_string(sym_div.yield_on_cost)}%
                         </span>
                       <% else %>
-                        <span style="color: var(--terminal-dim); opacity: 0.4;">-</span>
+                        <span
+                          style="color: var(--terminal-dim); opacity: 0.6;"
+                          aria-label="No data"
+                        >
+                          -
+                        </span>
                       <% end %>
                     </td>
                     <td class="terminal-number" style="text-align: right;">
@@ -508,18 +502,23 @@
                           {format_decimal(sym_div.est_remaining)}
                         </span>
                       <% else %>
-                        <span style="color: var(--terminal-dim); opacity: 0.4;">-</span>
+                        <span
+                          style="color: var(--terminal-dim); opacity: 0.6;"
+                          aria-label="No data"
+                        >
+                          -
+                        </span>
                       <% end %>
                     </td>
                   </tr>
                 <% end %>
                 <%!-- Dividend totals row --%>
                 <%= if map_size(@per_symbol_dividends) > 0 do %>
-                  <tr style="border-top: 1px solid var(--terminal-muted);">
+                  <tr style="border-top: 1px solid var(--terminal-border-bright);">
                     <td
                       colspan="8"
                       class="terminal-number"
-                      style="text-align: right; font-weight: 600; color: var(--terminal-muted); font-size: 0.625rem; letter-spacing: 0.05em;"
+                      style="text-align: right; font-weight: 600; color: var(--terminal-dim); font-size: 0.625rem; letter-spacing: 0.05em; opacity: 0.8;"
                     >
                       DIVIDENDS
                     </td>
@@ -552,7 +551,7 @@
                       <td
                         colspan="8"
                         class="terminal-number"
-                        style="text-align: right; color: var(--terminal-dim); font-size: 0.5625rem; letter-spacing: 0.05em;"
+                        style="text-align: right; color: var(--terminal-dim); font-size: 0.5625rem; letter-spacing: 0.05em; opacity: 0.7;"
                       >
                         MONTHLY PAYERS
                       </td>
@@ -599,157 +598,35 @@
       </div>
 
       <%!-- ═══════════════════════════════════════
-           ZONE 2 — "The Journey" (charts)
-           ═══════════════════════════════════════ --%>
-
-      <%!-- Portfolio Chart --%>
-      <%= if length(@all_chart_data) > 1 do %>
-        <div class="terminal-chart mb-[var(--space-xs)] animate-fade-in animate-delay-2">
-          <div class="terminal-chart-header">
-            <div class="flex items-center gap-[var(--space-sm)]">
-              <%= if @growth_stats do %>
-                <div class={"terminal-growth-badge #{if Decimal.compare(@growth_stats.absolute_change, Decimal.new("0")) == :lt, do: "negative"}"}>
-                  {format_euro_signed(@growth_stats.absolute_change)}
-                  <span style="opacity: 0.6;">
-                    (<%= if pnl_positive?(@growth_stats.percent_change) do %>
-                      +
-                    <% end %>
-                    {Decimal.to_string(@growth_stats.percent_change)}%)
-                  </span>
-                </div>
-              <% end %>
-            </div>
-            <div>
-              <div class="terminal-chart-title" id="chart-title" style="text-align: right;">
-                Portfolio Performance
-              </div>
-              <div
-                class="terminal-chart-legend"
-                id="chart-legend"
-                aria-label="Chart legend"
-                style="justify-content: flex-end;"
-              >
-                <span class="terminal-legend-item">
-                  <span class="terminal-legend-line" style="background: var(--chart-line);">
-                  </span>
-                  Value
-                </span>
-                <span class="terminal-legend-item">
-                  <span class="terminal-legend-line terminal-legend-dashed"></span> Cost Basis
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <%!-- Chart Range Presets + Year Filter --%>
-          <div class="flex items-center gap-1 flex-wrap mb-[var(--space-xs)]">
-            <%= for preset <- ["1M", "3M", "6M", "YTD", "1Y", "ALL"] do %>
-              <button
-                phx-click="chart_range_preset"
-                phx-value-preset={preset}
-                class="btn btn-xs btn-outline"
-              >
-                {preset}
-              </button>
-            <% end %>
-            <span style="color: var(--terminal-border-bright); margin: 0 0.125rem;">|</span>
-            <button
-              phx-click="chart_year"
-              phx-value-year="all"
-              class={"btn btn-xs #{if @chart_year == nil, do: "btn-primary", else: "btn-outline"}"}
-            >
-              All
-            </button>
-            <%= for y <- @chart_available_years do %>
-              <button
-                phx-click="chart_year"
-                phx-value-year={to_string(y)}
-                class={"btn btn-xs #{if @chart_year == y, do: "btn-primary", else: "btn-outline"}"}
-              >
-                {y}
-              </button>
-            <% end %>
-          </div>
-
-          <%!-- Portfolio Value + Cost Basis (ApexCharts) --%>
-          <%= if length(@chart_data) > 1 do %>
-            <% chart_json = serialize_portfolio_chart(@chart_data, @current_snapshot.date) %>
-            <div
-              id="portfolio-apex-chart"
-              phx-hook="ApexChartHook"
-              phx-update="ignore"
-              data-chart-config={Jason.encode!(build_portfolio_apex_config(chart_json))}
-            >
-            </div>
-          <% end %>
-
-          <%!-- Chart Footer --%>
-          <%= if @growth_stats do %>
-            <div
-              class="mt-[var(--space-xs)] flex items-center justify-between"
-              style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);"
-            >
-              <span>
-                {Date.to_string(@growth_stats.first_date)} → {Date.to_string(
-                  @growth_stats.latest_date
-                )}
-              </span>
-              <span>{length(@chart_data)} trading days</span>
-            </div>
-          <% end %>
-        </div>
-      <% end %>
-
-      <%!-- Dividend Chart --%>
-      <%= if length(@dividend_by_month) > 0 do %>
-        <div class="terminal-chart mb-[var(--space-xs)] animate-fade-in animate-delay-3">
-          <div class="terminal-chart-header">
-            <div class="terminal-chart-title">Dividend History</div>
-            <div
-              class="terminal-chart-legend"
-              aria-label="Dividend chart legend"
-              style="justify-content: flex-end;"
-            >
-              <span class="terminal-legend-item">
-                <span class="terminal-legend-line" style="background: var(--chart-dividend);">
-                </span>
-                Monthly
-              </span>
-              <span class="terminal-legend-item">
-                <span class="terminal-legend-line" style="background: var(--chart-cumulative);">
-                </span>
-                Cumulative
-              </span>
-            </div>
-          </div>
-          <% div_json = serialize_dividend_chart(@dividend_by_month) %>
-          <div
-            id="dividend-apex-chart"
-            phx-hook="ApexChartHook"
-            phx-update="ignore"
-            data-chart-config={Jason.encode!(build_dividend_apex_config(div_json))}
-          >
-          </div>
-        </div>
-      <% end %>
-
-      <%!-- ═══════════════════════════════════════
-           ZONE 3 — "The Details" (tabbed)
+           ZONE 2+3 — Tabbed sections
            ═══════════════════════════════════════ --%>
 
       <%!-- Tab Strip --%>
-      <div class="tab-strip animate-fade-in animate-delay-3" role="tablist">
+      <div class="tab-strip animate-fade-in animate-delay-2" role="tablist">
         <button
+          id="tab-performance"
           phx-click="switch_tab"
-          phx-value-tab="income"
-          class={"tab-strip-btn #{if @active_tab == "income", do: "active"}"}
+          phx-value-tab="performance"
+          class={"tab-strip-btn #{if @active_tab == "performance", do: "active"}"}
           role="tab"
-          aria-selected={to_string(@active_tab == "income")}
-          aria-controls="panel-income"
+          aria-selected={to_string(@active_tab == "performance")}
+          aria-controls="panel-performance"
         >
-          Income
+          Performance
         </button>
         <button
+          id="tab-dividends"
+          phx-click="switch_tab"
+          phx-value-tab="dividends"
+          class={"tab-strip-btn #{if @active_tab == "dividends", do: "active"}"}
+          role="tab"
+          aria-selected={to_string(@active_tab == "dividends")}
+          aria-controls="panel-dividends"
+        >
+          Dividends
+        </button>
+        <button
+          id="tab-summary"
           phx-click="switch_tab"
           phx-value-tab="summary"
           class={"tab-strip-btn #{if @active_tab == "summary", do: "active"}"}
@@ -761,73 +638,177 @@
         </button>
       </div>
 
-      <%!-- ── Tab: Income ── --%>
-      <div :if={@active_tab == "income"} id="panel-income" role="tabpanel" class="animate-fade-in">
-        <%!-- Dividend Cash Flow --%>
-        <%= if length(@cash_flow) > 0 do %>
-          <div
-            class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]"
-            data-testid="cash-flow"
-          >
-            <div class="flex items-center justify-between">
-              <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
-                Dividend Cash Flow {Date.utc_today().year}
+      <%!-- ── Tab: Performance ── --%>
+      <div
+        :if={@active_tab == "performance"}
+        id="panel-performance"
+        role="tabpanel"
+        aria-labelledby="tab-performance"
+        class="animate-fade-in"
+      >
+        <%= if length(@all_chart_data) > 1 do %>
+          <div class="terminal-chart mb-[var(--space-xs)]">
+            <div class="terminal-chart-header">
+              <div class="flex items-center gap-[var(--space-sm)]">
+                <%= if @growth_stats do %>
+                  <div class={"terminal-growth-badge #{if Decimal.compare(@growth_stats.absolute_change, Decimal.new("0")) == :lt, do: "negative"}"}>
+                    {format_euro_signed(@growth_stats.absolute_change)}
+                    <span style="opacity: 0.6;">
+                      (<%= if pnl_positive?(@growth_stats.percent_change) do %>
+                        +
+                      <% end %>
+                      {Decimal.to_string(@growth_stats.percent_change)}%)
+                    </span>
+                  </div>
+                <% end %>
               </div>
-              <div style="color: var(--gain); font-family: var(--font-mono); font-size: 0.75rem; font-weight: 500;">
-                {format_euro_decimal(List.last(@cash_flow).cumulative)}
-              </div>
-            </div>
-            <%!-- Mini Bar Chart --%>
-            <div
-              class="mt-[var(--space-xs)]"
-              style="display: flex; align-items: flex-end; gap: 2px; height: 60px;"
-            >
-              <% max_income =
-                @cash_flow |> Enum.map(&Decimal.to_float(&1.income)) |> Enum.max() |> max(0.01) %>
-              <%= for entry <- @cash_flow do %>
-                <% bar_h = Decimal.to_float(entry.income) / max_income * 100 %>
+              <div>
+                <div class="terminal-chart-title" id="chart-title" style="text-align: right;">
+                  Portfolio Performance
+                </div>
                 <div
-                  style={"flex: 1; height: #{max(bar_h, 2)}%; background: var(--chart-dividend); border-radius: 3px 3px 0 0; min-width: 8px;"}
-                  title={"#{entry.month}: #{format_euro_decimal(entry.income)}"}
+                  class="terminal-chart-legend"
+                  id="chart-legend"
+                  aria-label="Chart legend"
+                  style="justify-content: flex-end;"
                 >
+                  <span class="terminal-legend-item">
+                    <span class="terminal-legend-line" style="background: var(--chart-line);">
+                    </span>
+                    Value
+                  </span>
+                  <span class="terminal-legend-item">
+                    <span class="terminal-legend-line terminal-legend-dashed"></span> Cost Basis
+                  </span>
                 </div>
+              </div>
+            </div>
+
+            <%!-- Year Filter --%>
+            <div class="flex items-center justify-center gap-[var(--space-inline)] flex-wrap mb-[var(--space-xs)]">
+              <button
+                phx-click="chart_year"
+                phx-value-year="all"
+                class={"btn btn-xs #{if @chart_year == nil, do: "btn-primary", else: "btn-ghost"}"}
+                style="font-size: 0.625rem; color: var(--terminal-dim);"
+              >
+                All
+              </button>
+              <%= for y <- @chart_available_years do %>
+                <button
+                  phx-click="chart_year"
+                  phx-value-year={to_string(y)}
+                  class={"btn btn-xs #{if @chart_year == y, do: "btn-primary", else: "btn-ghost"}"}
+                  style="font-size: 0.625rem; color: var(--terminal-dim);"
+                >
+                  {y}
+                </button>
               <% end %>
             </div>
+
+            <%!-- Portfolio Value + Cost Basis (ApexCharts) --%>
+            <%= if length(@chart_data) > 1 do %>
+              <% chart_json = serialize_portfolio_chart(@chart_data, @current_snapshot.date) %>
+              <div
+                id="portfolio-apex-chart"
+                phx-hook="ApexChartHook"
+                phx-update="ignore"
+                data-chart-config={Jason.encode!(build_portfolio_apex_config(chart_json))}
+              >
+              </div>
+            <% end %>
+
+            <%!-- Chart Footer --%>
+            <%= if @growth_stats do %>
+              <div
+                class="mt-[var(--space-xs)] flex items-center justify-between"
+                style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); opacity: 0.7;"
+              >
+                <span>
+                  {Date.to_string(@growth_stats.first_date)} → {Date.to_string(
+                    @growth_stats.latest_date
+                  )}
+                </span>
+                <span>{length(@chart_data)} trading days</span>
+              </div>
+            <% end %>
+          </div>
+        <% else %>
+          <div class="text-center py-[var(--space-md)]" style="color: var(--terminal-dim);">
+            Need at least 2 snapshots to show performance chart.
+          </div>
+        <% end %>
+
+        <%!-- Cost Coverage --%>
+        <%= if @costs_summary.count > 0 do %>
+          <div
+            class="terminal-card p-[var(--space-sm)] mt-[var(--space-xs)]"
+            style="opacity: 0.85;"
+          >
+            <div class="terminal-section-label-inline" style="margin-bottom: var(--space-xs);">
+              Cost Coverage
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)]">
+              <%= for {type, total} <- @costs_summary.by_type do %>
+                <div>
+                  <div class="terminal-info-label">{format_cost_type(type)}</div>
+                  <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--loss); opacity: 0.7;">
+                    {format_euro_decimal(total)}
+                  </div>
+                </div>
+              <% end %>
+              <div>
+                <div class="terminal-info-label" style="font-weight: 600;">Total</div>
+                <div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--loss); font-weight: 600;">
+                  {format_euro_decimal(@costs_summary.total)}
+                </div>
+              </div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+
+      <%!-- ── Tab: Dividends ── --%>
+      <div
+        :if={@active_tab == "dividends"}
+        id="panel-dividends"
+        role="tabpanel"
+        aria-labelledby="tab-dividends"
+        class="animate-fade-in"
+      >
+        <%= if length(@dividend_by_month) > 0 do %>
+          <div class="terminal-chart mb-[var(--space-xs)]">
+            <div class="terminal-chart-header">
+              <div class="terminal-chart-title">Dividend History</div>
+              <div
+                class="terminal-chart-legend"
+                aria-label="Dividend chart legend"
+                style="justify-content: flex-end;"
+              >
+                <span class="terminal-legend-item">
+                  <span class="terminal-legend-line" style="background: var(--chart-dividend);">
+                  </span>
+                  Monthly
+                </span>
+                <span class="terminal-legend-item">
+                  <span class="terminal-legend-line" style="background: var(--chart-cumulative);">
+                  </span>
+                  Cumulative
+                </span>
+              </div>
+            </div>
+            <% div_json = serialize_dividend_chart(@dividend_by_month) %>
             <div
-              class="mt-1"
-              style="display: flex; gap: 2px; font-family: var(--font-mono); font-size: 0.5rem; color: var(--terminal-dim);"
+              id="dividend-apex-chart"
+              phx-hook="ApexChartHook"
+              phx-update="ignore"
+              data-chart-config={Jason.encode!(build_dividend_apex_config(div_json))}
             >
-              <%= for entry <- @cash_flow do %>
-                <div style="flex: 1; text-align: center; min-width: 8px;">
-                  {String.slice(entry.month, 5, 2)}
-                </div>
-              <% end %>
             </div>
-            <%!-- Cash Flow Table --%>
-            <div class="overflow-x-auto mt-[var(--space-xs)]">
-              <table class="terminal-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Month</th>
-                    <th scope="col" style="text-align: right;">Income</th>
-                    <th scope="col" style="text-align: right;">Cumulative</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <%= for entry <- @cash_flow do %>
-                    <tr>
-                      <td>{entry.month}</td>
-                      <td class="terminal-number" style="text-align: right; color: var(--gain);">
-                        +{format_euro_decimal(entry.income)}
-                      </td>
-                      <td class="terminal-number" style="text-align: right; font-weight: 500;">
-                        {format_euro_decimal(entry.cumulative)}
-                      </td>
-                    </tr>
-                  <% end %>
-                </tbody>
-              </table>
-            </div>
+          </div>
+        <% else %>
+          <div class="text-center py-[var(--space-md)]" style="color: var(--terminal-dim);">
+            No dividend data for this period.
           </div>
         <% end %>
       </div>
@@ -837,6 +818,7 @@
         :if={@active_tab == "summary"}
         id="panel-summary"
         role="tabpanel"
+        aria-labelledby="tab-summary"
         class="animate-fade-in"
       >
         <%!-- Investment Summary --%>
@@ -963,7 +945,7 @@
                   style="border-top: 1px solid var(--terminal-border); padding-top: var(--space-sm);"
                 >
                   <div class="flex items-center justify-between mb-[var(--space-xs)]">
-                    <div class="terminal-stat-label" style="border: none; padding: 0; margin: 0;">
+                    <div class="terminal-section-label-inline">
                       Payback Progress
                     </div>
                     <div style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--terminal-accent);">
@@ -1014,7 +996,7 @@
                 style="border-top: 1px solid var(--terminal-border); padding-top: var(--space-sm);"
               >
                 <div class="flex items-center justify-between mb-[var(--space-xs)]">
-                  <div class="terminal-stat-label" style="border: none; padding: 0; margin: 0;">
+                  <div class="terminal-section-label-inline">
                     Margin Interest
                   </div>
                   <div style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--loss);">
@@ -1044,7 +1026,11 @@
                 <%!-- Recent monthly interest --%>
                 <%= if length(@margin_equity.actual_interest_by_month) > 0 do %>
                   <div class="overflow-x-auto mt-[var(--space-xs)]">
-                    <table class="terminal-table" style="font-size: 0.6875rem;">
+                    <table
+                      class="terminal-table"
+                      aria-label="Monthly margin interest"
+                      style="font-size: 0.6875rem;"
+                    >
                       <thead>
                         <tr>
                           <th scope="col">Month</th>
@@ -1078,10 +1064,10 @@
           data-testid="realized-pnl-card"
         >
           <div class="flex flex-wrap items-center justify-between gap-[var(--space-xs)]">
-            <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
+            <div class="terminal-section-label-inline">
               Realized P&amp;L
             </div>
-            <div class="flex items-center gap-1 flex-wrap">
+            <div class="flex items-center gap-[var(--space-inline)] flex-wrap">
               <button
                 phx-click="pnl_year"
                 phx-value-year="all"
@@ -1176,7 +1162,7 @@
                   Top Winners
                 </div>
                 <div class="overflow-x-auto">
-                  <table class="terminal-table">
+                  <table class="terminal-table" aria-label="Top winning positions">
                     <thead>
                       <tr style="background: var(--gain-bg);">
                         <th scope="col">Symbol</th>
@@ -1231,7 +1217,7 @@
                   Top Losers
                 </div>
                 <div class="overflow-x-auto">
-                  <table class="terminal-table">
+                  <table class="terminal-table" aria-label="Top losing positions">
                     <thead>
                       <tr style="background: var(--loss-bg);">
                         <th scope="col">Symbol</th>
@@ -1284,7 +1270,11 @@
             </div>
 
             <div class="mt-[var(--space-sm)] text-center">
-              <button phx-click="pnl_show_all" class="btn btn-xs btn-outline">
+              <button
+                phx-click="pnl_show_all"
+                class="btn btn-xs btn-outline"
+                aria-expanded={to_string(@pnl_show_all)}
+              >
                 <%= if @pnl_show_all do %>
                   Hide
                 <% else %>
@@ -1295,7 +1285,7 @@
 
             <%= if @pnl_show_all do %>
               <div class="overflow-x-auto mt-[var(--space-xs)]">
-                <table class="terminal-table">
+                <table class="terminal-table" aria-label="All realized P&L by symbol">
                   <thead>
                     <tr>
                       <th scope="col">Symbol</th>
@@ -1359,7 +1349,7 @@
           >
             <div class="terminal-section-label">Currency Exposure</div>
             <div class="overflow-x-auto mt-[var(--space-xs)]">
-              <table class="terminal-table">
+              <table class="terminal-table" aria-label="Currency exposure">
                 <thead>
                   <tr>
                     <th scope="col">Currency</th>
@@ -1400,7 +1390,11 @@
 
         <%!-- P&L Waterfall (collapsible) --%>
         <div class="mb-[var(--space-xs)]">
-          <button phx-click="toggle_waterfall" class="btn btn-xs btn-outline w-full">
+          <button
+            phx-click="toggle_waterfall"
+            class="btn btn-xs btn-outline w-full"
+            aria-expanded={to_string(@show_waterfall)}
+          >
             <%= if @show_waterfall do %>
               Hide P&amp;L Waterfall
             <% else %>
@@ -1458,25 +1452,8 @@
       </div>
 
       <%!-- Footer --%>
-      <div
-        class="mt-[var(--space-md)] flex items-center justify-between animate-fade-in animate-delay-5"
-        style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim); letter-spacing: 0.02em;"
-      >
-        <div aria-hidden="true">
-          <span class="terminal-kbd">←</span>
-          <span class="terminal-kbd ml-0.5">→</span>
-          <span class="ml-1.5">navigate</span>
-          <span class="ml-2">
-            <span class="terminal-kbd">⇧←</span>
-            <span class="terminal-kbd ml-0.5">⇧→</span>
-            <span class="ml-1">±1 week</span>
-          </span>
-        </div>
-        <span class="sr-only">Use arrow keys to navigate, Shift+Arrow for week jumps</span>
-        <div class="flex items-center gap-[var(--space-sm)]">
-          <.link navigate={~p"/data/gaps"} class="hover:underline">data coverage</.link>
-          <span>dividends-o-matic</span>
-        </div>
+      <div class="terminal-footer animate-fade-in animate-delay-5">
+        dividends-o-matic
       </div>
     <% else %>
       <%!-- Empty State --%>

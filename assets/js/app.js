@@ -50,7 +50,14 @@ const Hooks = {
       window.removeEventListener("keydown", this.handleKeydown)
     }
   },
-  ApexChartHook: ApexChartHook
+  ApexChartHook: ApexChartHook,
+  DatePickerSubmit: {
+    mounted() {
+      this.el.addEventListener("change", () => {
+        this.el.closest("form").dispatchEvent(new Event("submit", {bubbles: true, cancelable: true}))
+      })
+    }
+  }
 }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")

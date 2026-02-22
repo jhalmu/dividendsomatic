@@ -527,21 +527,19 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:dividend_by_month, [])
     |> assign(:sparkline_values, [])
     |> assign(:costs_this_year, Decimal.new("0"))
+    |> assign(:costs_summary, %{by_type: %{}, total: Decimal.new("0"), count: 0})
     |> assign(:realized_pnl_total, Decimal.new("0"))
     |> assign(:total_return, Decimal.new("0"))
     |> assign(:fear_greed, nil)
     |> assign(:fx_exposure, [])
-    |> assign(:cash_flow, [])
     |> assign(:investment_summary, nil)
     |> assign(:show_waterfall, false)
     |> assign(:waterfall_data, [])
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
-    |> assign(:active_tab, "income")
+    |> assign(:active_tab, "performance")
     |> assign(:per_symbol_dividends, %{})
     |> assign(:dividend_summary_totals, %{})
-    |> assign(:is_reconstructed, false)
-    |> assign(:missing_price_count, 0)
     |> assign(:margin_equity, nil)
     |> assign(:pnl, %{
       total_pnl: Decimal.new("0"),
@@ -626,10 +624,10 @@ defmodule DividendsomaticWeb.PortfolioLive do
     )
     |> assign(:sparkline_values, sparkline_values)
     |> assign(:costs_this_year, Portfolio.total_costs_for_year(year))
+    |> assign(:costs_summary, Portfolio.costs_summary())
     |> assign_realized_and_total_return(year, dividend_dashboard.total_for_year)
     |> assign(:fear_greed, get_fear_greed_for_snapshot(socket, snapshot))
     |> assign(:fx_exposure, [])
-    |> assign(:cash_flow, dividend_dashboard.cash_flow_summary)
     |> assign(:show_waterfall, false)
     |> assign(:waterfall_data, [])
     |> assign(:pnl_year, nil)
@@ -638,8 +636,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:investment_summary, nil)
     |> assign(:summary_loaded, false)
     |> assign(:margin_equity, nil)
-    |> assign_new(:active_tab, fn -> "income" end)
-    |> assign_freshness_and_source(snapshot, positions)
+    |> assign_new(:active_tab, fn -> "performance" end)
     |> maybe_load_summary()
   end
 
@@ -739,15 +736,6 @@ defmodule DividendsomaticWeb.PortfolioLive do
       series: chart_json.series,
       options: %{annotations: chart_json.annotations}
     })
-  end
-
-  defp assign_freshness_and_source(socket, snapshot, positions) do
-    is_reconstructed = snapshot.data_quality == "reconstructed"
-    missing = if is_reconstructed, do: Enum.count(positions, &is_nil(&1.price)), else: 0
-
-    socket
-    |> assign(:is_reconstructed, is_reconstructed)
-    |> assign(:missing_price_count, missing)
   end
 
   defp assign_realized_and_total_return(socket, year, dividend_total) do
@@ -983,6 +971,13 @@ defmodule DividendsomaticWeb.PortfolioLive do
       dataLabels: %{enabled: false}
     }
   end
+
+  defp format_cost_type("commission"), do: "Commission"
+  defp format_cost_type("withholding_tax"), do: "Withholding Tax"
+  defp format_cost_type("foreign_tax"), do: "Foreign Tax"
+  defp format_cost_type("loan_interest"), do: "Loan Interest"
+  defp format_cost_type("capital_interest"), do: "Capital Interest"
+  defp format_cost_type(other), do: String.capitalize(other)
 
   defp date_to_unix_ms(date) do
     date

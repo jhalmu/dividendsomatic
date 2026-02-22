@@ -67,11 +67,21 @@ mix ecto.reset              # Drop + create + migrate
 
 ## Current Status
 
-**Version:** 0.38.0 (Alias System — Base Names & Variants)
-**Status:** Deterministic alias system, 349 primary aliases, 567 total, 49 symbols fixed to canonical tickers
+**Version:** 0.39.0 (Production Deployment Infrastructure)
+**Status:** Production-ready with Dockerfile, CI/CD, Caddy reverse proxy for dividends-o-matic.com
 **Branch:** `main`
 
-**Latest session (2026-02-21 Alias System — Base Names & Variants):**
+**Latest session (2026-02-22 Production Deployment Infrastructure):**
+- **Dockerfile** — multi-stage build (hexpm/elixir 1.19.4 + debian trixie-slim), runs as nobody
+- **Docker Compose** — app + Postgres 17, shared caddy network, env-based secrets
+- **GitHub Actions CI/CD** — 5-job pipeline (quality/security/test/build/deploy)
+- **Caddy reverse proxy** — dividends-o-matic.com with HSTS, security headers, www redirect
+- **Release tooling** — release.ex, bin/server, bin/migrate overlay scripts
+- **force_ssl** — HSTS + x_forwarded_proto rewrite in prod config
+- 679 tests, 0 failures
+- **Server setup needed**: DNS, /opt/dividendsomatic, GitHub Actions secrets
+
+**Previous session (2026-02-21 Alias System — Base Names & Variants):**
 - **`is_primary` flag on aliases**: 349/349 instruments have primary alias (finnhub > symbol_mapping > ibkr priority)
 - **Comma-separated aliases split**: 12→0 (e.g., "TELIA1, TLS" → separate records)
 - **49 instrument symbols fixed**: broker codes + company names → tickers (TELIA1→TELIA, "ALIBABA GROUP..."→BABA)
@@ -302,10 +312,10 @@ mix ecto.reset              # Drop + create + migrate
 - 685 tests + 21 Playwright E2E tests, 0 credo warnings
 
 **Next priorities:**
+- Server setup: DNS, /opt/dividendsomatic, GitHub Actions secrets, first deploy
 - Fix `mix validate.data` crash — nil amounts in `find_outliers/1` (ArithmeticError)
-- Balance check remaining gap (6.77%) — likely FX effects on ~€330k multi-currency cash over 4 years
+- Balance check remaining gap (15.90%) — likely FX effects on ~€330k multi-currency cash over 4 years
 - Remaining 162 instruments without sector (delisted/unknown symbols — may need manual mapping)
-- Production deployment (Hetzner via docker-compose)
 - EODHD historical data backfill (30+ years available)
 
 ---
@@ -323,7 +333,7 @@ All issues (#1-#22) closed.
 - [x] Gmail integration: OAuth configured, app published to production, all 4 Flex types supported
 - [ ] Finnhub free tier: quotes work, candles return 403 (using Yahoo Finance instead)
 - [ ] 10 stocks missing Yahoo Finance data (delisted/renamed)
-- [ ] No production deployment (Hetzner via docker-compose)
+- [x] Production deployment infrastructure (Dockerfile, CI/CD, Caddy) — server setup pending
 - [x] Chart reconstruction N+1 queries fixed (3,700+ → 3 queries + persistent_term cache)
 - [x] Multi-provider market data architecture (Finnhub + Yahoo + EODHD)
 - [x] IBKR dividend recovery: PIL fallback, Foreign Tax filter, 73 new dividends

@@ -1,76 +1,91 @@
-# Session Report — 2026-02-21 (Instrument Alias System — Base Names & Variant Collection)
+# Session Report — 2026-02-22 (Production Deployment Infrastructure)
 
 ## Overview
 
-Improved the instrument alias system: added `is_primary` flag for deterministic alias selection, split 12 comma-separated aliases, fixed 49 instrument symbols from broker codes/company names to canonical tickers, collected 122 variant aliases from positions and sold_positions, and made alias lookups deterministic across the codebase.
+Added full production deployment infrastructure: Dockerfile, Docker Compose, GitHub Actions CI/CD, Caddy reverse proxy config, and release tooling. Follows the same pattern as the homesite deployment on Hetzner VPS.
 
 ## Changes
 
-### Step 1: Migration — `is_primary` on instrument_aliases
-- Added `is_primary` boolean column (default false, not null)
-- Partial unique index: one primary per instrument (`WHERE is_primary = true`)
-- Updated `InstrumentAlias` schema with unique constraint
+### Step 1: Release Infrastructure
+- `lib/dividendsomatic/release.ex` — migration module for production releases (no Mix available)
+- `rel/overlays/bin/server` — startup script (`PHX_SERVER=true`)
+- `rel/overlays/bin/migrate` — migration script for Docker exec
 
-### Step 2: `mix backfill.aliases` task
-- **Split comma-separated aliases**: 12 records like "TELIA1, TLS" split into individual records
-- **Set `is_primary` flags**: Priority: finnhub > symbol_mapping > ibkr > most recent
-- **Fix base names**: 49 instrument symbols fixed via override map (68 entries)
-  - Nordic broker codes: TELIA1→TELIA, NDA FI→NORDEA, CTY1S→CITYCON, etc.
-  - Full company names: "ALIBABA GROUP HOLDING-SP ADR"→BABA, "OCCIDENTAL PETROLEUM CORP"→OXY, etc.
-- Supports `--dry-run`, `--variants` flags
-- Smart comma detection: skips long company names containing commas (e.g., "GROUP, LLC")
+### Step 2: Dockerfile
+- Multi-stage build: `hexpm/elixir:1.19.4-erlang-28.2.1` builder → `debian:trixie-slim` runner
+- Follows standard Phoenix release template
+- Installs hex+rebar, compiles deps, builds assets, creates release
+- Runner stage: minimal runtime deps (libstdc++6, openssl, libncurses6, locales, ca-certificates)
+- Runs as `nobody` user
 
-### Step 3: Variant alias collection (`--variants`)
-- **62 aliases from positions** — symbol variants per instrument via ISIN match
-- **59 aliases from sold_positions** — symbol variants per instrument via ISIN match
-- **Trade extraction**: handles both "Order" (symbol at index 4) and "Trade" (index 3) raw_data formats; skips legacy records without row data
+### Step 3: Docker Compose (Production)
+- `docker-compose.prod.yml` — app + Postgres 17 Alpine
+- External `caddy` network (shared with homesite)
+- Health check on Postgres before app starts
+- All secrets via environment variables from `.env`
 
-### Step 4: Deterministic alias lookups
-- `dividend_validator.ex:71` — `ORDER BY is_primary DESC, inserted_at DESC`
-- `ibkr_activity_parser.ex:1197` — `ORDER BY is_primary DESC, inserted_at DESC`
+### Step 4: .dockerignore
+- Excludes tests, CSV data, env files, build artifacts, editor files
 
-### Step 5: Integrity checks
-- `:instruments_without_primary_alias` — instruments with aliases but no primary (warning)
-- `:comma_separated_aliases` — aliases containing commas, ≤30 chars (warning)
-- `check_all` total_checks bumped from 4 to 5
+### Step 5: Production Config
+- Added `force_ssl: [hsts: true, rewrite_on: [:x_forwarded_proto]]` to `config/prod.exs`
 
-### Step 6: Tests (+11 new)
-- `instrument_alias_test.exs` — is_primary field, unique constraint, multiple non-primary (4 tests)
-- `backfill_aliases_test.exs` — comma splitting, dedup, primary selection priority, base names (7 tests)
+### Step 6: GitHub Actions CI/CD
+- 5-job pipeline: quality → security → test → build-and-push → deploy
+- **quality**: format, compile --warnings-as-errors, credo --strict
+- **security**: sobelow, deps.audit
+- **test**: PostgreSQL 17 service, mix test
+- **build-and-push**: Docker build → GHCR (on main push only)
+- **deploy**: SSH to Hetzner, pull, up, migrate, prune (on main push only)
+
+### Step 7: Caddyfile
+- Reverse proxy for `dividends-o-matic.com`
+- Security headers (HSTS, X-Content-Type-Options, X-Frame-Options, etc.)
+- www → non-www redirect
+- Access logging with rotation
+
+### Step 8: .env.example
+- Template for all required production secrets
 
 ## Verification Summary
 
 ### Test Suite
-- **685 tests, 0 failures** (25 excluded: playwright/external/auth)
-- Credo: 1 new issue in our code (mix task `run/1` complexity 10, acceptable for entry point)
+- **679 tests, 0 failures** (25 excluded: playwright/external/auth)
+- `MIX_ENV=prod mix compile` — clean compilation
+- Credo: 34 pre-existing issues (mix task complexity), 0 new issues
 
-### Data Validation
-- `mix validate.data` — pre-existing crash in `find_outliers/1` (ArithmeticError on nil amount), not caused by this session's changes
+### Data Validation (`mix validate.data`)
+- Total checked: 2178, Issues found: 679
+  - duplicate: 282 (warning) — cross-source ISIN duplicates
+  - isin_currency_mismatch: 240 (info) — Canadian stocks traded in USD
+  - inconsistent_amount: 154 (info) — ETF distribution variance
+  - suspicious_amount: 1 (warning) — OPP $207.45 per share
+  - mixed_amount_types: 2 (info) — ORC, RIV have both per_share and total_net
+- Portfolio balance: ⚠ WARNING (15.90% gap, margin account)
 
-### Alias System Results
-
-| Metric | Before | After |
-|--------|--------|-------|
-| Total aliases | 443 | **567** |
-| Primary aliases | 0 | **349** (all instruments) |
-| Comma-separated aliases | 12 | **0** |
-| Instruments with proper ticker | ~300 | **349** (49 fixed) |
-| Deterministic lookups | 0/2 | **2/2** |
+### GitHub Issues
+- No open issues (all #1-#22 closed)
 
 ## Files Changed
 
-### New files
-- `priv/repo/migrations/20260221160000_add_is_primary_to_instrument_aliases.exs`
-- `lib/mix/tasks/backfill_aliases.ex`
-- `test/dividendsomatic/portfolio/instrument_alias_test.exs`
-- `test/mix/tasks/backfill_aliases_test.exs`
+### New files (9)
+- `lib/dividendsomatic/release.ex`
+- `rel/overlays/bin/server`
+- `rel/overlays/bin/migrate`
+- `Dockerfile`
+- `.dockerignore`
+- `docker-compose.prod.yml`
+- `.github/workflows/deploy.yml`
+- `Caddyfile`
+- `.env.example`
 
-### Modified files
-- `lib/dividendsomatic/portfolio/instrument_alias.ex` — `:is_primary` field + unique constraint
-- `lib/dividendsomatic/portfolio/dividend_validator.ex` — deterministic alias subquery
-- `lib/dividendsomatic/portfolio/ibkr_activity_parser.ex` — deterministic alias lookup
-- `lib/dividendsomatic/portfolio/schema_integrity.ex` — alias quality checks
-- `test/dividendsomatic/portfolio/schema_integrity_test.exs` — updated total_checks assertion
+### Modified files (1)
+- `config/prod.exs` — added force_ssl
 
-## Known Issues
-- `mix validate.data` crashes on `ArithmeticError` in `find_outliers/1` — pre-existing, nil dividend amounts
+## Server Setup (One-Time, Manual)
+
+1. DNS: Point `dividends-o-matic.com` A record to VPS IP
+2. Create `/opt/dividendsomatic` with `.env` and `docker-compose.prod.yml`
+3. Ensure `docker network create caddy` exists
+4. Add Caddyfile site block to shared Caddy config
+5. GitHub Actions secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`

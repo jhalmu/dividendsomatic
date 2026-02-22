@@ -1,0 +1,46 @@
+services:
+  app:
+    image: ghcr.io/jhalmu/dividendsomatic:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "ecto://dividendsomatic:${DB_PASSWORD}@db/dividendsomatic_prod"
+      SECRET_KEY_BASE: "${SECRET_KEY_BASE}"
+      PHX_HOST: "${PHX_HOST}"
+      PHX_SERVER: "true"
+      PORT: "4000"
+      FINNHUB_API_KEY: "${FINNHUB_API_KEY}"
+      EODHD_API_KEY: "${EODHD_API_KEY}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
+      GOOGLE_REFRESH_TOKEN: "${GOOGLE_REFRESH_TOKEN}"
+    networks:
+      - internal
+      - caddy
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: dividendsomatic
+      POSTGRES_PASSWORD: "${DB_PASSWORD}"
+      POSTGRES_DB: dividendsomatic_prod
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dividendsomatic -d dividendsomatic_prod"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+volumes:
+  postgres_data:
+
+networks:
+  internal:
+  caddy:
+    external: true

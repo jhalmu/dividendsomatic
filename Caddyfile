@@ -1,0 +1,27 @@
+dividends-o-matic.com {
+    encode gzip zstd
+
+    reverse_proxy dividendsomatic-app-1:4000 {
+        header_up X-Forwarded-Proto https
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    log {
+        output file /data/dividendsomatic-access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+}
+
+www.dividends-o-matic.com {
+    redir https://dividends-o-matic.com{uri} permanent
+}

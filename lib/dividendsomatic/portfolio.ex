@@ -826,13 +826,23 @@ defmodule Dividendsomatic.Portfolio do
   defp build_symbol_dividend_data(divs_with_income, raw_divs, pos, instrument_div_map) do
     # Enrich total_net dividends that lack per_share: derive from net_amount / position qty
     enriched = enrich_missing_per_share(divs_with_income, pos)
-    frequency = detect_payment_frequency(raw_divs)
+    detected = detect_payment_frequency(raw_divs)
+
+    # Fall back to stored instrument frequency when detection can't determine it
+    frequency =
+      if detected == :unknown do
+        isin = if pos, do: pos.isin, else: nil
+        stored = if isin, do: get_in(instrument_div_map, [isin, :dividend_frequency])
+        stored_to_frequency(stored) || :unknown
+      else
+        detected
+      end
 
     {annual_per_share, source} =
       compute_best_annual_per_share(enriched, raw_divs, pos, instrument_div_map, frequency)
 
     div_fx_rate = latest_dividend_fx_rate(raw_divs)
-    yield_on_cost = symbol_yield_on_cost(annual_per_share, pos)
+    yield_on_cost = symbol_yield_on_cost(annual_per_share, pos, div_fx_rate)
     projected_annual = symbol_projected_annual(annual_per_share, pos, div_fx_rate)
     ytd_paid = symbol_ytd_paid(enriched)
 
@@ -849,30 +859,53 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   defp compute_best_annual_per_share(enriched, _raw_divs, pos, instrument_div_map, frequency) do
-    # 1. Try declared rate from instrument (Yahoo Finance)
     isin = if pos, do: pos.isin, else: nil
     instrument_data = if isin, do: Map.get(instrument_div_map, isin), else: nil
 
-    declared_rate =
-      if instrument_data do
-        instrument_data.dividend_rate
-      else
-        nil
-      end
+    stored_rate =
+      if instrument_data, do: instrument_data.dividend_rate, else: nil
 
-    if declared_rate && Decimal.compare(declared_rate, Decimal.new("0")) == :gt do
-      {declared_rate, "declared"}
-    else
-      # 2. Fallback: TTM with frequency extrapolation
-      ttm = DividendAnalytics.compute_annual_dividend_per_share(enriched, frequency)
+    stored_source =
+      if instrument_data, do: instrument_data.dividend_source, else: nil
 
-      source =
-        if frequency in [:monthly, :quarterly, :semi_annual],
-          do: "ttm_extrapolated",
-          else: "ttm_sum"
+    has_stored_rate? =
+      stored_rate && Decimal.compare(stored_rate, Decimal.new("0")) == :gt
 
-      {ttm, source}
+    ttm = DividendAnalytics.compute_annual_dividend_per_share(enriched, frequency)
+
+    ttm_source =
+      if frequency in [:monthly, :quarterly, :semi_annual],
+        do: "ttm_extrapolated",
+        else: "ttm_sum"
+
+    cond do
+      # 1. Manual or TTM-computed stored rate — trusted, use immediately
+      has_stored_rate? && stored_source in ["manual", "ttm_computed"] ->
+        {stored_rate, stored_source}
+
+      # 2. Yahoo rate with TTM available — check for divergence
+      has_stored_rate? && Decimal.compare(ttm, Decimal.new("0")) == :gt ->
+        if yahoo_ttm_diverges?(stored_rate, ttm) do
+          {ttm, ttm_source}
+        else
+          {stored_rate, "declared"}
+        end
+
+      # 3. Yahoo rate, no TTM data
+      has_stored_rate? ->
+        {stored_rate, "declared"}
+
+      # 4. No stored rate — TTM fallback
+      true ->
+        {ttm, ttm_source}
     end
+  end
+
+  defp yahoo_ttm_diverges?(yahoo_rate, ttm_rate) do
+    ratio = Decimal.div(yahoo_rate, ttm_rate)
+
+    Decimal.compare(ratio, Decimal.new("2")) == :gt ||
+      Decimal.compare(ratio, Decimal.new("0.5")) == :lt
   end
 
   defp build_instrument_dividend_map do
@@ -880,7 +913,12 @@ defmodule Dividendsomatic.Portfolio do
     |> where([i], not is_nil(i.dividend_rate))
     |> select(
       [i],
-      {i.isin, %{dividend_rate: i.dividend_rate, dividend_frequency: i.dividend_frequency}}
+      {i.isin,
+       %{
+         dividend_rate: i.dividend_rate,
+         dividend_frequency: i.dividend_frequency,
+         dividend_source: i.dividend_source
+       }}
     )
     |> Repo.all()
     |> Map.new()
@@ -910,6 +948,12 @@ defmodule Dividendsomatic.Portfolio do
   defp interval_to_frequency(avg) when avg < 270, do: :semi_annual
   defp interval_to_frequency(avg) when avg >= 270, do: :annual
   defp interval_to_frequency(_), do: :unknown
+
+  defp stored_to_frequency("monthly"), do: :monthly
+  defp stored_to_frequency("quarterly"), do: :quarterly
+  defp stored_to_frequency("semi_annual"), do: :semi_annual
+  defp stored_to_frequency("annual"), do: :annual
+  defp stored_to_frequency(_), do: nil
 
   defp symbol_est_monthly(projected_annual) do
     projected_annual
@@ -966,13 +1010,18 @@ defmodule Dividendsomatic.Portfolio do
     |> Decimal.round(2)
   end
 
-  defp symbol_yield_on_cost(_annual_per_share, nil), do: nil
+  defp symbol_yield_on_cost(_annual_per_share, nil, _div_fx_rate), do: nil
 
-  defp symbol_yield_on_cost(annual_per_share, pos) do
+  defp symbol_yield_on_cost(annual_per_share, pos, div_fx_rate) do
     avg_cost = pos.cost_price
 
     if avg_cost && Decimal.compare(avg_cost, Decimal.new("0")) == :gt do
+      # Convert annual_per_share to position currency via FX rate
+      # (e.g. SEK dividend / SEK→EUR fx_rate = EUR per share)
+      fx = div_fx_rate || pos.fx_rate || Decimal.new("1")
+
       annual_per_share
+      |> Decimal.mult(fx)
       |> Decimal.div(avg_cost)
       |> Decimal.mult(Decimal.new("100"))
       |> Decimal.round(2)
