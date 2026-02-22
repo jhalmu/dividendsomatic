@@ -29,6 +29,7 @@ defmodule Dividendsomatic.DataCase do
 
   setup tags do
     Dividendsomatic.DataCase.setup_sandbox(tags)
+    Dividendsomatic.Portfolio.invalidate_cache()
     :ok
   end
 

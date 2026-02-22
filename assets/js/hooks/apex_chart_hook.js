@@ -1,5 +1,3 @@
-import ApexCharts from "apexcharts"
-
 function addFormatters(config) {
   const fmt = (val) =>
     val != null
@@ -37,7 +35,8 @@ function addFormatters(config) {
 }
 
 const ApexChartHook = {
-  mounted() {
+  async mounted() {
+    const {default: ApexCharts} = await import("apexcharts")
     const config = addFormatters(JSON.parse(this.el.dataset.chartConfig))
     this.chart = new ApexCharts(this.el, config)
     this.chart.render()
@@ -47,8 +46,9 @@ const ApexChartHook = {
       if (series) this.chart.updateSeries(series, true)
     })
   },
-  updated() {
+  async updated() {
     if (!this.chart) {
+      const {default: ApexCharts} = await import("apexcharts")
       const config = addFormatters(JSON.parse(this.el.dataset.chartConfig))
       this.chart = new ApexCharts(this.el, config)
       this.chart.render()

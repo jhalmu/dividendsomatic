@@ -263,7 +263,8 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidatorTest do
         flow_type: "interest",
         date: ~D[2024-03-01],
         amount: Decimal.new("-500"),
-        currency: "EUR"
+        currency: "EUR",
+        source: "ibkr"
       })
       |> Repo.insert!()
 
@@ -274,7 +275,8 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidatorTest do
         flow_type: "fee",
         date: ~D[2024-03-01],
         amount: Decimal.new("-100"),
-        currency: "EUR"
+        currency: "EUR",
+        source: "ibkr"
       })
       |> Repo.insert!()
 
@@ -419,7 +421,8 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidatorTest do
         currency: "EUR",
         fx_rate: Decimal.new("1"),
         amount_eur: Decimal.new("50000"),
-        description: "Electronic Fund Transfer"
+        description: "Electronic Fund Transfer",
+        source: "ibkr"
       })
       |> Repo.insert!()
 
@@ -434,7 +437,8 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidatorTest do
         currency: "EUR",
         fx_rate: Decimal.new("1"),
         amount_eur: Decimal.new("99999"),
-        description: "Electronic Fund Transfer"
+        description: "Electronic Fund Transfer",
+        source: "ibkr"
       })
       |> Repo.insert!()
 
@@ -505,7 +509,8 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidatorTest do
         flow_type: "deposit",
         date: ~D[2024-01-01],
         amount: Decimal.new("90000"),
-        currency: "EUR"
+        currency: "EUR",
+        source: "ibkr"
       })
       |> Repo.insert!()
 
@@ -587,7 +592,8 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidatorTest do
       currency: "EUR",
       fx_rate: Decimal.new("1"),
       amount_eur: Decimal.new(deposits),
-      description: "Test deposit"
+      description: "Test deposit",
+      source: "ibkr"
     })
     |> Repo.insert!()
 

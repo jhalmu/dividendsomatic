@@ -24,6 +24,53 @@ defmodule Dividendsomatic.Portfolio do
 
   alias Dividendsomatic.Repo
 
+  ## Persistent Term Cache
+  # Historical portfolio data is immutable after import — safe to cache indefinitely.
+  # Invalidated only on import via invalidate_cache/0.
+
+  @portfolio_cache_keys [
+    :portfolio_all_chart_data,
+    :portfolio_first_snapshot,
+    :portfolio_snapshot_count,
+    :portfolio_costs_summary
+  ]
+
+  defp cached(key, compute_fn) do
+    case :persistent_term.get(key, nil) do
+      nil ->
+        value = compute_fn.()
+        :persistent_term.put(key, value)
+        value
+
+      value ->
+        value
+    end
+  end
+
+  defp cached_by_year(base_key, year, compute_fn) do
+    key = {base_key, year}
+    if year < Date.utc_today().year, do: cached(key, compute_fn), else: compute_fn.()
+  end
+
+  @doc """
+  Invalidates all portfolio caches. Call after any import that changes snapshot/cost data.
+  """
+  def invalidate_cache do
+    Enum.each(@portfolio_cache_keys, &safe_erase/1)
+
+    Enum.each(2017..Date.utc_today().year, fn year ->
+      safe_erase({:portfolio_costs_for_year, year})
+    end)
+
+    :ok
+  end
+
+  defp safe_erase(key) do
+    :persistent_term.erase(key)
+  rescue
+    ArgumentError -> :ok
+  end
+
   ## Portfolio Snapshots
 
   @doc """
@@ -149,18 +196,20 @@ defmodule Dividendsomatic.Portfolio do
   (IBKR Flex, Nordnet, 9A) write precomputed totals at import time.
   """
   def get_all_chart_data do
-    PortfolioSnapshot
-    |> order_by([s], asc: s.date)
-    |> select([s], %{
-      date: s.date,
-      date_string: fragment("to_char(?, 'YYYY-MM-DD')", s.date),
-      value: s.total_value,
-      value_float: type(s.total_value, :float),
-      cost_basis_float: type(s.total_cost, :float),
-      source: s.source,
-      data_quality: s.data_quality
-    })
-    |> Repo.all()
+    cached(:portfolio_all_chart_data, fn ->
+      PortfolioSnapshot
+      |> order_by([s], asc: s.date)
+      |> select([s], %{
+        date: s.date,
+        date_string: fragment("to_char(?, 'YYYY-MM-DD')", s.date),
+        value: s.total_value,
+        value_float: type(s.total_value, :float),
+        cost_basis_float: type(s.total_cost, :float),
+        source: s.source,
+        data_quality: s.data_quality
+      })
+      |> Repo.all()
+    end)
   end
 
   @doc """
@@ -221,11 +270,13 @@ defmodule Dividendsomatic.Portfolio do
   Returns the first (oldest) snapshot.
   """
   def get_first_snapshot do
-    PortfolioSnapshot
-    |> order_by([s], asc: s.date)
-    |> limit(1)
-    |> preload(:positions)
-    |> Repo.one()
+    cached(:portfolio_first_snapshot, fn ->
+      PortfolioSnapshot
+      |> order_by([s], asc: s.date)
+      |> limit(1)
+      |> preload(:positions)
+      |> Repo.one()
+    end)
   end
 
   @doc """
@@ -242,7 +293,9 @@ defmodule Dividendsomatic.Portfolio do
   Returns the total count of snapshots.
   """
   def count_snapshots do
-    Repo.aggregate(PortfolioSnapshot, :count)
+    cached(:portfolio_snapshot_count, fn ->
+      Repo.aggregate(PortfolioSnapshot, :count)
+    end)
   end
 
   @doc """
@@ -311,27 +364,31 @@ defmodule Dividendsomatic.Portfolio do
   Returns `{:ok, snapshot}` on success, `{:error, reason}` on failure.
   """
   def create_snapshot_from_csv(csv_data, report_date) do
-    Repo.transaction(fn ->
-      case create_snapshot(report_date, csv_data) do
-        {:ok, snapshot} ->
-          positions = parse_csv_positions(csv_data, snapshot.id, report_date)
-          {total_value, total_cost} = compute_snapshot_totals(positions)
+    result =
+      Repo.transaction(fn ->
+        case create_snapshot(report_date, csv_data) do
+          {:ok, snapshot} ->
+            positions = parse_csv_positions(csv_data, snapshot.id, report_date)
+            {total_value, total_cost} = compute_snapshot_totals(positions)
 
-          {:ok, snapshot} =
+            {:ok, snapshot} =
+              snapshot
+              |> PortfolioSnapshot.changeset(%{
+                total_value: total_value,
+                total_cost: total_cost,
+                positions_count: length(positions)
+              })
+              |> Repo.update()
+
             snapshot
-            |> PortfolioSnapshot.changeset(%{
-              total_value: total_value,
-              total_cost: total_cost,
-              positions_count: length(positions)
-            })
-            |> Repo.update()
 
-          snapshot
+          {:error, changeset} ->
+            Repo.rollback(changeset)
+        end
+      end)
 
-        {:error, changeset} ->
-          Repo.rollback(changeset)
-      end
-    end)
+    if match?({:ok, _}, result), do: invalidate_cache()
+    result
   end
 
   defp create_snapshot(report_date, csv_data) do
@@ -1376,16 +1433,18 @@ defmodule Dividendsomatic.Portfolio do
   Returns total costs for a specific year (interest + fees from cash_flows).
   """
   def total_costs_for_year(year) do
-    year_start = Date.new!(year, 1, 1)
+    cached_by_year(:portfolio_costs_for_year, year, fn ->
+      year_start = Date.new!(year, 1, 1)
 
-    year_end =
-      if year == Date.utc_today().year, do: Date.utc_today(), else: Date.new!(year, 12, 31)
+      year_end =
+        if year == Date.utc_today().year, do: Date.utc_today(), else: Date.new!(year, 12, 31)
 
-    CashFlow
-    |> where([c], c.flow_type in ["interest", "fee"])
-    |> where([c], c.date >= ^year_start and c.date <= ^year_end)
-    |> select([c], sum(fragment("ABS(COALESCE(?, ?))", c.amount_eur, c.amount)))
-    |> Repo.one() || Decimal.new("0")
+      CashFlow
+      |> where([c], c.flow_type in ["interest", "fee"])
+      |> where([c], c.date >= ^year_start and c.date <= ^year_end)
+      |> select([c], sum(fragment("ABS(COALESCE(?, ?))", c.amount_eur, c.amount)))
+      |> Repo.one() || Decimal.new("0")
+    end)
   end
 
   def list_costs do
@@ -1402,9 +1461,18 @@ defmodule Dividendsomatic.Portfolio do
     |> Repo.all()
   end
 
-  def total_costs_by_type do
-    CashFlow
-    |> where([c], c.flow_type in ["interest", "fee"])
+  def total_costs_by_type(opts \\ []) do
+    query =
+      CashFlow
+      |> where([c], c.flow_type in ["interest", "fee"])
+
+    query =
+      case Keyword.get(opts, :source) do
+        nil -> query
+        source -> where(query, [c], c.source == ^source)
+      end
+
+    query
     |> group_by([c], c.flow_type)
     |> select([c], {c.flow_type, sum(fragment("ABS(COALESCE(?, ?))", c.amount_eur, c.amount))})
     |> Repo.all()
@@ -1412,32 +1480,46 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   def costs_summary do
-    by_type = total_costs_by_type()
+    cached(:portfolio_costs_summary, fn ->
+      by_type = total_costs_by_type()
 
-    total =
-      by_type
-      |> Map.values()
-      |> Enum.reduce(Decimal.new("0"), &Decimal.add/2)
+      total =
+        by_type
+        |> Map.values()
+        |> Enum.reduce(Decimal.new("0"), &Decimal.add/2)
 
-    count =
-      CashFlow
-      |> where([c], c.flow_type in ["interest", "fee"])
-      |> Repo.aggregate(:count)
+      count =
+        CashFlow
+        |> where([c], c.flow_type in ["interest", "fee"])
+        |> Repo.aggregate(:count)
 
-    %{by_type: by_type, total: total, count: count}
+      %{by_type: by_type, total: total, count: count}
+    end)
   end
 
   ## Investment Summary
 
   @doc """
   Returns total deposits and withdrawals from cash_flows.
+
+  Options:
+    - `:source` — filter by source (e.g., "ibkr"). Default: all sources.
   """
-  def total_deposits_withdrawals do
+  def total_deposits_withdrawals(opts \\ []) do
     zero = Decimal.new("0")
 
-    results =
+    query =
       CashFlow
       |> where([c], c.flow_type in ["deposit", "withdrawal"])
+
+    query =
+      case Keyword.get(opts, :source) do
+        nil -> query
+        source -> where(query, [c], c.source == ^source)
+      end
+
+    results =
+      query
       |> select([c], %{flow_type: c.flow_type, amount: c.amount, amount_eur: c.amount_eur})
       |> Repo.all()
 
@@ -1758,7 +1840,8 @@ defmodule Dividendsomatic.Portfolio do
     margin_snapshot = get_latest_margin_equity()
 
     actual_interest = total_actual_margin_interest()
-    dw = total_deposits_withdrawals()
+    # IBKR-only: margin equity is an IBKR concept, Nordnet deposits are irrelevant
+    dw = total_deposits_withdrawals(source: "ibkr")
 
     case margin_snapshot do
       nil ->
@@ -1801,7 +1884,7 @@ defmodule Dividendsomatic.Portfolio do
   """
   def total_actual_margin_interest do
     CashFlow
-    |> where([c], c.flow_type == "interest")
+    |> where([c], c.flow_type == "interest" and c.source == "ibkr")
     |> select([c], sum(fragment("ABS(?)", c.amount)))
     |> Repo.one() || Decimal.new("0")
   end
@@ -1811,7 +1894,7 @@ defmodule Dividendsomatic.Portfolio do
   """
   def margin_interest_by_month do
     CashFlow
-    |> where([c], c.flow_type == "interest")
+    |> where([c], c.flow_type == "interest" and c.source == "ibkr")
     |> group_by([c], fragment("to_char(?, 'YYYY-MM')", c.date))
     |> select([c], %{
       month: fragment("to_char(?, 'YYYY-MM')", c.date),
@@ -1831,7 +1914,7 @@ defmodule Dividendsomatic.Portfolio do
       if year == Date.utc_today().year, do: Date.utc_today(), else: Date.new!(year, 12, 31)
 
     CashFlow
-    |> where([c], c.flow_type == "interest")
+    |> where([c], c.flow_type == "interest" and c.source == "ibkr")
     |> where([c], c.date >= ^year_start and c.date <= ^year_end)
     |> select([c], sum(fragment("ABS(?)", c.amount)))
     |> Repo.one() || Decimal.new("0")

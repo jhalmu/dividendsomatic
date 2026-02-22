@@ -72,6 +72,15 @@ topbar.config({barColors: {0: "#38BDF8"}, shadowColor: "rgba(0, 0, 0, .3)"})
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 
+// View Transitions API for smooth page navigations
+if (document.startViewTransition) {
+  window.addEventListener("phx:page-loading-start", (info) => {
+    if (info.detail?.kind === "redirect" || info.detail?.kind === "initial") {
+      document.startViewTransition()
+    }
+  })
+}
+
 // connect if there are any LiveViews on the page
 liveSocket.connect()
 

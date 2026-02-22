@@ -1,108 +1,82 @@
-# Session Report — 2026-02-22 (Production Deployment & Go-Live)
+# Session Report — 2026-02-22 (persistent_term Cache for Navigation)
 
 ## Overview
 
-Completed full production deployment: built infrastructure, fixed CI pipeline (5 iterations), set up server on Hetzner VPS, configured DNS + TLS, restored database, and verified end-to-end CI/CD pipeline. Site is live at https://dividends-o-matic.com.
+Implemented `persistent_term` caching for historical portfolio data to eliminate redundant DB queries during snapshot navigation. Reduced per-navigation queries from ~12 to ~5. Also ran Lighthouse audit (Performance 84, Accessibility 100, Best Practices 100, SEO 100).
 
 ## Changes
 
-### Step 1: Release Infrastructure
-- `lib/dividendsomatic/release.ex` — migration module for production releases (no Mix available)
-- `rel/overlays/bin/server` — startup script (`PHX_SERVER=true`)
-- `rel/overlays/bin/migrate` — migration script for Docker exec
+### 1. Cache Helpers (`lib/dividendsomatic/portfolio.ex`)
+- Added `cached/2` — wraps a computation with `persistent_term` memoization
+- Added `cached_by_year/3` — caches only for completed years (current year always recomputed)
+- Added `safe_erase/1` — safe key deletion (handles missing keys)
+- Added `invalidate_cache/0` — public function to clear all portfolio caches
+- `@portfolio_cache_keys` module attribute listing all cache keys
 
-### Step 2: Dockerfile
-- Multi-stage build: `hexpm/elixir:1.19.5-erlang-28.3.2-debian-trixie-20260202-slim`
-- Builder: build-essential + git + nodejs + npm (for apexcharts)
-- Runner: debian trixie-slim + libstdc++6 + openssl + libncurses6 + locales + ca-certificates
-- Runs as `nobody` user, CMD `/app/bin/server`
+### 2. Cached Query Functions (`lib/dividendsomatic/portfolio.ex`)
+- `get_all_chart_data/0` — always cached (`:portfolio_all_chart_data`)
+- `get_first_snapshot/0` — always cached (`:portfolio_first_snapshot`)
+- `count_snapshots/0` — always cached (`:portfolio_snapshot_count`)
+- `costs_summary/0` — always cached (`:portfolio_costs_summary`)
+- `total_costs_for_year/1` — cached for past years only (`{:portfolio_costs_for_year, year}`)
 
-### Step 3: Docker Compose (Production)
-- `docker-compose.prod.yml` — app + Postgres 17 Alpine
-- External `homesite_caddy` network (shared with homesite's Caddy)
-- Health check on Postgres before app starts
-- All secrets via environment variables from `.env`
+### 3. Derived Navigation Values (`lib/dividendsomatic_web/live/portfolio_live.ex`)
+Replaced 4 DB queries with in-memory derivations from cached `all_chart_data`:
+- `Portfolio.count_snapshots()` → `length(all_chart_data)`
+- `Portfolio.get_snapshot_position(date)` → `Enum.count(all_chart_data, ...)`
+- `Portfolio.has_previous_snapshot?(date)` → `snapshot_position > 1`
+- `Portfolio.has_next_snapshot?(date)` → `snapshot_position < total_snapshots`
 
-### Step 4: .dockerignore
-- Excludes tests, CSV data, env files, build artifacts, editor files
+### 4. Cache Invalidation on Import
+- `create_snapshot_from_csv/2` — invalidates after successful transaction
+- `FlexImportOrchestrator.import_all/1` — invalidates after all files processed
+- `IbkrActivityParser.import_file/1` — invalidates after import completes
 
-### Step 5: Production Config
-- Added `force_ssl: [hsts: true, rewrite_on: [:x_forwarded_proto]]` to `config/prod.exs`
+### 5. Test Support (`test/support/data_case.ex`)
+- Added `Portfolio.invalidate_cache()` to DataCase setup to prevent cross-test cache pollution
 
-### Step 6: GitHub Actions CI/CD
-- 5-job pipeline: quality → security → test → build-and-push → deploy
-- **quality**: format, compile --warnings-as-errors, credo --mute-exit-status
-- **security**: sobelow --config, deps.audit
-- **test**: PostgreSQL 17 service, `ecto.create + ecto.migrate` (no seeds), mix test
-- **build-and-push**: Docker build → GHCR (on main push only)
-- **deploy**: SSH to Hetzner via appleboy/ssh-action, pull + up + migrate + prune
+## Query Reduction Per Navigation
 
-### Step 7: Caddyfile
-- Reverse proxy for `dividends-o-matic.com` via shared homesite Caddy
-- Security headers (HSTS, X-Content-Type-Options, X-Frame-Options, etc.)
-- www → non-www redirect, access logging with rotation
+| Query | Before | After |
+|-------|--------|-------|
+| `get_all_chart_data()` | DB full scan | `persistent_term` lookup |
+| `count_snapshots()` | `COUNT(*)` | `length(cached_data)` |
+| `get_snapshot_position()` | `COUNT WHERE` | `Enum.count(cached_data)` |
+| `has_previous_snapshot?()` | `EXISTS` | `position > 1` |
+| `has_next_snapshot?()` | `EXISTS` | `position < total` |
+| `get_first_snapshot()` | `ORDER ASC LIMIT 1` | `persistent_term` lookup |
+| `costs_summary()` | `GROUP BY + COUNT` | `persistent_term` lookup |
+| `total_costs_for_year(y)` | `SUM WHERE` | cached for past years |
+| **Total eliminated** | **~8 queries** | **0 queries** (after first load) |
 
-### Step 8: .env.example
-- Template for all required production secrets
-
-### Server Setup (Completed)
-- Server: Hetzner VPS at orangedinos.de (95.216.190.226)
-- Docker Compose with external `homesite_caddy` network
-- Caddy site block added to `/opt/homesite/Caddyfile`
-- DNS: A records for `dividends-o-matic.com` + `www` at Joker registrar
-- TLS: Let's Encrypt production cert via Caddy (had to clear stale staging ACME data)
-- Database: pg_dump from dev → pg_restore to production
-- Gmail auto-import: Google OAuth credentials configured, Oban cron active (12:00 UTC Mon-Sat)
-- GitHub Actions secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY (production environment)
-
-### CI Pipeline Fixes (squashed into single commit)
-1. OTP 28.2.1 → 28.3.2 (version doesn't exist as three-part)
-2. seeds.exs rewritten for Position schema (Holding was deleted)
-3. `ecto.setup` → `ecto.create + ecto.migrate` (seeds polluted test DB)
-4. `credo --strict` → `--mute-exit-status` (pre-existing [F] issues)
-5. Debian trixie-20250210 → trixie-20260202 (correct date)
-6. Added nodejs/npm to Docker builder for apexcharts dependency
-
-## Verification Summary
+## Verification
 
 ### Test Suite
 - **679 tests, 0 failures** (25 excluded: playwright/external/auth)
-- Credo: 34 pre-existing issues (mix task complexity), 0 new issues
+- Credo: 35 pre-existing refactoring issues, 7 readability issues — none from this session
 
 ### Data Validation (`mix validate.data`)
 - Total checked: 2178, Issues found: 679
-  - duplicate: 282 (warning) — cross-source ISIN duplicates
-  - isin_currency_mismatch: 240 (info) — Canadian stocks traded in USD
-  - inconsistent_amount: 154 (info) — ETF distribution variance
-  - suspicious_amount: 1 (warning) — OPP $207.45 per share
-  - mixed_amount_types: 2 (info) — ORC, RIV have both per_share and total_net
-- Portfolio balance: ⚠ WARNING (15.90% gap, margin account)
+  - duplicate: 282 (warning), isin_currency_mismatch: 240 (info)
+  - inconsistent_amount: 154 (info), suspicious_amount: 1 (warning)
+  - mixed_amount_types: 2 (info)
+- Portfolio balance: ⚠ WARNING (8.80% gap, €7,583)
 
-### CI/CD Pipeline
-- All 5 jobs green: Quality ✓ Security ✓ Tests ✓ Build & Push ✓ Deploy ✓
-
-### Production Site
-- https://dividends-o-matic.com — 200 OK with TLS
-- https://www.dividends-o-matic.com — 301 redirect to non-www
-- Portfolio data loaded, Oban scheduler running
+### Lighthouse Audit
+- **Performance: 84** (FCP 3.2s, LCP 3.4s, TBT 30ms, CLS 0 — simulated mobile throttling)
+- **Accessibility: 100**
+- **Best Practices: 100**
+- **SEO: 100**
+- Server response 1,340ms (simulated slow 4G), total payload 1,297 KiB
 
 ### GitHub Issues
 - No open issues (all #1-#22 closed)
 
 ## Files Changed
 
-### New files (9)
-- `lib/dividendsomatic/release.ex`
-- `rel/overlays/bin/server`
-- `rel/overlays/bin/migrate`
-- `Dockerfile`
-- `.dockerignore`
-- `docker-compose.prod.yml`
-- `.github/workflows/deploy.yml`
-- `Caddyfile`
-- `.env.example`
-
-### Modified files (3)
-- `config/prod.exs` — added force_ssl
-- `priv/repo/seeds.exs` — rewritten for Position schema
-- Various CI fixes (squashed)
+### Modified (6)
+- `lib/dividendsomatic/portfolio.ex` — cache helpers + wrapped 5 functions + invalidation on import
+- `lib/dividendsomatic_web/live/portfolio_live.ex` — derived nav values from cached data
+- `lib/dividendsomatic/data_ingestion/flex_import_orchestrator.ex` — cache invalidation
+- `lib/dividendsomatic/portfolio/ibkr_activity_parser.ex` — cache invalidation
+- `test/support/data_case.ex` — cache invalidation in test setup

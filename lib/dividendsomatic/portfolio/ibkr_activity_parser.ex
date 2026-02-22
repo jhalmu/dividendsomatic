@@ -66,7 +66,9 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
   def import_file(file_path) do
     {sections, is_consolidated} = parse_file(file_path)
     import_instruments(sections, is_consolidated)
-    import_transactions(file_path, sections, is_consolidated)
+    result = import_transactions(file_path, sections, is_consolidated)
+    Portfolio.invalidate_cache()
+    result
   end
 
   defp parse_file(file_path) do
@@ -674,6 +676,7 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
         amount: amount,
         currency: currency,
         description: description,
+        source: "ibkr",
         raw_data: %{"row" => row}
       }
     end
@@ -733,6 +736,7 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
           amount: amount,
           currency: currency,
           description: description,
+          source: "ibkr",
           raw_data: %{"row" => row}
         }
       end
@@ -793,6 +797,7 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
           amount: amount,
           currency: currency,
           description: description,
+          source: "ibkr",
           raw_data: %{"row" => row}
         }
       end
@@ -1168,6 +1173,7 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
           amount: amount,
           currency: currency,
           description: description,
+          source: "ibkr",
           raw_data: %{"row" => row}
         }
       end

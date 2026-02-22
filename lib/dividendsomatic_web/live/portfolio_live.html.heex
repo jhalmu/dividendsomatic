@@ -2,10 +2,10 @@
   <div class="max-w-[var(--content-max-width)] mx-auto px-[var(--space-sm)] sm:px-[var(--space-md)] lg:px-[var(--space-lg)] py-[var(--space-md)]">
     <!-- Brand + Motto + Theme Toggle -->
     <div class="terminal-branding">
-      <div>
+      <.link navigate={~p"/"} style="text-decoration: none; color: inherit;">
         <h1 class="terminal-brand-name">dividends-o-matic</h1>
         <div class="terminal-motto">sisu &amp; dividends</div>
-      </div>
+      </.link>
       <button
         onclick="const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'; document.documentElement.setAttribute('data-theme', next); localStorage.setItem('phx:theme', next);"
         class="btn btn-ghost btn-sm btn-circle"
@@ -653,7 +653,7 @@
                 <%= if @growth_stats do %>
                   <div class={"terminal-growth-badge #{if Decimal.compare(@growth_stats.absolute_change, Decimal.new("0")) == :lt, do: "negative"}"}>
                     {format_euro_signed(@growth_stats.absolute_change)}
-                    <span style="opacity: 0.6;">
+                    <span>
                       (<%= if pnl_positive?(@growth_stats.percent_change) do %>
                         +
                       <% end %>
@@ -675,10 +675,7 @@
                   <span class="terminal-legend-item">
                     <span class="terminal-legend-line" style="background: var(--chart-line);">
                     </span>
-                    Value
-                  </span>
-                  <span class="terminal-legend-item">
-                    <span class="terminal-legend-line terminal-legend-dashed"></span> Cost Basis
+                    Portfolio Value
                   </span>
                 </div>
               </div>
@@ -722,7 +719,7 @@
             <%= if @growth_stats do %>
               <div
                 class="mt-[var(--space-xs)] flex items-center justify-between"
-                style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim); opacity: 0.7;"
+                style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);"
               >
                 <span>
                   {Date.to_string(@growth_stats.first_date)} → {Date.to_string(
@@ -741,10 +738,7 @@
 
         <%!-- Cost Coverage --%>
         <%= if @costs_summary.count > 0 do %>
-          <div
-            class="terminal-card p-[var(--space-sm)] mt-[var(--space-xs)]"
-            style="opacity: 0.85;"
-          >
+          <div class="terminal-card p-[var(--space-sm)] mt-[var(--space-xs)]">
             <div class="terminal-section-label-inline" style="margin-bottom: var(--space-xs);">
               Cost Coverage
             </div>
@@ -752,7 +746,7 @@
               <%= for {type, total} <- @costs_summary.by_type do %>
                 <div>
                   <div class="terminal-info-label">{format_cost_type(type)}</div>
-                  <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--loss); opacity: 0.7;">
+                  <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--loss);">
                     {format_euro_decimal(total)}
                   </div>
                 </div>

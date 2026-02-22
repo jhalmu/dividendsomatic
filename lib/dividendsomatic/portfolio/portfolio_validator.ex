@@ -10,8 +10,8 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
   positions and cash balances.
 
   Scoped to IBKR data only. Cash flows and positions are IBKR-sourced,
-  so realized P&L is filtered to source="ibkr" to avoid counting
-  Nordnet/Lynx 9A trades that lack corresponding deposit records.
+  so realized P&L is filtered to source="ibkr" and sale_date > IBKR
+  start to avoid double-counting pre-NLV returns already in NLV_start.
   """
 
   import Ecto.Query
@@ -32,10 +32,11 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
   @warn_threshold Decimal.new("1")
   @fail_threshold Decimal.new("5")
 
-  # Wider thresholds for margin accounts — FX effects on cash balances,
-  # corporate actions, and timing differences cause legitimate gaps
+  # Wider thresholds for margin accounts — remaining gap is primarily
+  # from missing Δ unrealized P&L (we only have current snapshot, not
+  # change over time) and untracked FX effects on multi-currency margin.
   @margin_warn_threshold Decimal.new("5")
-  @margin_fail_threshold Decimal.new("20")
+  @margin_fail_threshold Decimal.new("15")
 
   @doc """
   Runs all portfolio validations and returns a report.
@@ -94,8 +95,8 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
           |> Decimal.add(deposits)
           |> Decimal.sub(withdrawals)
 
-        # Split costs into interest and fees
-        costs_by_type = Portfolio.total_costs_by_type()
+        # Split costs into interest and fees (IBKR-only)
+        costs_by_type = Portfolio.total_costs_by_type(source: "ibkr")
         interest_costs = Map.get(costs_by_type, "interest", zero)
         fee_costs = Map.get(costs_by_type, "fee", zero)
         total_costs = Decimal.add(interest_costs, fee_costs)
@@ -105,8 +106,9 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
         # zeroes out cross-currency dividends without position fx_rate.
         total_dividends = total_dividends_eur()
 
-        # IBKR-only realized P&L
-        realized_pnl = ibkr_realized_pnl()
+        # IBKR-only realized P&L, scoped to positions sold after NLV start.
+        # Pre-NLV sales are already reflected in NLV_start.
+        realized_pnl = ibkr_realized_pnl(ibkr_start_date)
 
         net_profit =
           realized_pnl
@@ -254,6 +256,7 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
       CashFlow
       |> where([c], c.flow_type in ["deposit", "withdrawal"])
       |> where([c], c.date > ^date)
+      |> where([c], c.source == "ibkr")
       |> select([c], %{flow_type: c.flow_type, amount: c.amount, amount_eur: c.amount_eur})
       |> Repo.all()
 
@@ -269,9 +272,18 @@ defmodule Dividendsomatic.Portfolio.PortfolioValidator do
     end)
   end
 
-  defp ibkr_realized_pnl do
+  # Only count positions sold after the IBKR start date. Positions sold
+  # before that date have their P&L already reflected in NLV_start.
+  defp ibkr_realized_pnl(nil) do
     SoldPosition
     |> where([s], s.source == "ibkr")
+    |> select([s], sum(fragment("COALESCE(?, ?)", s.realized_pnl_eur, s.realized_pnl)))
+    |> Repo.one() || Decimal.new("0")
+  end
+
+  defp ibkr_realized_pnl(after_date) do
+    SoldPosition
+    |> where([s], s.source == "ibkr" and s.sale_date > ^after_date)
     |> select([s], sum(fragment("COALESCE(?, ?)", s.realized_pnl_eur, s.realized_pnl)))
     |> Repo.one() || Decimal.new("0")
   end

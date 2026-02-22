@@ -71,7 +71,28 @@ mix ecto.reset              # Drop + create + migrate
 **Status:** Live at https://dividends-o-matic.com — full CI/CD pipeline, Gmail auto-import active
 **Branch:** `main`
 
-**Latest session (2026-02-22 Production Deployment & Go-Live):**
+**Latest session (2026-02-22 persistent_term Cache for Navigation):**
+- **`persistent_term` caching** — wrapped 5 immutable query functions (chart data, first snapshot, count, costs) with `persistent_term` memoization
+- **Navigation queries reduced** — ~12 DB queries per nav click → ~5 (8 queries eliminated after first load)
+- **Derived values** — `has_prev`, `has_next`, `snapshot_position`, `total_snapshots` computed from cached chart data instead of 4 separate DB queries
+- **Cache invalidation** — `invalidate_cache/0` called after snapshot import, activity import, and orchestrator import
+- **Test isolation** — `Portfolio.invalidate_cache()` added to DataCase setup
+- **Lighthouse audit** — Performance 84, Accessibility 100, Best Practices 100, SEO 100
+- 679 tests, 0 failures
+
+**Previous session (2026-02-22 Cash Flow Cleanup & Balance Check Fix):**
+- **Cash flow dedup** — `mix dedup.cash_flows` removed 272 exact/description duplicates from overlapping Activity Statement imports
+- **Cash flow cleanup** — `mix cleanup.cash_flows` removed 347 additional records:
+  - 272 Nordnet records (TALLETUS, NOSTO, LAINAKORKO, nordnet-migrated data)
+  - 93 currency-duplicate IBKR interest (same charge in both USD and EUR)
+  - 12 variant-description duplicates ("Debit Interest for Debit Interest" style)
+- **Interest corrected**: €32,963 → €18,316 (matches IBKR ground truth €18,165 within €151)
+- **Realized P&L date-scoped**: only positions sold after IBKR start date; pre-NLV sales already reflected in NLV_start
+- **Balance check improved**: 40.69% FAIL → **8.80% WARNING** (€7,583 gap)
+- **Remaining gap sources**: missing Δ unrealized P&L (snapshot-only), untracked FX effects, €24k dividend gap vs IBKR
+- 679 tests, 0 failures
+
+**Previous session (2026-02-22 Production Deployment & Go-Live):**
 - **Production live** — https://dividends-o-matic.com with Let's Encrypt TLS
 - **CI/CD pipeline green** — all 5 jobs passing (quality/security/test/build/deploy)
 - **Dockerfile** — multi-stage build (hexpm/elixir 1.19.5-erlang-28.3.2 + debian trixie-20260202-slim)
@@ -313,10 +334,11 @@ mix ecto.reset              # Drop + create + migrate
 - 685 tests + 21 Playwright E2E tests, 0 credo warnings
 
 **Next priorities:**
-- Fix `mix validate.data` crash — nil amounts in `find_outliers/1` (ArithmeticError)
-- Balance check remaining gap (15.90%) — likely FX effects on ~€330k multi-currency cash over 4 years
 - Remaining 162 instruments without sector (delisted/unknown symbols — may need manual mapping)
 - EODHD historical data backfill (30+ years available)
+
+**Investigated & documented:**
+- Balance check gap 8.80% (€7,583) — remaining gap from: (1) missing Δ unrealized P&L — we only have current snapshot, not starting unrealized at NLV_start, (2) untracked FX effects on multi-currency margin loan, (3) dividend gap €81k vs IBKR €105k (possibly missing PIL/withholding refunds). Would require period-start unrealized tracking or IBKR dividend reconciliation to close further.
 
 ---
 

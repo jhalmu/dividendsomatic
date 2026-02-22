@@ -62,6 +62,7 @@ defmodule Dividendsomatic.DataIngestion.FlexImportOrchestrator do
           end)
 
         summary = build_summary(results)
+        Portfolio.invalidate_cache()
         Logger.info("FlexImportOrchestrator: #{inspect(summary)}")
         {:ok, summary}
 

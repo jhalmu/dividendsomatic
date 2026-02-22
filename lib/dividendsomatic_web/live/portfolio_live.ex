@@ -572,10 +572,12 @@ defmodule DividendsomaticWeb.PortfolioLive do
         Decimal.add(acc, Decimal.mult(p.unrealized_pnl || Decimal.new("0"), fx))
       end)
 
-    total_snapshots = Portfolio.count_snapshots()
-    snapshot_position = Portfolio.get_snapshot_position(snapshot.date)
-
     all_chart_data = Portfolio.get_all_chart_data()
+    total_snapshots = length(all_chart_data)
+
+    snapshot_position =
+      Enum.count(all_chart_data, &(Date.compare(&1.date, snapshot.date) != :gt))
+
     sparkline_values = Enum.map(all_chart_data, & &1.value_float)
 
     year = snapshot.date.year
@@ -599,8 +601,8 @@ defmodule DividendsomaticWeb.PortfolioLive do
     socket
     |> assign(:current_snapshot, snapshot)
     |> assign(:positions, positions)
-    |> assign(:has_prev, Portfolio.has_previous_snapshot?(snapshot.date))
-    |> assign(:has_next, Portfolio.has_next_snapshot?(snapshot.date))
+    |> assign(:has_prev, snapshot_position > 1)
+    |> assign(:has_next, snapshot_position < total_snapshots)
     |> assign(:total_value, total_value)
     |> assign(:total_pnl, total_pnl)
     |> assign(:snapshot_position, snapshot_position)
@@ -781,12 +783,6 @@ defmodule DividendsomaticWeb.PortfolioLive do
         [ts, Float.round(point.value_float, 0)]
       end)
 
-    cost_series =
-      Enum.map(chart_data, fn point ->
-        ts = date_to_unix_ms(point.date)
-        [ts, Float.round(point.cost_basis_float, 0)]
-      end)
-
     annotations = %{
       xaxis: [
         %{
@@ -809,8 +805,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
 
     %{
       series: [
-        %{name: "Portfolio Value", type: "area", data: value_series},
-        %{name: "Cost Basis", type: "line", data: cost_series}
+        %{name: "Portfolio Value", type: "area", data: value_series}
       ],
       annotations: annotations
     }
@@ -858,20 +853,18 @@ defmodule DividendsomaticWeb.PortfolioLive do
       },
       series: series,
       stroke: %{
-        width: [2.5, 1.5],
-        curve: "smooth",
-        dashArray: [0, 5]
+        width: 1.5,
+        curve: "smooth"
       },
-      colors: ["#5EADF7", "#4C5772"],
+      colors: ["#5EADF7"],
       fill: %{
-        type: ["gradient", "solid"],
+        type: "gradient",
         gradient: %{
           shadeIntensity: 1,
-          opacityFrom: 0.15,
+          opacityFrom: 0.08,
           opacityTo: 0.01,
           stops: [0, 85, 100]
-        },
-        opacity: [1, 0]
+        }
       },
       xaxis: %{
         type: "datetime",
@@ -893,6 +886,8 @@ defmodule DividendsomaticWeb.PortfolioLive do
       },
       tooltip: %{
         theme: "dark",
+        shared: true,
+        intersect: false,
         x: %{format: "dd MMM yyyy"},
         style: %{fontSize: "12px"}
       },

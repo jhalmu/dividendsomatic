@@ -9,7 +9,7 @@ defmodule Dividendsomatic.Portfolio.CashFlow do
   @flow_types ~w(deposit withdrawal interest fee other)
 
   @required_fields [:external_id, :flow_type, :date, :amount, :currency]
-  @optional_fields [:fx_rate, :amount_eur, :description, :raw_data]
+  @optional_fields [:fx_rate, :amount_eur, :description, :raw_data, :source]
 
   schema "cash_flows" do
     field :external_id, :string
@@ -20,6 +20,7 @@ defmodule Dividendsomatic.Portfolio.CashFlow do
     field :fx_rate, :decimal
     field :amount_eur, :decimal
     field :description, :string
+    field :source, :string
     field :raw_data, :map, default: %{}
 
     timestamps()

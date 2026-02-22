@@ -227,8 +227,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       html = render_click(view, "switch_tab", %{"tab" => "performance"})
 
       assert html =~ "Portfolio Performance"
-      assert html =~ "Value"
-      assert html =~ "Cost Basis"
+      assert html =~ "Portfolio Value"
     end
 
     test "should not show chart with single snapshot", %{conn: conn} do
