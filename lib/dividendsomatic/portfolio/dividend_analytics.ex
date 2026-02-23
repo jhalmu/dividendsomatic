@@ -113,24 +113,31 @@ defmodule Dividendsomatic.Portfolio.DividendAnalytics do
     do: "unknown"
 
   def detect_dividend_frequency(dividends_with_income) do
+    # Deduplicate dates: PIL/withholding splits create same-date records
+    # whose 0-day gaps would skew the average toward "monthly"
     dates =
       dividends_with_income
       |> Enum.map(& &1.dividend.ex_date)
+      |> Enum.uniq()
       |> Enum.sort(Date)
 
-    gaps =
-      dates
-      |> Enum.chunk_every(2, 1, :discard)
-      |> Enum.map(fn [a, b] -> Date.diff(b, a) end)
+    if length(dates) < 2 do
+      "unknown"
+    else
+      gaps =
+        dates
+        |> Enum.chunk_every(2, 1, :discard)
+        |> Enum.map(fn [a, b] -> Date.diff(b, a) end)
 
-    avg_gap = Enum.sum(gaps) / length(gaps)
+      avg_gap = Enum.sum(gaps) / length(gaps)
 
-    cond do
-      avg_gap < 50 -> "monthly"
-      avg_gap < 120 -> "quarterly"
-      avg_gap < 220 -> "semi-annual"
-      avg_gap < 420 -> "annual"
-      true -> "irregular"
+      cond do
+        avg_gap < 50 -> "monthly"
+        avg_gap < 120 -> "quarterly"
+        avg_gap < 220 -> "semi-annual"
+        avg_gap < 420 -> "annual"
+        true -> "irregular"
+      end
     end
   end
 

@@ -692,8 +692,13 @@ defmodule Dividendsomatic.Portfolio do
     year_end = if year == today.year, do: today, else: Date.new!(year, 12, 31)
 
     {widest_from, widest_to} = dashboard_date_range(year_start, year_end, chart_date_range)
-    positions_map = build_positions_map(widest_from, widest_to)
-    all_dividends = load_dividends_in_range(widest_from, widest_to)
+
+    # Per-symbol yield needs TTM data (365 days), not just the year range
+    ttm_start = Date.add(today, -365)
+    full_from = Enum.min([widest_from, ttm_start], Date)
+
+    positions_map = build_positions_map(full_from, widest_to)
+    all_dividends = load_dividends_in_range(full_from, widest_to)
 
     year_dividends = filter_date_range(all_dividends, year_start, year_end)
     year_by_month = compute_by_month(year_dividends, positions_map)
@@ -989,6 +994,7 @@ defmodule Dividendsomatic.Portfolio do
     divs
     |> Enum.sort_by(& &1.ex_date, Date)
     |> Enum.map(& &1.ex_date)
+    |> Enum.uniq()
     |> avg_date_interval()
     |> interval_to_frequency()
   end
