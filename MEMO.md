@@ -71,14 +71,16 @@ mix ecto.reset              # Drop + create + migrate
 **Status:** Live at https://dividends-o-matic.com — full CI/CD pipeline, Gmail auto-import active
 **Branch:** `main`
 
-**Latest session (2026-02-23 PIL Dedup + TCPC/TRIN Yield Fix):**
+**Latest session (2026-02-23 PIL Dedup + Yield Fix + Credo Cleanup):**
 - **PIL dedup fix** — `compute_annual_dividend_per_share` deduplicates by `(ex_date, per_share)` to prevent PIL/withholding splits from inflating annual rate ~2×
-- **Same fix in `backfill_dividend_rates.ex`** — `compute_rate_from_payments` also deduplicates
-- **Manual overrides corrected** — TRIN $4.08→$2.04 (base monthly only), TCPC $1.00 quarterly added
-- **TCPC frequency fixed** — "monthly"→"quarterly" on instrument record
+- **Dashboard TTM date range** — extended to load 365 days (was current year only), fixing AGNC/ORC/KESKOB yields
+- **Frequency detection dedup** — `Enum.uniq()` on dates before gap computation to prevent PIL 0-day gaps
+- **Manual overrides** — TRIN $2.04, TCPC $1.00, KESKOB €0.88, Nordea €0.96 (all protected with source "manual")
+- **10/10 yields match IBKR reference** — AGNC 12.58%, AKTIA 6.59%, CSWC 10.20%, KESKOB 4.17%, NDA FI 5.60%, NESTE 0.94%, ORC 19.00%, TCPC 21.69%, TELIA1 4.57%, TRIN 13.63%
+- **Credo cleanup** — 42 issues → 0 across 17 files (extracted helpers, alias ordering, data-driven patterns)
 - **4 new tests** — 3 PIL dedup unit tests + 1 integration test (PIL yield inflation guard)
 - **yield-audit skill updated** — BDC/PIL patterns, TCPC sanity bounds, dedup test references
-- 686 tests, 0 failures
+- 686 tests, 0 failures, 0 credo warnings
 
 **Previous session (2026-02-23 Yield FX Mismatch Regression Tests & Audit Skill):**
 - **3 yield FX regression tests** — same-currency (USD/USD), cross-currency (SEK/EUR), consistency invariant
@@ -347,7 +349,7 @@ mix ecto.reset              # Drop + create + migrate
 - **All 6 legacy tables dropped** — data migrated, schemas deleted, imports rewritten
 - SchemaIntegrity system (5 checks: orphan, null field, FK integrity, duplicate, alias quality) + Oban daily worker
 - Deterministic alias system: 567 aliases, 349 primary, is_primary flag + priority ordering
-- 685 tests + 21 Playwright E2E tests, 0 credo warnings
+- 686 tests + 21 Playwright E2E tests, 0 credo warnings
 
 **Next priorities:**
 - Remaining 162 instruments without sector (delisted/unknown symbols — may need manual mapping)
