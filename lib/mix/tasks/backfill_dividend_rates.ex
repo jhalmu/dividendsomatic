@@ -30,6 +30,8 @@ defmodule Mix.Tasks.Backfill.DividendRates do
     "US8964423086" => %{dividend_rate: Decimal.new("2.04"), dividend_frequency: "monthly"},
     # TCPC: quarterly $0.25 × 4 = $1.00. BDC with PIL splits that inflate TTM.
     "US09259E1082" => %{dividend_rate: Decimal.new("1.00"), dividend_frequency: "quarterly"},
+    # KESKOB: quarterly €0.22 × 4 = €0.88/year. Only 1 installment in data so far.
+    "FI0009000202" => %{dividend_rate: Decimal.new("0.88"), dividend_frequency: "quarterly"},
     # Nordea: switching to semi-annual in 2026. 0.96 is FY2025 dividend;
     # mid-year 2026 payment TBD (~50% of H1 profit). Update when announced.
     "FI4000297767" => %{dividend_rate: Decimal.new("0.96"), dividend_frequency: "semi_annual"}
