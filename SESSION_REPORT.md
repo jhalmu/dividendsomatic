@@ -154,3 +154,74 @@ Both records carry the same `per_share` value. `compute_annual_dividend_per_shar
 - `test/dividendsomatic/portfolio/dividend_analytics_test.exs` — 3 PIL dedup unit tests
 - `test/dividendsomatic/portfolio_test.exs` — 1 PIL yield integration test
 - `.claude/skills/yield-audit.md` — BDC/PIL patterns, TCPC bounds, test references
+
+## How the Yield Fix Works — Past, Present, and Future
+
+### What was broken
+
+Four independent bugs conspired to produce wrong Current Yield values:
+
+1. **PIL double-counting** — IBKR creates two `dividend_payment` records per event (PIL portion + withholding adjustment), both with the same `per_share`. The TTM computation summed every record, inflating annual rates ~2x for stocks with PIL splits (TCPC, TRIN).
+
+2. **Dashboard date range too narrow** — `compute_dividend_dashboard` only loaded dividends from Jan 1 of the current year. In early 2026, that gave only ~2 months of data. When this tiny TTM diverged >2x from the stored Yahoo rate, the system picked the TTM value — which was wildly wrong. This broke AGNC, ORC, and KESKOB.
+
+3. **Frequency detection poisoned by PIL** — The 0-day gaps between same-date PIL/withholding records dragged the average gap down, causing quarterly stocks to be detected as "monthly". Monthly extrapolation (avg × 12 instead of avg × 4) tripled the annual rate.
+
+4. **Incomplete payment history** — KESKOB had only 1 of 4 quarterly installments in the database. TTM computed €0.22/year instead of the correct €0.88/year.
+
+### How we fixed it
+
+| Bug | Fix | Where |
+|-----|-----|-------|
+| PIL double-counting | Deduplicate by `(ex_date, per_share)` before summing | `dividend_analytics.ex:30-36`, `backfill_dividend_rates.ex:179-185` |
+| Narrow date range | Load `min(year_start, today - 365)` for TTM | `portfolio.ex:697-698` |
+| Frequency detection | `Enum.uniq()` on dates before computing gaps | `dividend_analytics.ex:121`, `portfolio.ex` detect_payment_frequency |
+| Missing data | Manual overrides with `dividend_source: "manual"` | `backfill_dividend_rates.ex` @manual_overrides |
+
+### Snapshot 2026-02-20 vs 2026-02-19
+
+Both snapshots now show **correct yields**. The symbols differ between them — Feb 19 has `KESKO/NORDEA/TELIA` while Feb 20 has `KESKOB/NDA FI/TELIA1` — but this doesn't matter because:
+
+- Yields are computed **dynamically** at page load, not stored per-snapshot
+- The code matches dividends to positions via **ISIN cross-matching** (line 851-866 in portfolio.ex), so `KESKO` on the Feb 19 snapshot correctly matches dividends for ISIN `FI0009000202`
+- The annual_per_share comes from the current (fixed) computation logic and current instrument rates
+
+**Verified:**
+
+| Symbol (Feb 19) | Symbol (Feb 20) | Yield (19th) | Yield (20th) |
+|-----------------|-----------------|--------------|--------------|
+| AGNC | AGNC | 12.59% | 12.46% |
+| AKTIA | AKTIA | 6.63% | 6.59% |
+| CSWC | CSWC | 11.12% | 11.18% |
+| KESKO | KESKOB | 4.18% | 4.17% |
+| NORDEA | NDA FI | 5.80% | 5.72% |
+| NESTE | NESTE | 0.93% | 0.94% |
+| ORC | ORC | 18.91% | 18.70% |
+| TCPC | TCPC | 21.26% | 21.78% |
+| TELIA | TELIA1 | 4.52% | 4.50% |
+| TRIN | TRIN | 13.27% | 13.55% |
+
+Small differences are from different prices on each date (e.g., TRIN $15.27 on 19th vs $14.97 on 20th).
+
+### What about tomorrow?
+
+New data imports will produce correct yields. Seven layers of protection are in place:
+
+1. **Code: PIL dedup** — `compute_annual_dividend_per_share` deduplicates by `(ex_date, per_share)`. Any new PIL/withholding splits are handled automatically.
+
+2. **Code: 365-day TTM window** — Dashboard always loads a full year of dividends regardless of the selected year, so TTM computation has enough data even early in the year.
+
+3. **Code: Frequency detection dedup** — Dates are deduplicated before gap computation, preventing PIL splits from skewing frequency detection.
+
+4. **Data: Manual overrides** — TCPC ($1.00), TRIN ($2.04), KESKOB (€0.88), Nordea (€0.96), and TELIA ($2.03) have `dividend_source: "manual"`, which is protected from overwrite by both Yahoo fetch and TTM backfill.
+
+5. **Fetch protection** — `mix fetch.dividend_rates` (Yahoo) skips instruments with `dividend_source` set to `"manual"` or `"ttm_computed"`.
+
+6. **Backfill protection** — `mix backfill.dividend_rates` applies manual overrides first, then skips them during TTM computation phase.
+
+7. **Regression tests** — 4 tests specifically catch PIL dedup regression: 3 unit tests in `dividend_analytics_test.exs` + 1 integration test (PIL yield inflation guard) in `portfolio_test.exs`.
+
+**When to update manual overrides:**
+- When a company changes its dividend policy (e.g., Nordea switching to semi-annual in 2026)
+- When enough quarterly installments accumulate in the database that TTM becomes accurate (e.g., KESKOB after 4 quarters of data)
+- Override values and reasoning are documented in `backfill_dividend_rates.ex` comments
