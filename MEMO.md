@@ -71,7 +71,16 @@ mix ecto.reset              # Drop + create + migrate
 **Status:** Live at https://dividends-o-matic.com — full CI/CD pipeline, Gmail auto-import active
 **Branch:** `main`
 
-**Latest session (2026-02-23 Yield FX Mismatch Regression Tests & Audit Skill):**
+**Latest session (2026-02-23 PIL Dedup + TCPC/TRIN Yield Fix):**
+- **PIL dedup fix** — `compute_annual_dividend_per_share` deduplicates by `(ex_date, per_share)` to prevent PIL/withholding splits from inflating annual rate ~2×
+- **Same fix in `backfill_dividend_rates.ex`** — `compute_rate_from_payments` also deduplicates
+- **Manual overrides corrected** — TRIN $4.08→$2.04 (base monthly only), TCPC $1.00 quarterly added
+- **TCPC frequency fixed** — "monthly"→"quarterly" on instrument record
+- **4 new tests** — 3 PIL dedup unit tests + 1 integration test (PIL yield inflation guard)
+- **yield-audit skill updated** — BDC/PIL patterns, TCPC sanity bounds, dedup test references
+- 686 tests, 0 failures
+
+**Previous session (2026-02-23 Yield FX Mismatch Regression Tests & Audit Skill):**
 - **3 yield FX regression tests** — same-currency (USD/USD), cross-currency (SEK/EUR), consistency invariant
 - **yield-audit skill** — weekly checklist with reference values, formula docs, red flags table
 - **EOD workflow updated** — weekly yield audit step added to CLAUDE.md
