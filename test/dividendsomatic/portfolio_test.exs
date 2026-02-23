@@ -697,6 +697,52 @@ defmodule Dividendsomatic.PortfolioTest do
     end
   end
 
+  describe "PIL dedup yield consistency" do
+    test "should not double-count PIL/withholding split records in yield computation" do
+      today = Date.utc_today()
+
+      # Simulates TCPC-like scenario: quarterly BDC paying $0.25/quarter
+      # with PIL split creating 2 records per pay date
+      position = %Portfolio.Position{
+        symbol: "TESTPIL",
+        currency: "USD",
+        fx_rate: Decimal.new("0.85"),
+        quantity: Decimal.new("1000"),
+        cost_price: Decimal.new("5.00"),
+        price: Decimal.new("5.00"),
+        value: Decimal.new("5000")
+      }
+
+      # Two pay dates, each with 2 records (PIL + withholding adjustment)
+      for offset <- [-30, -120] do
+        pay_date = Date.add(today, offset)
+
+        # Main PIL payment
+        insert_test_dividend("TESTPIL", "US0000PIL001", pay_date, "200", "USD",
+          per_share: Decimal.new("0.25"),
+          fx_rate: Decimal.new("0.85")
+        )
+
+        # Withholding tax adjustment (same per_share, negative net)
+        insert_test_dividend("TESTPIL", "US0000PIL001", pay_date, "-30", "USD",
+          per_share: Decimal.new("0.25"),
+          fx_rate: Decimal.new("0.85")
+        )
+      end
+
+      result = Portfolio.compute_dividend_dashboard(today.year, nil, [position])
+      per_sym = result.per_symbol["TESTPIL"]
+      assert per_sym != nil
+
+      # Without dedup: 4 records × $0.25 = $1.00 TTM sum (wrong — 2 dates counted as 4 payments)
+      # With dedup: 2 unique (date, $0.25) pairs → TTM sum $0.50, extrapolate quarterly: $0.50/2 × 4 = $1.00
+      # yield = (1.00 × 0.85) / (5.00 × 0.85) × 100 = 20.00%
+      # The key assertion: yield should NOT be ~40% (which would happen without dedup)
+      assert Decimal.compare(per_sym.current_yield, Decimal.new("30")) == :lt,
+             "Yield #{per_sym.current_yield}% is inflated — PIL dedup may be broken"
+    end
+  end
+
   describe "FX exposure (Feature 3)" do
     test "compute_fx_exposure/1 groups by currency with correct percentages" do
       # Build mock positions

@@ -25,12 +25,23 @@ defmodule Dividendsomatic.Portfolio.DividendAnalytics do
     if recent == [] do
       Decimal.new("0")
     else
-      per_share_values =
-        Enum.map(recent, fn entry -> per_share_amount(entry.dividend) end)
-        |> Enum.reject(fn ps -> Decimal.compare(ps, Decimal.new("0")) == :eq end)
+      # Deduplicate: PIL/withholding splits create multiple records with the same
+      # (ex_date, per_share) for a single dividend event. Count each unique pair once.
+      unique_entries =
+        recent
+        |> Enum.map(fn entry ->
+          {entry.dividend.ex_date, per_share_amount(entry.dividend)}
+        end)
+        |> Enum.reject(fn {_, ps} -> Decimal.compare(ps, Decimal.new("0")) == :eq end)
+        |> Enum.uniq_by(fn {date, ps} -> {date, Decimal.to_string(ps)} end)
 
+      per_share_values = Enum.map(unique_entries, fn {_, ps} -> ps end)
       ttm_sum = Enum.reduce(per_share_values, Decimal.new("0"), &Decimal.add/2)
-      payment_count = length(per_share_values)
+
+      # Count unique payment dates for extrapolation (each date = one payment event)
+      payment_count =
+        unique_entries |> Enum.map(fn {date, _} -> date end) |> Enum.uniq() |> length()
+
       expected_annual = frequency_to_count(frequency)
 
       if expected_annual > 0 and payment_count > 0 and payment_count < expected_annual do

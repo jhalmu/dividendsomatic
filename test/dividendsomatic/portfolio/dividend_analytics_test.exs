@@ -187,6 +187,99 @@ defmodule Dividendsomatic.Portfolio.DividendAnalyticsTest do
     end
   end
 
+  describe "compute_annual_dividend_per_share PIL deduplication" do
+    test "should deduplicate PIL/withholding split records with same date and per_share" do
+      today = Date.utc_today()
+      pay_date = Date.add(today, -30)
+
+      # Two records for the same dividend event: PIL + withholding adjustment
+      # Both have same ex_date and per_share — should count once, not twice
+      divs = [
+        %{
+          dividend: %{
+            ex_date: pay_date,
+            amount: Decimal.new("206.50"),
+            amount_type: "total_net",
+            gross_rate: Decimal.new("0.25"),
+            quantity_at_record: nil
+          },
+          income: Decimal.new("206.50")
+        },
+        %{
+          dividend: %{
+            ex_date: pay_date,
+            amount: Decimal.new("-33.75"),
+            amount_type: "total_net",
+            gross_rate: Decimal.new("0.25"),
+            quantity_at_record: nil
+          },
+          income: Decimal.new("-33.75")
+        }
+      ]
+
+      result = DividendAnalytics.compute_annual_dividend_per_share(divs, :quarterly)
+      # Only one unique (date, per_share) pair → 1 payment, extrapolate: 0.25 × 4 = 1.00
+      assert Decimal.equal?(result, Decimal.new("1.00"))
+    end
+
+    test "should keep different per_share values on same date" do
+      today = Date.utc_today()
+      pay_date = Date.add(today, -30)
+
+      # Two different per_share values on same date (regular + special)
+      divs = [
+        %{
+          dividend: %{
+            ex_date: pay_date,
+            amount: Decimal.new("250"),
+            amount_type: "total_net",
+            gross_rate: Decimal.new("0.25"),
+            quantity_at_record: nil
+          },
+          income: Decimal.new("250")
+        },
+        %{
+          dividend: %{
+            ex_date: pay_date,
+            amount: Decimal.new("40"),
+            amount_type: "total_net",
+            gross_rate: Decimal.new("0.04"),
+            quantity_at_record: nil
+          },
+          income: Decimal.new("40")
+        }
+      ]
+
+      result = DividendAnalytics.compute_annual_dividend_per_share(divs)
+      # Two different per_share values: 0.25 + 0.04 = 0.29 (both counted)
+      assert Decimal.equal?(result, Decimal.new("0.29"))
+    end
+
+    test "should count unique dates for payment_count in extrapolation" do
+      today = Date.utc_today()
+
+      # 2 dates × 2 records each (PIL splits), monthly frequency
+      divs =
+        for {offset, _} <- [{-30, 1}, {-30, 2}, {-60, 1}, {-60, 2}] do
+          %{
+            dividend: %{
+              ex_date: Date.add(today, offset),
+              amount: Decimal.new("170"),
+              amount_type: "total_net",
+              gross_rate: Decimal.new("0.17"),
+              quantity_at_record: nil
+            },
+            income: Decimal.new("170")
+          }
+        end
+
+      result = DividendAnalytics.compute_annual_dividend_per_share(divs, :monthly)
+      # 2 unique dates, each with per_share 0.17 (deduped from 2 records)
+      # avg_per_date = 0.17, extrapolate: 0.17 × 12 = 2.04
+      assert Decimal.equal?(result, Decimal.new("2.04"))
+    end
+  end
+
   describe "frequency_to_count/1" do
     test "should return correct counts for atom frequencies" do
       assert DividendAnalytics.frequency_to_count(:monthly) == 12

@@ -25,7 +25,11 @@ defmodule Mix.Tasks.Backfill.DividendRates do
   # These are set with dividend_source: "manual" and protected from overwrite.
   @manual_overrides %{
     "SE0000667925" => %{dividend_rate: Decimal.new("2.03"), dividend_frequency: "quarterly"},
-    "US8964423086" => %{dividend_rate: Decimal.new("4.08"), dividend_frequency: "monthly"},
+    # TRIN: base monthly $0.17 × 12 = $2.04 (excludes quarterly supplementals).
+    # IBKR reference yield 13.63% uses base rate only.
+    "US8964423086" => %{dividend_rate: Decimal.new("2.04"), dividend_frequency: "monthly"},
+    # TCPC: quarterly $0.25 × 4 = $1.00. BDC with PIL splits that inflate TTM.
+    "US09259E1082" => %{dividend_rate: Decimal.new("1.00"), dividend_frequency: "quarterly"},
     # Nordea: switching to semi-annual in 2026. 0.96 is FY2025 dividend;
     # mid-year 2026 payment TBD (~50% of H1 profit). Update when announced.
     "FI4000297767" => %{dividend_rate: Decimal.new("0.96"), dividend_frequency: "semi_annual"}
@@ -156,15 +160,23 @@ defmodule Mix.Tasks.Backfill.DividendRates do
     end
   end
 
-  # Compute annual rate directly from loaded payments (no date filtering)
+  # Compute annual rate directly from loaded payments (no date filtering).
+  # Deduplicates PIL/withholding splits: same (date, per_share) counted once.
   defp compute_rate_from_payments(enriched, frequency) do
-    per_share_values =
+    unique_entries =
       enriched
-      |> Enum.map(fn entry -> DividendAnalytics.per_share_amount(entry.dividend) end)
-      |> Enum.reject(fn ps -> Decimal.compare(ps, Decimal.new("0")) == :eq end)
+      |> Enum.map(fn entry ->
+        {entry.dividend.ex_date, DividendAnalytics.per_share_amount(entry.dividend)}
+      end)
+      |> Enum.reject(fn {_, ps} -> Decimal.compare(ps, Decimal.new("0")) == :eq end)
+      |> Enum.uniq_by(fn {date, ps} -> {date, Decimal.to_string(ps)} end)
 
+    per_share_values = Enum.map(unique_entries, fn {_, ps} -> ps end)
     sum = Enum.reduce(per_share_values, Decimal.new("0"), &Decimal.add/2)
-    payment_count = length(per_share_values)
+
+    payment_count =
+      unique_entries |> Enum.map(fn {date, _} -> date end) |> Enum.uniq() |> length()
+
     expected_annual = DividendAnalytics.frequency_to_count(frequency)
 
     if expected_annual > 0 and payment_count > 0 and payment_count < expected_annual do
