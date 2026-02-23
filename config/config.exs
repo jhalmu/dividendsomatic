@@ -66,11 +66,15 @@ config :dividendsomatic, Oban,
   repo: Dividendsomatic.Repo,
   plugins: [
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
+    # Cron times are UTC. Finnish time = UTC + 2 (EET) / UTC + 3 (EEST summer)
     {Oban.Plugins.Cron,
      crontab: [
-       {"0 12 * * 1-6", Dividendsomatic.Workers.GmailImportWorker},
-       {"0 13 * * 1-6", Dividendsomatic.Workers.DataImportWorker,
+       # 12:00 Finnish
+       {"0 10 * * 1-6", Dividendsomatic.Workers.GmailImportWorker},
+       # 13:00 Finnish
+       {"0 11 * * 1-6", Dividendsomatic.Workers.DataImportWorker,
         args: %{"source" => "csv_directory"}},
+       # 08:00 Finnish
        {"0 6 * * *", Dividendsomatic.Workers.IntegrityCheckWorker}
      ]}
   ],

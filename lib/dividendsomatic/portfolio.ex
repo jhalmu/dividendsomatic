@@ -900,6 +900,7 @@ defmodule Dividendsomatic.Portfolio do
 
     div_fx_rate = latest_dividend_fx_rate(raw_divs)
     yield_on_cost = symbol_yield_on_cost(annual_per_share, pos, div_fx_rate)
+    current_yield = symbol_current_yield(annual_per_share, pos, div_fx_rate)
     projected_annual = symbol_projected_annual(annual_per_share, pos, div_fx_rate)
     ytd_paid = symbol_ytd_paid(enriched)
 
@@ -909,6 +910,7 @@ defmodule Dividendsomatic.Portfolio do
       projected_annual: projected_annual,
       est_remaining: symbol_est_remaining(projected_annual, ytd_paid),
       yield_on_cost: yield_on_cost,
+      current_yield: current_yield,
       rule72: symbol_rule72(yield_on_cost),
       payment_frequency: frequency,
       dividend_source: source
@@ -1071,15 +1073,32 @@ defmodule Dividendsomatic.Portfolio do
 
   defp symbol_yield_on_cost(annual_per_share, pos, div_fx_rate) do
     avg_cost = pos.cost_price
+    div_fx = div_fx_rate || pos.fx_rate || Decimal.new("1")
+    pos_fx = pos.fx_rate || Decimal.new("1")
 
     if avg_cost && Decimal.compare(avg_cost, Decimal.new("0")) == :gt do
-      # Convert annual_per_share to position currency via FX rate
-      # (e.g. SEK dividend / SEK→EUR fx_rate = EUR per share)
-      fx = div_fx_rate || pos.fx_rate || Decimal.new("1")
-
+      # Normalize both to EUR: (annual * div_fx) / (cost * pos_fx)
       annual_per_share
-      |> Decimal.mult(fx)
-      |> Decimal.div(avg_cost)
+      |> Decimal.mult(div_fx)
+      |> Decimal.div(Decimal.mult(avg_cost, pos_fx))
+      |> Decimal.mult(Decimal.new("100"))
+      |> Decimal.round(2)
+    else
+      nil
+    end
+  end
+
+  defp symbol_current_yield(_annual_per_share, nil, _div_fx_rate), do: nil
+
+  defp symbol_current_yield(annual_per_share, pos, div_fx_rate) do
+    market_price = pos.price
+    div_fx = div_fx_rate || pos.fx_rate || Decimal.new("1")
+    pos_fx = pos.fx_rate || Decimal.new("1")
+
+    if market_price && Decimal.compare(market_price, Decimal.new("0")) == :gt do
+      annual_per_share
+      |> Decimal.mult(div_fx)
+      |> Decimal.div(Decimal.mult(market_price, pos_fx))
       |> Decimal.mult(Decimal.new("100"))
       |> Decimal.round(2)
     else

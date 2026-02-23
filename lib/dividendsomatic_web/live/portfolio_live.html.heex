@@ -363,7 +363,8 @@
                   <th scope="col">% NAV</th>
                   <th scope="col">Est. Monthly</th>
                   <th scope="col">Est. Annual</th>
-                  <th scope="col">Yield</th>
+                  <th scope="col">YoC</th>
+                  <th scope="col">Curr. Yield</th>
                   <th scope="col">Est. Rem.</th>
                 </tr>
               </thead>
@@ -486,6 +487,20 @@
                       <%= if sym_div && sym_div.yield_on_cost do %>
                         <span style="color: var(--gain);">
                           {Decimal.to_string(sym_div.yield_on_cost)}%
+                        </span>
+                      <% else %>
+                        <span
+                          style="color: var(--terminal-dim); opacity: 0.6;"
+                          aria-label="No data"
+                        >
+                          -
+                        </span>
+                      <% end %>
+                    </td>
+                    <td class="terminal-number" style="text-align: right;">
+                      <%= if sym_div && sym_div.current_yield do %>
+                        <span style="color: var(--gain);">
+                          {Decimal.to_string(sym_div.current_yield)}%
                         </span>
                       <% else %>
                         <span
