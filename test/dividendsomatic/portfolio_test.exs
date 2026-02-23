@@ -568,6 +568,135 @@ defmodule Dividendsomatic.PortfolioTest do
     end
   end
 
+  describe "yield FX consistency" do
+    test "should ignore FX for same-currency yield (USD/USD, nil div_fx_rate)" do
+      today = Date.utc_today()
+
+      # USD stock with fx_rate to EUR = 0.85
+      position = %Portfolio.Position{
+        symbol: "TESTUSD",
+        currency: "USD",
+        fx_rate: Decimal.new("0.85"),
+        quantity: Decimal.new("100"),
+        cost_price: Decimal.new("12.00"),
+        price: Decimal.new("15.00"),
+        value: Decimal.new("1500")
+      }
+
+      # USD dividend with NO fx_rate — this is the exact bug scenario.
+      # Before fix, div_fx defaulted to 1.0 instead of pos.fx_rate,
+      # inflating yield by ~17% for all USD stocks.
+      insert_test_dividend(
+        "TESTUSD",
+        "US0000000001",
+        Date.new!(today.year, 1, 15),
+        "200",
+        "USD",
+        per_share: Decimal.new("2.00")
+      )
+
+      result = Portfolio.compute_dividend_dashboard(today.year, nil, [position])
+      per_sym = result.per_symbol["TESTUSD"]
+      assert per_sym != nil
+
+      # yield = (annual_per_share × div_fx) / (price × pos_fx) × 100
+      # div_fx falls back to pos.fx_rate (0.85), so FX cancels out:
+      # (2.00 × 0.85) / (15.00 × 0.85) × 100 = 2.00/15.00 × 100 = 13.33
+      assert Decimal.equal?(per_sym.current_yield, Decimal.new("13.33")),
+             "Expected current_yield 13.33%, got #{per_sym.current_yield}"
+
+      # (2.00 × 0.85) / (12.00 × 0.85) × 100 = 2.00/12.00 × 100 = 16.67
+      assert Decimal.equal?(per_sym.yield_on_cost, Decimal.new("16.67")),
+             "Expected yield_on_cost 16.67%, got #{per_sym.yield_on_cost}"
+    end
+
+    test "should use div_fx_rate for cross-currency yield (SEK dividend, EUR position)" do
+      today = Date.utc_today()
+
+      # EUR-listed position (like TELIA on Frankfurt)
+      position = %Portfolio.Position{
+        symbol: "TESTCROSS",
+        currency: "EUR",
+        fx_rate: Decimal.new("1.0"),
+        quantity: Decimal.new("1000"),
+        cost_price: Decimal.new("3.80"),
+        price: Decimal.new("4.20"),
+        value: Decimal.new("4200")
+      }
+
+      # SEK dividend with explicit fx_rate (SEK→EUR = 0.09)
+      insert_test_dividend(
+        "TESTCROSS",
+        "SE0000000002",
+        Date.new!(today.year, 1, 15),
+        "200",
+        "SEK",
+        fx_rate: Decimal.new("0.09"),
+        per_share: Decimal.new("2.00")
+      )
+
+      result = Portfolio.compute_dividend_dashboard(today.year, nil, [position])
+      per_sym = result.per_symbol["TESTCROSS"]
+      assert per_sym != nil
+
+      # yield = (2.00 × 0.09) / (4.20 × 1.0) × 100 = 0.18/4.20 × 100 = 4.29
+      assert Decimal.equal?(per_sym.current_yield, Decimal.new("4.29")),
+             "Expected current_yield 4.29%, got #{per_sym.current_yield}"
+
+      # yield_on_cost = (2.00 × 0.09) / (3.80 × 1.0) × 100 = 0.18/3.80 × 100 = 4.74
+      assert Decimal.equal?(per_sym.yield_on_cost, Decimal.new("4.74")),
+             "Expected yield_on_cost 4.74%, got #{per_sym.yield_on_cost}"
+    end
+
+    test "should keep yield and projected_annual consistent under FX fallback" do
+      today = Date.utc_today()
+
+      # USD stock — div_fx_rate will be nil, so both yield and projected_annual
+      # must use the same fallback (pos.fx_rate). If they diverge, yields are wrong.
+      position = %Portfolio.Position{
+        symbol: "TESTCONS",
+        currency: "USD",
+        fx_rate: Decimal.new("0.85"),
+        quantity: Decimal.new("100"),
+        cost_price: Decimal.new("8.00"),
+        price: Decimal.new("10.00"),
+        value: Decimal.new("1000")
+      }
+
+      insert_test_dividend(
+        "TESTCONS",
+        "US0000000002",
+        Date.new!(today.year, 1, 15),
+        "120",
+        "USD",
+        per_share: Decimal.new("1.20")
+      )
+
+      result = Portfolio.compute_dividend_dashboard(today.year, nil, [position])
+      per_sym = result.per_symbol["TESTCONS"]
+      assert per_sym != nil
+
+      # Invariant: projected_annual / (price × qty × pos_fx) ≈ current_yield / 100
+      # This ensures yield and projected_annual use the same FX logic.
+      pos_fx = position.fx_rate
+      position_value = position.price |> Decimal.mult(position.quantity) |> Decimal.mult(pos_fx)
+
+      yield_from_projected =
+        per_sym.projected_annual
+        |> Decimal.div(position_value)
+        |> Decimal.round(4)
+
+      yield_from_current =
+        per_sym.current_yield
+        |> Decimal.div(Decimal.new("100"))
+        |> Decimal.round(4)
+
+      assert Decimal.equal?(yield_from_projected, yield_from_current),
+             "Yield mismatch: projected gives #{yield_from_projected}, " <>
+               "current_yield gives #{yield_from_current}"
+    end
+  end
+
   describe "FX exposure (Feature 3)" do
     test "compute_fx_exposure/1 groups by currency with correct percentages" do
       # Build mock positions

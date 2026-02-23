@@ -71,7 +71,14 @@ mix ecto.reset              # Drop + create + migrate
 **Status:** Live at https://dividends-o-matic.com — full CI/CD pipeline, Gmail auto-import active
 **Branch:** `main`
 
-**Latest session (2026-02-22 persistent_term Cache for Navigation):**
+**Latest session (2026-02-23 Yield FX Mismatch Regression Tests & Audit Skill):**
+- **3 yield FX regression tests** — same-currency (USD/USD), cross-currency (SEK/EUR), consistency invariant
+- **yield-audit skill** — weekly checklist with reference values, formula docs, red flags table
+- **EOD workflow updated** — weekly yield audit step added to CLAUDE.md
+- Post-mortem: div_fx defaulted to 1.0 instead of pos.fx_rate, inflating USD yields ~17%
+- 682 tests, 0 failures
+
+**Previous session (2026-02-22 persistent_term Cache for Navigation):**
 - **`persistent_term` caching** — wrapped 5 immutable query functions (chart data, first snapshot, count, costs) with `persistent_term` memoization
 - **Navigation queries reduced** — ~12 DB queries per nav click → ~5 (8 queries eliminated after first load)
 - **Derived values** — `has_prev`, `has_next`, `snapshot_position`, `total_snapshots` computed from cached chart data instead of 4 separate DB queries

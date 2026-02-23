@@ -125,9 +125,10 @@ lib/mix/tasks/
 When user says **"EOD"**: Execute immediately without confirmation:
 1. Run `mix test.all`
 2. Run `mix validate.data` — include validation summary in SESSION_REPORT.md
-3. Sync GitHub issues (`gh issue list/close/comment`)
-4. Update SESSION_REPORT.md
-5. Commit & push
+3. Weekly: invoke `yield-audit` skill — spot-check yield values against reference table
+4. Sync GitHub issues (`gh issue list/close/comment`)
+5. Update SESSION_REPORT.md
+6. Commit & push
 
 Commands allowed without asking: `git`, `gh`, `mix test`, `mix format`, `mix credo`, `mix validate.data`, `mix check.all`
 
