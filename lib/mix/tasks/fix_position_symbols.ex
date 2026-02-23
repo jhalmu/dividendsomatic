@@ -257,23 +257,7 @@ defmodule Mix.Tasks.Fix.PositionSymbols do
 
     isin_count =
       Enum.reduce(isin_fixes, 0, fn {isin, exchange}, total ->
-        count =
-          if dry_run do
-            Repo.one(
-              from(i in Instrument,
-                where: i.isin == ^isin and is_nil(i.listing_exchange),
-                select: count()
-              )
-            )
-          else
-            {count, _} =
-              from(i in Instrument, where: i.isin == ^isin and is_nil(i.listing_exchange))
-              |> Repo.update_all(
-                set: [listing_exchange: exchange, updated_at: DateTime.utc_now()]
-              )
-
-            count
-          end
+        count = apply_isin_exchange_fix(isin, exchange, dry_run)
 
         if count > 0 do
           sym =
@@ -287,41 +271,49 @@ defmodule Mix.Tasks.Fix.PositionSymbols do
 
     legacy_count =
       Enum.reduce(legacy_fixes, 0, fn {"LEGACY:" <> identifier, exchange}, total ->
-        # Legacy instruments use identifier_key like "symbol:exchange" or just the symbol
         identifier_key = "LEGACY:#{identifier}"
-
-        count =
-          if dry_run do
-            Repo.one(
-              from(i in Instrument,
-                where:
-                  fragment("? LIKE ?", i.isin, ^identifier_key) and
-                    is_nil(i.listing_exchange),
-                select: count()
-              )
-            )
-          else
-            {count, _} =
-              from(i in Instrument,
-                where:
-                  fragment("? LIKE ?", i.isin, ^identifier_key) and
-                    is_nil(i.listing_exchange)
-              )
-              |> Repo.update_all(
-                set: [listing_exchange: exchange, updated_at: DateTime.utc_now()]
-              )
-
-            count
-          end
-
-        if count > 0 do
-          Mix.shell().info("  #{identifier_key} → #{exchange}")
-        end
-
+        count = apply_legacy_exchange_fix(identifier_key, exchange, dry_run)
+        if count > 0, do: Mix.shell().info("  #{identifier_key} → #{exchange}")
         total + count
       end)
 
     isin_count + legacy_count
+  end
+
+  defp apply_isin_exchange_fix(isin, _exchange, true = _dry_run) do
+    Repo.one(
+      from(i in Instrument,
+        where: i.isin == ^isin and is_nil(i.listing_exchange),
+        select: count()
+      )
+    )
+  end
+
+  defp apply_isin_exchange_fix(isin, exchange, false = _dry_run) do
+    {count, _} =
+      from(i in Instrument, where: i.isin == ^isin and is_nil(i.listing_exchange))
+      |> Repo.update_all(set: [listing_exchange: exchange, updated_at: DateTime.utc_now()])
+
+    count
+  end
+
+  defp apply_legacy_exchange_fix(identifier_key, _exchange, true = _dry_run) do
+    Repo.one(
+      from(i in Instrument,
+        where: fragment("? LIKE ?", i.isin, ^identifier_key) and is_nil(i.listing_exchange),
+        select: count()
+      )
+    )
+  end
+
+  defp apply_legacy_exchange_fix(identifier_key, exchange, false = _dry_run) do
+    {count, _} =
+      from(i in Instrument,
+        where: fragment("? LIKE ?", i.isin, ^identifier_key) and is_nil(i.listing_exchange)
+      )
+      |> Repo.update_all(set: [listing_exchange: exchange, updated_at: DateTime.utc_now()])
+
+    count
   end
 
   defp print_summary do

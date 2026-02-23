@@ -119,43 +119,55 @@ defmodule Mix.Tasks.Migrate.LegacyTransactions do
     IO.puts("\nMigrating #{length(txns)} buy/sell transactions...")
 
     Enum.reduce(txns, %{migrated: 0, skipped: 0, errors: 0}, fn txn, acc ->
-      ext_id = make_external_id("trade", txn)
-
-      cond do
-        Repo.exists?(from(t in Trade, where: t.external_id == ^ext_id)) ->
-          %{acc | skipped: acc.skipped + 1}
-
-        dry_run? ->
-          %{acc | migrated: acc.migrated + 1}
-
-        true ->
-          instrument = find_instrument(txn.isin)
-
-          if instrument do
-            attrs = %{
-              external_id: ext_id,
-              instrument_id: instrument.id,
-              trade_date: txn.trade_date || txn.entry_date,
-              settlement_date: txn.settlement_date,
-              quantity: txn.quantity || Decimal.new("0"),
-              price: txn.price || Decimal.new("0"),
-              amount: txn.amount || Decimal.new("0"),
-              commission: txn.commission || Decimal.new("0"),
-              currency: txn.currency || "EUR",
-              fx_rate: txn.exchange_rate,
-              description: "Migrated from legacy_broker_transactions (#{txn.broker})",
-              raw_data: %{"legacy_id" => Ecto.UUID.cast!(txn.id), "broker" => txn.broker}
-            }
-
-            case Repo.insert(Trade.changeset(%Trade{}, attrs)) do
-              {:ok, _} -> %{acc | migrated: acc.migrated + 1}
-              {:error, _} -> %{acc | errors: acc.errors + 1}
-            end
-          else
-            %{acc | errors: acc.errors + 1}
-          end
-      end
+      process_trade_row(txn, acc, dry_run?)
     end)
+  end
+
+  defp process_trade_row(txn, acc, dry_run?) do
+    ext_id = make_external_id("trade", txn)
+
+    cond do
+      Repo.exists?(from(t in Trade, where: t.external_id == ^ext_id)) ->
+        %{acc | skipped: acc.skipped + 1}
+
+      dry_run? ->
+        %{acc | migrated: acc.migrated + 1}
+
+      true ->
+        insert_trade(txn, ext_id, acc)
+    end
+  end
+
+  defp insert_trade(txn, ext_id, acc) do
+    case find_instrument(txn.isin) do
+      nil ->
+        %{acc | errors: acc.errors + 1}
+
+      instrument ->
+        attrs = build_trade_attrs(txn, ext_id, instrument)
+
+        case Repo.insert(Trade.changeset(%Trade{}, attrs)) do
+          {:ok, _} -> %{acc | migrated: acc.migrated + 1}
+          {:error, _} -> %{acc | errors: acc.errors + 1}
+        end
+    end
+  end
+
+  defp build_trade_attrs(txn, ext_id, instrument) do
+    %{
+      external_id: ext_id,
+      instrument_id: instrument.id,
+      trade_date: txn.trade_date || txn.entry_date,
+      settlement_date: txn.settlement_date,
+      quantity: txn.quantity || Decimal.new("0"),
+      price: txn.price || Decimal.new("0"),
+      amount: txn.amount || Decimal.new("0"),
+      commission: txn.commission || Decimal.new("0"),
+      currency: txn.currency || "EUR",
+      fx_rate: txn.exchange_rate,
+      description: "Migrated from legacy_broker_transactions (#{txn.broker})",
+      raw_data: %{"legacy_id" => Ecto.UUID.cast!(txn.id), "broker" => txn.broker}
+    }
   end
 
   # --- Dividends ---
@@ -171,48 +183,60 @@ defmodule Mix.Tasks.Migrate.LegacyTransactions do
 
     Enum.reduce(grouped, %{migrated: 0, skipped: 0, errors: 0}, fn {{isin, date}, group_txns},
                                                                    acc ->
-      ext_id = "legacy_bt_div_#{isin}_#{date}"
-
-      cond do
-        Repo.exists?(from(dp in DividendPayment, where: dp.external_id == ^ext_id)) ->
-          %{acc | skipped: acc.skipped + 1}
-
-        # Also check for existing payment by instrument+date
-        already_has_payment?(isin, date) ->
-          %{acc | skipped: acc.skipped + 1}
-
-        dry_run? ->
-          %{acc | migrated: acc.migrated + 1}
-
-        true ->
-          instrument = find_instrument(isin)
-
-          if instrument do
-            {gross, tax} = aggregate_dividend_group(group_txns)
-
-            attrs = %{
-              external_id: ext_id,
-              instrument_id: instrument.id,
-              ex_date: date,
-              pay_date: date,
-              gross_amount: gross,
-              net_amount: Decimal.sub(gross, Decimal.abs(tax)),
-              withholding_tax: Decimal.abs(tax),
-              currency: List.first(group_txns).currency || "EUR",
-              fx_rate: List.first(group_txns).exchange_rate,
-              description: "Migrated from legacy_broker_transactions",
-              raw_data: %{"legacy_ids" => Enum.map(group_txns, &Ecto.UUID.cast!(&1.id))}
-            }
-
-            case Repo.insert(DividendPayment.changeset(%DividendPayment{}, attrs)) do
-              {:ok, _} -> %{acc | migrated: acc.migrated + 1}
-              {:error, _} -> %{acc | errors: acc.errors + 1}
-            end
-          else
-            %{acc | errors: acc.errors + 1}
-          end
-      end
+      process_dividend_group(isin, date, group_txns, acc, dry_run?)
     end)
+  end
+
+  defp process_dividend_group(isin, date, group_txns, acc, dry_run?) do
+    ext_id = "legacy_bt_div_#{isin}_#{date}"
+
+    cond do
+      Repo.exists?(from(dp in DividendPayment, where: dp.external_id == ^ext_id)) ->
+        %{acc | skipped: acc.skipped + 1}
+
+      # Also check for existing payment by instrument+date
+      already_has_payment?(isin, date) ->
+        %{acc | skipped: acc.skipped + 1}
+
+      dry_run? ->
+        %{acc | migrated: acc.migrated + 1}
+
+      true ->
+        insert_dividend_payment(isin, date, group_txns, ext_id, acc)
+    end
+  end
+
+  defp insert_dividend_payment(isin, date, group_txns, ext_id, acc) do
+    case find_instrument(isin) do
+      nil ->
+        %{acc | errors: acc.errors + 1}
+
+      instrument ->
+        attrs = build_dividend_attrs(instrument, date, group_txns, ext_id)
+
+        case Repo.insert(DividendPayment.changeset(%DividendPayment{}, attrs)) do
+          {:ok, _} -> %{acc | migrated: acc.migrated + 1}
+          {:error, _} -> %{acc | errors: acc.errors + 1}
+        end
+    end
+  end
+
+  defp build_dividend_attrs(instrument, date, group_txns, ext_id) do
+    {gross, tax} = aggregate_dividend_group(group_txns)
+
+    %{
+      external_id: ext_id,
+      instrument_id: instrument.id,
+      ex_date: date,
+      pay_date: date,
+      gross_amount: gross,
+      net_amount: Decimal.sub(gross, Decimal.abs(tax)),
+      withholding_tax: Decimal.abs(tax),
+      currency: List.first(group_txns).currency || "EUR",
+      fx_rate: List.first(group_txns).exchange_rate,
+      description: "Migrated from legacy_broker_transactions",
+      raw_data: %{"legacy_ids" => Enum.map(group_txns, &Ecto.UUID.cast!(&1.id))}
+    }
   end
 
   defp aggregate_dividend_group(txns) do
@@ -253,35 +277,43 @@ defmodule Mix.Tasks.Migrate.LegacyTransactions do
     IO.puts("Migrating #{length(txns)} deposit/withdrawal transactions...")
 
     Enum.reduce(txns, %{migrated: 0, skipped: 0, errors: 0}, fn txn, acc ->
-      ext_id = make_external_id("cf", txn)
-
-      cond do
-        Repo.exists?(from(cf in CashFlow, where: cf.external_id == ^ext_id)) ->
-          %{acc | skipped: acc.skipped + 1}
-
-        dry_run? ->
-          %{acc | migrated: acc.migrated + 1}
-
-        true ->
-          flow_type = if txn.transaction_type == "deposit", do: "deposit", else: "withdrawal"
-
-          attrs = %{
-            external_id: ext_id,
-            flow_type: flow_type,
-            date: txn.trade_date || txn.entry_date,
-            amount: txn.amount || Decimal.new("0"),
-            currency: txn.currency || "EUR",
-            fx_rate: txn.exchange_rate,
-            description: txn.description || "Migrated from legacy (#{txn.broker})",
-            raw_data: %{"legacy_id" => Ecto.UUID.cast!(txn.id), "broker" => txn.broker}
-          }
-
-          case Repo.insert(CashFlow.changeset(%CashFlow{}, attrs)) do
-            {:ok, _} -> %{acc | migrated: acc.migrated + 1}
-            {:error, _} -> %{acc | errors: acc.errors + 1}
-          end
-      end
+      process_cash_flow_row(txn, acc, dry_run?)
     end)
+  end
+
+  defp process_cash_flow_row(txn, acc, dry_run?) do
+    ext_id = make_external_id("cf", txn)
+
+    cond do
+      Repo.exists?(from(cf in CashFlow, where: cf.external_id == ^ext_id)) ->
+        %{acc | skipped: acc.skipped + 1}
+
+      dry_run? ->
+        %{acc | migrated: acc.migrated + 1}
+
+      true ->
+        insert_cash_flow(txn, ext_id, acc)
+    end
+  end
+
+  defp insert_cash_flow(txn, ext_id, acc) do
+    flow_type = if txn.transaction_type == "deposit", do: "deposit", else: "withdrawal"
+
+    attrs = %{
+      external_id: ext_id,
+      flow_type: flow_type,
+      date: txn.trade_date || txn.entry_date,
+      amount: txn.amount || Decimal.new("0"),
+      currency: txn.currency || "EUR",
+      fx_rate: txn.exchange_rate,
+      description: txn.description || "Migrated from legacy (#{txn.broker})",
+      raw_data: %{"legacy_id" => Ecto.UUID.cast!(txn.id), "broker" => txn.broker}
+    }
+
+    case Repo.insert(CashFlow.changeset(%CashFlow{}, attrs)) do
+      {:ok, _} -> %{acc | migrated: acc.migrated + 1}
+      {:error, _} -> %{acc | errors: acc.errors + 1}
+    end
   end
 
   # --- Interest/Fees ---
@@ -290,33 +322,41 @@ defmodule Mix.Tasks.Migrate.LegacyTransactions do
     IO.puts("Migrating #{length(txns)} interest transactions...")
 
     Enum.reduce(txns, %{migrated: 0, skipped: 0, errors: 0}, fn txn, acc ->
-      ext_id = make_external_id("int", txn)
-
-      cond do
-        Repo.exists?(from(cf in CashFlow, where: cf.external_id == ^ext_id)) ->
-          %{acc | skipped: acc.skipped + 1}
-
-        dry_run? ->
-          %{acc | migrated: acc.migrated + 1}
-
-        true ->
-          attrs = %{
-            external_id: ext_id,
-            flow_type: "interest",
-            date: txn.trade_date || txn.entry_date,
-            amount: txn.amount || Decimal.new("0"),
-            currency: txn.currency || "EUR",
-            fx_rate: txn.exchange_rate,
-            description: txn.description || "#{txn.transaction_type} (#{txn.broker})",
-            raw_data: %{"legacy_id" => Ecto.UUID.cast!(txn.id), "type" => txn.transaction_type}
-          }
-
-          case Repo.insert(CashFlow.changeset(%CashFlow{}, attrs)) do
-            {:ok, _} -> %{acc | migrated: acc.migrated + 1}
-            {:error, _} -> %{acc | errors: acc.errors + 1}
-          end
-      end
+      process_interest_row(txn, acc, dry_run?)
     end)
+  end
+
+  defp process_interest_row(txn, acc, dry_run?) do
+    ext_id = make_external_id("int", txn)
+
+    cond do
+      Repo.exists?(from(cf in CashFlow, where: cf.external_id == ^ext_id)) ->
+        %{acc | skipped: acc.skipped + 1}
+
+      dry_run? ->
+        %{acc | migrated: acc.migrated + 1}
+
+      true ->
+        insert_interest(txn, ext_id, acc)
+    end
+  end
+
+  defp insert_interest(txn, ext_id, acc) do
+    attrs = %{
+      external_id: ext_id,
+      flow_type: "interest",
+      date: txn.trade_date || txn.entry_date,
+      amount: txn.amount || Decimal.new("0"),
+      currency: txn.currency || "EUR",
+      fx_rate: txn.exchange_rate,
+      description: txn.description || "#{txn.transaction_type} (#{txn.broker})",
+      raw_data: %{"legacy_id" => Ecto.UUID.cast!(txn.id), "type" => txn.transaction_type}
+    }
+
+    case Repo.insert(CashFlow.changeset(%CashFlow{}, attrs)) do
+      {:ok, _} -> %{acc | migrated: acc.migrated + 1}
+      {:error, _} -> %{acc | errors: acc.errors + 1}
+    end
   end
 
   # --- Corporate Actions ---
@@ -325,36 +365,44 @@ defmodule Mix.Tasks.Migrate.LegacyTransactions do
     IO.puts("Migrating #{length(txns)} corporate action transactions...")
 
     Enum.reduce(txns, %{migrated: 0, skipped: 0, errors: 0}, fn txn, acc ->
-      ext_id = make_external_id("ca", txn)
-
-      cond do
-        Repo.exists?(from(ca in CorporateAction, where: ca.external_id == ^ext_id)) ->
-          %{acc | skipped: acc.skipped + 1}
-
-        dry_run? ->
-          %{acc | migrated: acc.migrated + 1}
-
-        true ->
-          instrument = if txn.isin, do: find_instrument(txn.isin)
-
-          attrs = %{
-            external_id: ext_id,
-            action_type: txn.raw_type || "corporate_action",
-            date: txn.trade_date || txn.entry_date,
-            instrument_id: if(instrument, do: instrument.id),
-            description: txn.description || txn.security_name,
-            quantity: txn.quantity,
-            amount: txn.amount,
-            currency: txn.currency,
-            raw_data: %{"legacy_id" => Ecto.UUID.cast!(txn.id), "broker" => txn.broker}
-          }
-
-          case Repo.insert(CorporateAction.changeset(%CorporateAction{}, attrs)) do
-            {:ok, _} -> %{acc | migrated: acc.migrated + 1}
-            {:error, _} -> %{acc | errors: acc.errors + 1}
-          end
-      end
+      process_corporate_action_row(txn, acc, dry_run?)
     end)
+  end
+
+  defp process_corporate_action_row(txn, acc, dry_run?) do
+    ext_id = make_external_id("ca", txn)
+
+    cond do
+      Repo.exists?(from(ca in CorporateAction, where: ca.external_id == ^ext_id)) ->
+        %{acc | skipped: acc.skipped + 1}
+
+      dry_run? ->
+        %{acc | migrated: acc.migrated + 1}
+
+      true ->
+        insert_corporate_action(txn, ext_id, acc)
+    end
+  end
+
+  defp insert_corporate_action(txn, ext_id, acc) do
+    instrument = if txn.isin, do: find_instrument(txn.isin)
+
+    attrs = %{
+      external_id: ext_id,
+      action_type: txn.raw_type || "corporate_action",
+      date: txn.trade_date || txn.entry_date,
+      instrument_id: if(instrument, do: instrument.id),
+      description: txn.description || txn.security_name,
+      quantity: txn.quantity,
+      amount: txn.amount,
+      currency: txn.currency,
+      raw_data: %{"legacy_id" => Ecto.UUID.cast!(txn.id), "broker" => txn.broker}
+    }
+
+    case Repo.insert(CorporateAction.changeset(%CorporateAction{}, attrs)) do
+      {:ok, _} -> %{acc | migrated: acc.migrated + 1}
+      {:error, _} -> %{acc | errors: acc.errors + 1}
+    end
   end
 
   # --- Helpers ---

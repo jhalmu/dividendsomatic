@@ -14,8 +14,8 @@ defmodule Mix.Tasks.Migrate.LegacyDividends do
 
   import Ecto.Query
 
-  alias Dividendsomatic.Repo
   alias Dividendsomatic.Portfolio.{DividendPayment, Instrument}
+  alias Dividendsomatic.Repo
 
   @broker_sources ~w(ibkr nordnet ibkr_flex_dividend)
 
@@ -70,32 +70,7 @@ defmodule Mix.Tasks.Migrate.LegacyDividends do
         broker_records,
         %{migrated: 0, skipped_dup: 0, no_instrument: 0, errors: 0},
         fn rec, acc ->
-          instrument = if rec.isin, do: Repo.get_by(Instrument, isin: rec.isin)
-
-          cond do
-            is_nil(instrument) ->
-              IO.puts("  SKIP (no instrument): #{rec.isin || rec.symbol} #{rec.ex_date}")
-              %{acc | no_instrument: acc.no_instrument + 1}
-
-            already_exists?(instrument.id, rec) ->
-              %{acc | skipped_dup: acc.skipped_dup + 1}
-
-            dry_run? ->
-              IO.puts("  WOULD CREATE: #{rec.isin} #{rec.ex_date} #{rec.amount} #{rec.currency}")
-              %{acc | migrated: acc.migrated + 1}
-
-            true ->
-              attrs = build_payment_attrs(instrument.id, rec)
-
-              case Repo.insert(DividendPayment.changeset(%DividendPayment{}, attrs)) do
-                {:ok, _} ->
-                  %{acc | migrated: acc.migrated + 1}
-
-                {:error, cs} ->
-                  IO.puts("  ERROR: #{rec.isin} #{rec.ex_date} -> #{inspect(cs.errors)}")
-                  %{acc | errors: acc.errors + 1}
-              end
-          end
+          process_broker_record(rec, acc, dry_run?)
         end
       )
 
@@ -104,6 +79,39 @@ defmodule Mix.Tasks.Migrate.LegacyDividends do
     IO.puts("  Skipped (dup):  #{results.skipped_dup}")
     IO.puts("  No instrument:  #{results.no_instrument}")
     IO.puts("  Errors:         #{results.errors}")
+  end
+
+  defp process_broker_record(rec, acc, dry_run?) do
+    instrument = if rec.isin, do: Repo.get_by(Instrument, isin: rec.isin)
+
+    cond do
+      is_nil(instrument) ->
+        IO.puts("  SKIP (no instrument): #{rec.isin || rec.symbol} #{rec.ex_date}")
+        %{acc | no_instrument: acc.no_instrument + 1}
+
+      already_exists?(instrument.id, rec) ->
+        %{acc | skipped_dup: acc.skipped_dup + 1}
+
+      dry_run? ->
+        IO.puts("  WOULD CREATE: #{rec.isin} #{rec.ex_date} #{rec.amount} #{rec.currency}")
+        %{acc | migrated: acc.migrated + 1}
+
+      true ->
+        insert_broker_dividend(instrument.id, rec, acc)
+    end
+  end
+
+  defp insert_broker_dividend(instrument_id, rec, acc) do
+    attrs = build_payment_attrs(instrument_id, rec)
+
+    case Repo.insert(DividendPayment.changeset(%DividendPayment{}, attrs)) do
+      {:ok, _} ->
+        %{acc | migrated: acc.migrated + 1}
+
+      {:error, cs} ->
+        IO.puts("  ERROR: #{rec.isin} #{rec.ex_date} -> #{inspect(cs.errors)}")
+        %{acc | errors: acc.errors + 1}
+    end
   end
 
   defp archive_yfinance_dividends(dry_run?) do
@@ -161,27 +169,7 @@ defmodule Mix.Tasks.Migrate.LegacyDividends do
   end
 
   defp build_payment_attrs(instrument_id, rec) do
-    # Legacy per_share amount → gross_amount uses amount * quantity if available
-    {gross, net, per_share} =
-      case rec.amount_type do
-        "per_share" ->
-          per_share = rec.amount
-          quantity = rec.quantity_at_record
-
-          gross =
-            if quantity && Decimal.gt?(quantity, Decimal.new("0")),
-              do: Decimal.mult(per_share, quantity),
-              else: per_share
-
-          net = rec.net_amount || gross
-          {gross, net, per_share}
-
-        _ ->
-          net = rec.net_amount || rec.amount
-          gross = rec.gross_rate || net
-          {gross, net, nil}
-      end
-
+    {gross, net, per_share} = compute_amounts(rec)
     external_id = "legacy_#{rec.source}_#{rec.isin}_#{rec.ex_date || rec.pay_date}"
 
     %{
@@ -199,5 +187,24 @@ defmodule Mix.Tasks.Migrate.LegacyDividends do
       description: "Migrated from legacy_dividends (#{rec.source})",
       raw_data: %{"legacy_source" => rec.source, "legacy_id" => Ecto.UUID.cast!(rec.id)}
     }
+  end
+
+  defp compute_amounts(%{amount_type: "per_share"} = rec) do
+    per_share = rec.amount
+    quantity = rec.quantity_at_record
+
+    gross =
+      if quantity && Decimal.gt?(quantity, Decimal.new("0")),
+        do: Decimal.mult(per_share, quantity),
+        else: per_share
+
+    net = rec.net_amount || gross
+    {gross, net, per_share}
+  end
+
+  defp compute_amounts(rec) do
+    net = rec.net_amount || rec.amount
+    gross = rec.gross_rate || net
+    {gross, net, nil}
   end
 end

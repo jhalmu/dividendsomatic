@@ -561,20 +561,18 @@ defmodule Mix.Tasks.Backfill.Instruments do
   end
 
   defp has_enrichment_columns? do
-    try do
-      Repo.one(from(i in Instrument, select: fragment("1"), limit: 1))
-      # Check if sector column exists by querying it
-      Repo.one(
-        from(i in "instruments",
-          select: fragment("sector"),
-          limit: 1
-        )
+    Repo.one(from(i in Instrument, select: fragment("1"), limit: 1))
+    # Check if sector column exists by querying it
+    Repo.one(
+      from(i in "instruments",
+        select: fragment("sector"),
+        limit: 1
       )
+    )
 
-      true
-    rescue
-      _ -> false
-    end
+    true
+  rescue
+    _ -> false
   end
 
   defp backfill_from_company_profiles do

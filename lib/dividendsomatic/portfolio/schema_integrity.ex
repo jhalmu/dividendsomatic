@@ -139,175 +139,45 @@ defmodule Dividendsomatic.Portfolio.SchemaIntegrity do
   Check for null fields that should be populated.
   """
   def null_field_check do
-    issues = []
-
-    # Dividend payments missing amount_eur
-    dp_no_eur =
-      from(dp in DividendPayment, where: is_nil(dp.amount_eur), select: count())
-      |> Repo.one()
-
-    issues =
-      if dp_no_eur > 0 do
-        [
-          %{
-            check: :null_amount_eur,
-            severity: :info,
-            count: dp_no_eur,
-            message: "#{dp_no_eur} dividend payments missing amount_eur"
-          }
-          | issues
-        ]
-      else
-        issues
-      end
-
-    # Dividend payments missing fx_rate (for non-EUR currencies)
-    dp_no_fx =
-      from(dp in DividendPayment,
-        where: is_nil(dp.fx_rate) and dp.currency != "EUR",
-        select: count()
-      )
-      |> Repo.one()
-
-    issues =
-      if dp_no_fx > 0 do
-        [
-          %{
-            check: :null_fx_rate,
-            severity: :warning,
-            count: dp_no_fx,
-            message: "#{dp_no_fx} non-EUR dividend payments missing fx_rate"
-          }
-          | issues
-        ]
-      else
-        issues
-      end
-
-    # Instruments missing currency
-    inst_no_currency =
-      from(i in Instrument, where: is_nil(i.currency), select: count())
-      |> Repo.one()
-
-    issues =
-      if inst_no_currency > 0 do
-        [
-          %{
-            check: :null_instrument_currency,
-            severity: :warning,
-            count: inst_no_currency,
-            message: "#{inst_no_currency} instruments missing currency"
-          }
-          | issues
-        ]
-      else
-        issues
-      end
-
-    # Instruments missing symbol
-    inst_no_symbol =
-      from(i in Instrument, where: is_nil(i.symbol), select: count())
-      |> Repo.one()
-
-    issues =
-      if inst_no_symbol > 0 do
-        [
-          %{
-            check: :null_instrument_symbol,
-            severity: :info,
-            count: inst_no_symbol,
-            message: "#{inst_no_symbol} instruments missing symbol"
-          }
-          | issues
-        ]
-      else
-        issues
-      end
-
-    # Instruments missing ISIN
-    inst_no_isin =
-      from(i in Instrument, where: is_nil(i.isin), select: count())
-      |> Repo.one()
-
-    issues =
-      if inst_no_isin > 0 do
-        [
-          %{
-            check: :null_instrument_isin,
-            severity: :warning,
-            count: inst_no_isin,
-            message: "#{inst_no_isin} instruments missing ISIN"
-          }
-          | issues
-        ]
-      else
-        issues
-      end
-
-    # Dividend payments on instruments missing ISIN
-    dp_no_isin =
-      from(dp in DividendPayment,
-        join: i in Instrument,
-        on: dp.instrument_id == i.id,
-        where: is_nil(i.isin),
-        select: count()
-      )
-      |> Repo.one()
-
-    issues =
-      if dp_no_isin > 0 do
-        [
-          %{
-            check: :null_dividend_instrument_isin,
-            severity: :warning,
-            count: dp_no_isin,
-            message: "#{dp_no_isin} dividend payments on instruments missing ISIN"
-          }
-          | issues
-        ]
-      else
-        issues
-      end
-
-    # Positions missing ISIN
-    pos_no_isin =
-      from(p in Position, where: is_nil(p.isin), select: count())
-      |> Repo.one()
-
-    issues =
-      if pos_no_isin > 0 do
-        [
-          %{
-            check: :null_position_isin,
-            severity: :info,
-            count: pos_no_isin,
-            message: "#{pos_no_isin} positions missing ISIN"
-          }
-          | issues
-        ]
-      else
-        issues
-      end
-
-    # Sold positions missing ISIN
-    sold_no_isin =
-      from(sp in SoldPosition, where: is_nil(sp.isin), select: count())
-      |> Repo.one()
-
-    if sold_no_isin > 0 do
-      [
-        %{
-          check: :null_sold_isin,
-          severity: :warning,
-          count: sold_no_isin,
-          message: "#{sold_no_isin} sold positions missing ISIN"
-        }
-        | issues
-      ]
-    else
-      issues
-    end
+    null_field_queries()
+    |> Enum.reduce([], fn {query, check, severity, label}, issues ->
+      maybe_add_null_issue(issues, Repo.one(query), check, severity, label)
+    end)
   end
+
+  defp null_field_queries do
+    [
+      {from(dp in DividendPayment, where: is_nil(dp.amount_eur), select: count()),
+       :null_amount_eur, :info, "dividend payments missing amount_eur"},
+      {from(dp in DividendPayment,
+         where: is_nil(dp.fx_rate) and dp.currency != "EUR",
+         select: count()
+       ), :null_fx_rate, :warning, "non-EUR dividend payments missing fx_rate"},
+      {from(i in Instrument, where: is_nil(i.currency), select: count()),
+       :null_instrument_currency, :warning, "instruments missing currency"},
+      {from(i in Instrument, where: is_nil(i.symbol), select: count()), :null_instrument_symbol,
+       :info, "instruments missing symbol"},
+      {from(i in Instrument, where: is_nil(i.isin), select: count()), :null_instrument_isin,
+       :warning, "instruments missing ISIN"},
+      {from(dp in DividendPayment,
+         join: i in Instrument,
+         on: dp.instrument_id == i.id,
+         where: is_nil(i.isin),
+         select: count()
+       ), :null_dividend_instrument_isin, :warning,
+       "dividend payments on instruments missing ISIN"},
+      {from(p in Position, where: is_nil(p.isin), select: count()), :null_position_isin, :info,
+       "positions missing ISIN"},
+      {from(sp in SoldPosition, where: is_nil(sp.isin), select: count()), :null_sold_isin,
+       :warning, "sold positions missing ISIN"}
+    ]
+  end
+
+  defp maybe_add_null_issue(issues, count, check, severity, label) when count > 0 do
+    [%{check: check, severity: severity, count: count, message: "#{count} #{label}"} | issues]
+  end
+
+  defp maybe_add_null_issue(issues, _count, _check, _severity, _label), do: issues
 
   @doc """
   Check FK integrity (references to non-existent instruments).

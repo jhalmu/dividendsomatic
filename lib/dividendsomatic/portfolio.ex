@@ -923,45 +923,59 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   defp compute_best_annual_per_share(enriched, _raw_divs, pos, instrument_div_map, frequency) do
-    isin = if pos, do: pos.isin, else: nil
-    instrument_data = if isin, do: Map.get(instrument_div_map, isin), else: nil
-
-    stored_rate =
-      if instrument_data, do: instrument_data.dividend_rate, else: nil
-
-    stored_source =
-      if instrument_data, do: instrument_data.dividend_source, else: nil
+    {stored_rate, stored_source} = lookup_instrument_dividend(pos, instrument_div_map)
 
     has_stored_rate? =
       stored_rate && Decimal.compare(stored_rate, Decimal.new("0")) == :gt
 
     ttm = DividendAnalytics.compute_annual_dividend_per_share(enriched, frequency)
+    ttm_source = ttm_source_label(frequency)
 
-    ttm_source =
-      if frequency in [:monthly, :quarterly, :semi_annual],
-        do: "ttm_extrapolated",
-        else: "ttm_sum"
+    select_best_rate(has_stored_rate?, stored_rate, stored_source, ttm, ttm_source)
+  end
 
-    cond do
-      # 1. Manual or TTM-computed stored rate — trusted, use immediately
-      has_stored_rate? && stored_source in ["manual", "ttm_computed"] ->
-        {stored_rate, stored_source}
+  defp lookup_instrument_dividend(pos, instrument_div_map) do
+    isin = if pos, do: pos.isin, else: nil
+    instrument_data = if isin, do: Map.get(instrument_div_map, isin), else: nil
 
+    if instrument_data do
+      {instrument_data.dividend_rate, instrument_data.dividend_source}
+    else
+      {nil, nil}
+    end
+  end
+
+  defp ttm_source_label(frequency) when frequency in [:monthly, :quarterly, :semi_annual],
+    do: "ttm_extrapolated"
+
+  defp ttm_source_label(_frequency), do: "ttm_sum"
+
+  defp select_best_rate(true, stored_rate, stored_source, _ttm, _ttm_source)
+       when stored_source in ["manual", "ttm_computed"] do
+    # 1. Manual or TTM-computed stored rate — trusted, use immediately
+    {stored_rate, stored_source}
+  end
+
+  defp select_best_rate(true, stored_rate, _stored_source, ttm, ttm_source) do
+    if Decimal.compare(ttm, Decimal.new("0")) == :gt do
       # 2. Yahoo rate with TTM available — check for divergence
-      has_stored_rate? && Decimal.compare(ttm, Decimal.new("0")) == :gt ->
-        if yahoo_ttm_diverges?(stored_rate, ttm) do
-          {ttm, ttm_source}
-        else
-          {stored_rate, "declared"}
-        end
-
+      resolve_yahoo_ttm(stored_rate, ttm, ttm_source)
+    else
       # 3. Yahoo rate, no TTM data
-      has_stored_rate? ->
-        {stored_rate, "declared"}
+      {stored_rate, "declared"}
+    end
+  end
 
-      # 4. No stored rate — TTM fallback
-      true ->
-        {ttm, ttm_source}
+  defp select_best_rate(_has_stored?, _stored_rate, _stored_source, ttm, ttm_source) do
+    # 4. No stored rate — TTM fallback
+    {ttm, ttm_source}
+  end
+
+  defp resolve_yahoo_ttm(stored_rate, ttm, ttm_source) do
+    if yahoo_ttm_diverges?(stored_rate, ttm) do
+      {ttm, ttm_source}
+    else
+      {stored_rate, "declared"}
     end
   end
 
@@ -1056,16 +1070,18 @@ defmodule Dividendsomatic.Portfolio do
     if has_per_share || is_nil(qty) || Decimal.compare(qty, Decimal.new("0")) != :gt do
       divs_with_income
     else
-      Enum.map(divs_with_income, fn entry ->
-        d = entry.dividend
+      Enum.map(divs_with_income, &derive_per_share_from_net(&1, qty))
+    end
+  end
 
-        if d.amount_type == "total_net" do
-          derived = Decimal.div(d.amount || Decimal.new("0"), qty)
-          %{entry | dividend: Map.put(d, :gross_rate, derived)}
-        else
-          entry
-        end
-      end)
+  defp derive_per_share_from_net(entry, qty) do
+    d = entry.dividend
+
+    if d.amount_type == "total_net" do
+      derived = Decimal.div(d.amount || Decimal.new("0"), qty)
+      %{entry | dividend: Map.put(d, :gross_rate, derived)}
+    else
+      entry
     end
   end
 

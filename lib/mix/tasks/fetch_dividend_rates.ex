@@ -16,7 +16,7 @@ defmodule Mix.Tasks.Fetch.DividendRates do
   import Ecto.Query
 
   alias Dividendsomatic.MarketData.Providers.YahooFinance
-  alias Dividendsomatic.Portfolio.{Instrument, Position, PortfolioSnapshot}
+  alias Dividendsomatic.Portfolio.{Instrument, PortfolioSnapshot, Position}
   alias Dividendsomatic.Repo
   alias Dividendsomatic.Stocks.SymbolMapper
   alias Dividendsomatic.Stocks.YahooFinance, as: YF

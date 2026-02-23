@@ -22,20 +22,24 @@ defmodule Dividendsomatic.Workers.IntegrityCheckWorker do
     if result.total_issues == 0 do
       Logger.info("IntegrityCheckWorker: all checks passed (0 issues)")
     else
-      Logger.warning(
-        "IntegrityCheckWorker: #{result.total_issues} issues found — " <>
-          "#{Map.get(result.by_severity, :error, 0)} errors, " <>
-          "#{Map.get(result.by_severity, :warning, 0)} warnings, " <>
-          "#{Map.get(result.by_severity, :info, 0)} info"
-      )
-
-      Enum.each(result.issues, fn issue ->
-        level = if issue.severity == :error, do: :warning, else: :info
-
-        Logger.log(level, "  [#{issue.severity}] #{issue.message}")
-      end)
+      log_integrity_summary(result)
+      Enum.each(result.issues, &log_issue/1)
     end
 
     :ok
+  end
+
+  defp log_integrity_summary(result) do
+    Logger.warning(
+      "IntegrityCheckWorker: #{result.total_issues} issues found — " <>
+        "#{Map.get(result.by_severity, :error, 0)} errors, " <>
+        "#{Map.get(result.by_severity, :warning, 0)} warnings, " <>
+        "#{Map.get(result.by_severity, :info, 0)} info"
+    )
+  end
+
+  defp log_issue(issue) do
+    level = if issue.severity == :error, do: :warning, else: :info
+    Logger.log(level, "  [#{issue.severity}] #{issue.message}")
   end
 end

@@ -865,7 +865,8 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
 
   defp parse_corporate_action_row(row, is_consolidated) do
     # After section+Data stripped:
-    # Standard: [AssetCategory, Currency, ReportDate, DateTime, Description, Quantity, Proceeds, Value, RealizedP/L, Code]
+    # Standard: [AssetCategory, Currency, ReportDate, DateTime, Description,
+    #            Quantity, Proceeds, Value, RealizedP/L, Code]
     # Consolidated adds Account column after Currency
     {asset_category, currency, report_date_str, _datetime_str, description, quantity_str,
      proceeds_str, value_str} =
@@ -924,26 +925,31 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
     end
   end
 
+  # Ordered keyword patterns for corporate action classification.
+  # First match wins, so more specific patterns come before general ones.
+  @corporate_action_patterns [
+    {"spinoff", "spinoff"},
+    {"rights issue", "rights_issue"},
+    {"subscribes to", "rights_exercise"},
+    {"stock dividend", "stock_dividend"},
+    {"merged", "merger"},
+    {"delisted", "delist"},
+    {"tendered", "tender"},
+    {"tender", "tender"},
+    {"consent", "consent"},
+    {"split", "split"},
+    {"name change", "name_change"}
+  ]
+
   @doc """
   Classifies a corporate action type from its description.
   """
   def classify_corporate_action(description) do
     desc = String.downcase(description)
 
-    cond do
-      String.contains?(desc, "spinoff") -> "spinoff"
-      String.contains?(desc, "rights issue") -> "rights_issue"
-      String.contains?(desc, "subscribes to") -> "rights_exercise"
-      String.contains?(desc, "stock dividend") -> "stock_dividend"
-      String.contains?(desc, "merged") -> "merger"
-      String.contains?(desc, "delisted") -> "delist"
-      String.contains?(desc, "tendered") -> "tender"
-      String.contains?(desc, "tender") -> "tender"
-      String.contains?(desc, "consent") -> "consent"
-      String.contains?(desc, "split") -> "split"
-      String.contains?(desc, "name change") -> "name_change"
-      true -> "other"
-    end
+    Enum.find_value(@corporate_action_patterns, "other", fn {keyword, type} ->
+      if String.contains?(desc, keyword), do: type
+    end)
   end
 
   defp insert_corporate_action(%{external_id: external_id} = attrs) do
@@ -1045,24 +1051,43 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
   end
 
   defp parse_and_upsert_nav(rows, date) do
+    nav_data = parse_nav_rows(rows)
+    attrs = build_nav_attrs(nav_data, date)
+
+    case upsert_margin_equity(attrs) do
+      {:ok, :inserted} ->
+        Logger.info(
+          "  NAV snapshot: inserted for #{date} (NLV: #{attrs.net_liquidation_value}, Cash: #{attrs.cash_balance})"
+        )
+
+        %{inserted: 1, skipped: 0}
+
+      {:ok, :skipped} ->
+        Logger.info("  NAV snapshot: already exists for #{date}")
+        %{inserted: 0, skipped: 1}
+    end
+  end
+
+  defp parse_nav_rows(rows) do
     zero = Decimal.new("0")
 
-    # Parse Cash and Stock/Total rows
     # NAV rows after section+Data stripped: [AssetClass, PriorTotal, CurrentLong, CurrentShort, CurrentTotal, Change]
-    nav_data =
-      Enum.reduce(rows, %{}, fn row, acc ->
-        asset_class = Enum.at(row, 0, "") |> String.trim()
-        current_total_str = Enum.at(row, 4, "")
-        current_total = parse_decimal(current_total_str)
+    Enum.reduce(rows, %{}, fn row, acc ->
+      asset_class = Enum.at(row, 0, "") |> String.trim()
+      current_total_str = Enum.at(row, 4, "")
+      current_total = parse_decimal(current_total_str)
 
-        case String.downcase(asset_class) do
-          "cash" -> Map.put(acc, :cash, current_total || zero)
-          "stock" -> Map.put(acc, :stock, current_total || zero)
-          "total" -> Map.put(acc, :total, current_total || zero)
-          _ -> acc
-        end
-      end)
+      case String.downcase(asset_class) do
+        "cash" -> Map.put(acc, :cash, current_total || zero)
+        "stock" -> Map.put(acc, :stock, current_total || zero)
+        "total" -> Map.put(acc, :total, current_total || zero)
+        _ -> acc
+      end
+    end)
+  end
 
+  defp build_nav_attrs(nav_data, date) do
+    zero = Decimal.new("0")
     cash = Map.get(nav_data, :cash, zero)
     nlv = Map.get(nav_data, :total, zero)
 
@@ -1072,10 +1097,7 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
         do: Decimal.abs(cash),
         else: zero
 
-    # NLV = cash + stock (cash is negative when on margin)
-    # own_equity = NLV itself (already net of margin loan)
-
-    attrs = %{
+    %{
       date: date,
       cash_balance: cash,
       margin_loan: margin_loan,
@@ -1087,16 +1109,6 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
           nav_data |> Map.new(fn {k, v} -> {Atom.to_string(k), Decimal.to_string(v)} end)
       }
     }
-
-    case upsert_margin_equity(attrs) do
-      {:ok, :inserted} ->
-        Logger.info("  NAV snapshot: inserted for #{date} (NLV: #{nlv}, Cash: #{cash})")
-        %{inserted: 1, skipped: 0}
-
-      {:ok, :skipped} ->
-        Logger.info("  NAV snapshot: already exists for #{date}")
-        %{inserted: 0, skipped: 1}
-    end
   end
 
   defp upsert_margin_equity(attrs) do

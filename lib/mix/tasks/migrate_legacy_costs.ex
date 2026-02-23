@@ -16,8 +16,8 @@ defmodule Mix.Tasks.Migrate.LegacyCosts do
 
   import Ecto.Query
 
-  alias Dividendsomatic.Repo
   alias Dividendsomatic.Portfolio.CashFlow
+  alias Dividendsomatic.Repo
 
   @interest_types ~w(loan_interest capital_interest)
   @skip_types ~w(commission foreign_tax withholding_tax)
@@ -31,7 +31,20 @@ defmodule Mix.Tasks.Migrate.LegacyCosts do
 
     IO.puts("\n=== #{label}Legacy Costs Migration ===")
 
-    # Count skipped types
+    print_skipped_counts()
+    results = migrate_interest_records(dry_run?)
+
+    IO.puts("\n--- Results ---")
+    IO.puts("  Interest migrated: #{results.migrated}")
+    IO.puts("  Skipped (dup):     #{results.skipped}")
+    IO.puts("  Errors:            #{results.errors}")
+
+    unless dry_run? do
+      IO.puts("\nMigration complete. Safe to drop legacy_costs table.")
+    end
+  end
+
+  defp print_skipped_counts do
     skip_counts =
       Repo.all(
         from(c in "legacy_costs",
@@ -44,8 +57,9 @@ defmodule Mix.Tasks.Migrate.LegacyCosts do
     Enum.each(skip_counts, fn {type, count} ->
       IO.puts("  Skip #{type}: #{count} (already on trades/dividend_payments)")
     end)
+  end
 
-    # Migrate interest
+  defp migrate_interest_records(dry_run?) do
     interest_records =
       Repo.all(
         from(c in "legacy_costs",
@@ -65,42 +79,40 @@ defmodule Mix.Tasks.Migrate.LegacyCosts do
 
     IO.puts("  Interest records to migrate: #{length(interest_records)}")
 
-    results =
-      Enum.reduce(interest_records, %{migrated: 0, skipped: 0, errors: 0}, fn rec, acc ->
-        ext_id = "legacy_cost_#{rec.cost_type}_#{Ecto.UUID.cast!(rec.id)}"
+    Enum.reduce(interest_records, %{migrated: 0, skipped: 0, errors: 0}, fn rec, acc ->
+      process_interest_record(rec, acc, dry_run?)
+    end)
+  end
 
-        cond do
-          Repo.exists?(from(cf in CashFlow, where: cf.external_id == ^ext_id)) ->
-            %{acc | skipped: acc.skipped + 1}
+  defp process_interest_record(rec, acc, dry_run?) do
+    ext_id = "legacy_cost_#{rec.cost_type}_#{Ecto.UUID.cast!(rec.id)}"
 
-          dry_run? ->
-            %{acc | migrated: acc.migrated + 1}
+    cond do
+      Repo.exists?(from(cf in CashFlow, where: cf.external_id == ^ext_id)) ->
+        %{acc | skipped: acc.skipped + 1}
 
-          true ->
-            attrs = %{
-              external_id: ext_id,
-              flow_type: "interest",
-              date: rec.date,
-              amount: rec.amount || Decimal.new("0"),
-              currency: rec.currency || "EUR",
-              description: rec.description || "#{rec.cost_type} (#{rec.broker})",
-              raw_data: %{"legacy_cost_type" => rec.cost_type, "broker" => rec.broker}
-            }
+      dry_run? ->
+        %{acc | migrated: acc.migrated + 1}
 
-            case Repo.insert(CashFlow.changeset(%CashFlow{}, attrs)) do
-              {:ok, _} -> %{acc | migrated: acc.migrated + 1}
-              {:error, _} -> %{acc | errors: acc.errors + 1}
-            end
-        end
-      end)
+      true ->
+        insert_interest_cash_flow(rec, ext_id, acc)
+    end
+  end
 
-    IO.puts("\n--- Results ---")
-    IO.puts("  Interest migrated: #{results.migrated}")
-    IO.puts("  Skipped (dup):     #{results.skipped}")
-    IO.puts("  Errors:            #{results.errors}")
+  defp insert_interest_cash_flow(rec, ext_id, acc) do
+    attrs = %{
+      external_id: ext_id,
+      flow_type: "interest",
+      date: rec.date,
+      amount: rec.amount || Decimal.new("0"),
+      currency: rec.currency || "EUR",
+      description: rec.description || "#{rec.cost_type} (#{rec.broker})",
+      raw_data: %{"legacy_cost_type" => rec.cost_type, "broker" => rec.broker}
+    }
 
-    unless dry_run? do
-      IO.puts("\nMigration complete. Safe to drop legacy_costs table.")
+    case Repo.insert(CashFlow.changeset(%CashFlow{}, attrs)) do
+      {:ok, _} -> %{acc | migrated: acc.migrated + 1}
+      {:error, _} -> %{acc | errors: acc.errors + 1}
     end
   end
 end

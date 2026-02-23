@@ -84,8 +84,7 @@ defmodule Mix.Tasks.Cleanup.CashFlows do
     placeholders =
       @nordnet_descriptions
       |> Enum.with_index(1)
-      |> Enum.map(fn {_, i} -> "$#{i}" end)
-      |> Enum.join(", ")
+      |> Enum.map_join(", ", fn {_, i} -> "$#{i}" end)
 
     %{rows: exact_rows} =
       Repo.query!(

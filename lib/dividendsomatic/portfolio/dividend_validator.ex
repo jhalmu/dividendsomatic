@@ -220,21 +220,23 @@ defmodule Dividendsomatic.Portfolio.DividendValidator do
         val = Decimal.to_float(d.amount)
         median > 0 && val > 0 && (val / median > 10 || median / val > 10)
       end)
-      |> Enum.map(fn d ->
-        val = Decimal.to_float(d.amount)
-        # Small amounts (< median) are likely supplemental dividends, not data errors
-        severity = if val > median, do: :warning, else: :info
-
-        %{
-          severity: severity,
-          type: :inconsistent_amount,
-          symbol: d.symbol,
-          isin: d.isin,
-          ex_date: d.ex_date,
-          detail: "Per-share amount #{d.amount} varies >10x from median for this stock"
-        }
-      end)
+      |> Enum.map(fn d -> build_outlier_issue(d, median) end)
     end
+  end
+
+  defp build_outlier_issue(d, median) do
+    val = Decimal.to_float(d.amount)
+    # Small amounts (< median) are likely supplemental dividends, not data errors
+    severity = if val > median, do: :warning, else: :info
+
+    %{
+      severity: severity,
+      type: :inconsistent_amount,
+      symbol: d.symbol,
+      isin: d.isin,
+      ex_date: d.ex_date,
+      detail: "Per-share amount #{d.amount} varies >10x from median for this stock"
+    }
   end
 
   @doc """

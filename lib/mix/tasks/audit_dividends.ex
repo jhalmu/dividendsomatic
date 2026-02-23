@@ -20,8 +20,8 @@ defmodule Mix.Tasks.Audit.Dividends do
     DividendAnalytics,
     DividendPayment,
     Instrument,
-    Position,
-    PortfolioSnapshot
+    PortfolioSnapshot,
+    Position
   }
 
   alias Dividendsomatic.Repo
@@ -56,27 +56,34 @@ defmodule Mix.Tasks.Audit.Dividends do
         IO.puts("  No snapshots found\n")
 
       snapshot ->
-        results =
-          Position
-          |> join(:left, [p], i in Instrument, on: p.isin == i.isin)
-          |> where([p], p.portfolio_snapshot_id == ^snapshot.id)
-          |> where([p, i], is_nil(i.dividend_rate) or i.dividend_rate == ^Decimal.new("0"))
-          |> select([p, i], {p.isin, p.symbol, i.name, i.dividend_source})
-          |> Repo.all()
-          |> Enum.uniq_by(fn {isin, _, _, _} -> isin end)
-
-        if results == [] do
-          IO.puts("  All active positions have dividend rates\n")
-        else
-          IO.puts("  #{length(results)} positions missing rates:")
-
-          Enum.each(results, fn {isin, symbol, name, source} ->
-            IO.puts("    #{symbol || "?"} (#{name || isin}) [source: #{source || "nil"}]")
-          end)
-
-          IO.puts("")
-        end
+        snapshot
+        |> positions_missing_rates()
+        |> print_missing_rates()
     end
+  end
+
+  defp positions_missing_rates(snapshot) do
+    Position
+    |> join(:left, [p], i in Instrument, on: p.isin == i.isin)
+    |> where([p], p.portfolio_snapshot_id == ^snapshot.id)
+    |> where([p, i], is_nil(i.dividend_rate) or i.dividend_rate == ^Decimal.new("0"))
+    |> select([p, i], {p.isin, p.symbol, i.name, i.dividend_source})
+    |> Repo.all()
+    |> Enum.uniq_by(fn {isin, _, _, _} -> isin end)
+  end
+
+  defp print_missing_rates([]) do
+    IO.puts("  All active positions have dividend rates\n")
+  end
+
+  defp print_missing_rates(results) do
+    IO.puts("  #{length(results)} positions missing rates:")
+
+    Enum.each(results, fn {isin, symbol, name, source} ->
+      IO.puts("    #{symbol || "?"} (#{name || isin}) [source: #{source || "nil"}]")
+    end)
+
+    IO.puts("")
   end
 
   # --- Section 2: Instruments with payments but no rate ---
@@ -147,31 +154,10 @@ defmodule Mix.Tasks.Audit.Dividends do
       |> Repo.all()
 
     discrepancies =
-      Enum.reduce(instruments, [], fn instrument, acc ->
-        payments = recent_payments(instrument.id)
-
-        if payments == [] do
-          acc
-        else
-          enriched = adapt_payments(payments)
-          frequency = DividendAnalytics.detect_dividend_frequency(enriched)
-          freq_atom = frequency_string_to_atom(frequency)
-          ttm_rate = DividendAnalytics.compute_annual_dividend_per_share(enriched, freq_atom)
-
-          if Decimal.compare(ttm_rate, Decimal.new("0")) == :gt do
-            ratio = Decimal.div(instrument.dividend_rate, ttm_rate)
-
-            if Decimal.compare(ratio, Decimal.new("1.3")) == :gt ||
-                 Decimal.compare(ratio, Decimal.new("0.7")) == :lt do
-              [{instrument, ttm_rate, ratio} | acc]
-            else
-              acc
-            end
-          else
-            acc
-          end
-        end
-      end)
+      instruments
+      |> Enum.map(fn instrument -> {instrument, check_ttm_discrepancy(instrument)} end)
+      |> Enum.filter(fn {_, result} -> result != nil end)
+      |> Enum.map(fn {instrument, {ttm_rate, ratio}} -> {instrument, ttm_rate, ratio} end)
 
     if discrepancies == [] do
       IO.puts("  No significant discrepancies found\n")
@@ -213,21 +199,44 @@ defmodule Mix.Tasks.Audit.Dividends do
       IO.puts("  All dividend data is recent\n")
     else
       IO.puts("  #{length(results)} instruments with stale data:")
-
-      Enum.each(results, fn {isin, name, symbol, source, updated_at} ->
-        age =
-          if updated_at,
-            do: "#{div(DateTime.diff(DateTime.utc_now(), updated_at, :second), 86400)}d ago",
-            else: "never"
-
-        IO.puts("    #{symbol || "?"} (#{name || isin}) [#{source || "nil"}] updated: #{age}")
-      end)
-
+      Enum.each(results, &print_stale_instrument/1)
       IO.puts("")
     end
   end
 
+  defp print_stale_instrument({isin, name, symbol, source, updated_at}) do
+    age = format_staleness_age(updated_at)
+    IO.puts("    #{symbol || "?"} (#{name || isin}) [#{source || "nil"}] updated: #{age}")
+  end
+
+  defp format_staleness_age(nil), do: "never"
+
+  defp format_staleness_age(updated_at) do
+    "#{div(DateTime.diff(DateTime.utc_now(), updated_at, :second), 86400)}d ago"
+  end
+
   # --- Helpers ---
+
+  defp check_ttm_discrepancy(instrument) do
+    payments = recent_payments(instrument.id)
+    if payments == [], do: nil, else: compare_yahoo_to_ttm(instrument, payments)
+  end
+
+  defp compare_yahoo_to_ttm(instrument, payments) do
+    enriched = adapt_payments(payments)
+    frequency = DividendAnalytics.detect_dividend_frequency(enriched)
+    freq_atom = frequency_string_to_atom(frequency)
+    ttm_rate = DividendAnalytics.compute_annual_dividend_per_share(enriched, freq_atom)
+
+    if Decimal.compare(ttm_rate, Decimal.new("0")) == :gt do
+      ratio = Decimal.div(instrument.dividend_rate, ttm_rate)
+
+      if Decimal.compare(ratio, Decimal.new("1.3")) == :gt ||
+           Decimal.compare(ratio, Decimal.new("0.7")) == :lt do
+        {ttm_rate, ratio}
+      end
+    end
+  end
 
   defp recent_payments(instrument_id) do
     cutoff = Date.add(Date.utc_today(), -365)

@@ -74,39 +74,50 @@ defmodule Mix.Tasks.Backfill.DividendRates do
 
     IO.puts("Phase 1: Manual overrides (#{length(overrides)} entries)")
 
-    Enum.reduce(overrides, {0, 0}, fn {isin, data}, {applied, skipped} ->
+    Enum.reduce(overrides, {0, 0}, fn {isin, data}, acc ->
       case Repo.get_by(Instrument, isin: isin) do
         nil ->
           IO.puts("  #{isin} — instrument not found, skipping")
-          {applied, skipped + 1}
+          increment_skipped(acc)
 
         instrument ->
-          IO.write("  #{instrument.name || isin} (#{isin})")
-
-          if dry_run? do
-            IO.puts(" — would set rate=#{data.dividend_rate} freq=#{data.dividend_frequency}")
-            {applied + 1, skipped}
-          else
-            attrs = %{
-              dividend_rate: data.dividend_rate,
-              dividend_frequency: data.dividend_frequency,
-              dividend_source: "manual",
-              dividend_updated_at: DateTime.utc_now() |> DateTime.truncate(:second)
-            }
-
-            case instrument |> Instrument.changeset(attrs) |> Repo.update() do
-              {:ok, _} ->
-                IO.puts(" — set rate=#{data.dividend_rate} freq=#{data.dividend_frequency}")
-                {applied + 1, skipped}
-
-              {:error, reason} ->
-                IO.puts(" — FAILED: #{inspect(reason)}")
-                {applied, skipped + 1}
-            end
-          end
+          apply_single_override(instrument, isin, data, dry_run?, acc)
       end
     end)
   end
+
+  defp apply_single_override(instrument, isin, data, dry_run?, acc) do
+    IO.write("  #{instrument.name || isin} (#{isin})")
+
+    if dry_run? do
+      IO.puts(" — would set rate=#{data.dividend_rate} freq=#{data.dividend_frequency}")
+      increment_applied(acc)
+    else
+      persist_manual_override(instrument, data, acc)
+    end
+  end
+
+  defp persist_manual_override(instrument, data, acc) do
+    attrs = %{
+      dividend_rate: data.dividend_rate,
+      dividend_frequency: data.dividend_frequency,
+      dividend_source: "manual",
+      dividend_updated_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    }
+
+    case instrument |> Instrument.changeset(attrs) |> Repo.update() do
+      {:ok, _} ->
+        IO.puts(" — set rate=#{data.dividend_rate} freq=#{data.dividend_frequency}")
+        increment_applied(acc)
+
+      {:error, reason} ->
+        IO.puts(" — FAILED: #{inspect(reason)}")
+        increment_skipped(acc)
+    end
+  end
+
+  defp increment_applied({applied, skipped}), do: {applied + 1, skipped}
+  defp increment_skipped({applied, skipped}), do: {applied, skipped + 1}
 
   # --- Phase 2: TTM computation ---
 

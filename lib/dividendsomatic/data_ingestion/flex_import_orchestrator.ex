@@ -200,17 +200,18 @@ defmodule Dividendsomatic.DataIngestion.FlexImportOrchestrator do
   # Matches by instrument ISIN + pay_date + net_amount, updates fx_rate + amount_eur where NULL.
   defp enrich_dividend_fx_rates(cleaned_csv) do
     case FlexDividendCsvParser.parse(cleaned_csv) do
-      {:ok, records} ->
-        Enum.reduce(records, 0, fn record, count ->
-          case enrich_single_dividend(record) do
-            {:ok, _} -> count + 1
-            _ -> count
-          end
-        end)
-
-      {:error, _} ->
-        0
+      {:ok, records} -> count_enriched(records, &enrich_single_dividend/1)
+      {:error, _} -> 0
     end
+  end
+
+  defp count_enriched(records, enrich_fn) do
+    Enum.reduce(records, 0, fn record, count ->
+      case enrich_fn.(record) do
+        {:ok, _} -> count + 1
+        _ -> count
+      end
+    end)
   end
 
   defp enrich_single_dividend(record) do
@@ -222,47 +223,38 @@ defmodule Dividendsomatic.DataIngestion.FlexImportOrchestrator do
          %Date{} <- pay_date,
          %Decimal{} <- fx_rate,
          false <- Decimal.equal?(fx_rate, 0) do
-      # Find matching dividend_payment by ISIN + pay_date with NULL fx_rate
       query =
         from dp in DividendPayment,
           join: i in assoc(dp, :instrument),
           where: i.isin == ^isin and dp.pay_date == ^pay_date and is_nil(dp.fx_rate),
           select: dp
 
-      case Repo.all(query) do
-        [] ->
-          :no_match
-
-        payments ->
-          Enum.each(payments, fn dp ->
-            amount_eur = Decimal.div(dp.net_amount, fx_rate)
-
-            dp
-            |> Ecto.Changeset.change(%{fx_rate: fx_rate, amount_eur: amount_eur})
-            |> Repo.update()
-          end)
-
-          {:ok, length(payments)}
-      end
+      update_matching_dividends(Repo.all(query), fx_rate)
     else
       _ -> :skip
     end
+  end
+
+  defp update_matching_dividends([], _fx_rate), do: :no_match
+
+  defp update_matching_dividends(payments, fx_rate) do
+    Enum.each(payments, fn dp ->
+      amount_eur = Decimal.div(dp.net_amount, fx_rate)
+
+      dp
+      |> Ecto.Changeset.change(%{fx_rate: fx_rate, amount_eur: amount_eur})
+      |> Repo.update()
+    end)
+
+    {:ok, length(payments)}
   end
 
   # Enrich trades with FX rates from Flex Trades CSV.
   # Matches by instrument ISIN + trade_date + trade_id, updates fx_rate where NULL.
   defp enrich_trade_fx_rates(cleaned_csv) do
     case FlexTradesCsvParser.parse(cleaned_csv) do
-      {:ok, records} ->
-        Enum.reduce(records, 0, fn record, count ->
-          case enrich_single_trade(record) do
-            {:ok, _} -> count + 1
-            _ -> count
-          end
-        end)
-
-      {:error, _} ->
-        0
+      {:ok, records} -> count_enriched(records, &enrich_single_trade/1)
+      {:error, _} -> 0
     end
   end
 
@@ -276,37 +268,35 @@ defmodule Dividendsomatic.DataIngestion.FlexImportOrchestrator do
          %Date{} <- trade_date,
          %Decimal{} <- fx_rate,
          false <- Decimal.equal?(fx_rate, 0) do
-      # Find matching trade by ISIN + trade_date with NULL fx_rate
       query =
         from t in Trade,
           join: i in assoc(t, :instrument),
           where: i.isin == ^isin and t.trade_date == ^trade_date and is_nil(t.fx_rate)
 
-      # Narrow by trade_id in raw_data if available
-      query =
-        if trade_id && trade_id != "" do
-          from t in query,
-            where: fragment("?->>'trade_id' = ?", t.raw_data, ^trade_id)
-        else
-          query
-        end
-
-      case Repo.all(query) do
-        [] ->
-          :no_match
-
-        trades ->
-          Enum.each(trades, fn t ->
-            t
-            |> Ecto.Changeset.change(%{fx_rate: fx_rate})
-            |> Repo.update()
-          end)
-
-          {:ok, length(trades)}
-      end
+      query = maybe_filter_by_trade_id(query, trade_id)
+      update_matching_trades(Repo.all(query), fx_rate)
     else
       _ -> :skip
     end
+  end
+
+  defp maybe_filter_by_trade_id(query, trade_id) when is_binary(trade_id) and trade_id != "" do
+    from t in query,
+      where: fragment("?->>'trade_id' = ?", t.raw_data, ^trade_id)
+  end
+
+  defp maybe_filter_by_trade_id(query, _trade_id), do: query
+
+  defp update_matching_trades([], _fx_rate), do: :no_match
+
+  defp update_matching_trades(trades, fx_rate) do
+    Enum.each(trades, fn t ->
+      t
+      |> Ecto.Changeset.change(%{fx_rate: fx_rate})
+      |> Repo.update()
+    end)
+
+    {:ok, length(trades)}
   end
 
   # --- Cash Report Summary ---

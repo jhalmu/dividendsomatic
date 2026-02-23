@@ -13,8 +13,8 @@ defmodule Mix.Tasks.Migrate.SymbolMappings do
 
   import Ecto.Query
 
-  alias Dividendsomatic.Repo
   alias Dividendsomatic.Portfolio.{Instrument, InstrumentAlias}
+  alias Dividendsomatic.Repo
 
   @impl Mix.Task
   def run(args) do
@@ -28,74 +28,92 @@ defmodule Mix.Tasks.Migrate.SymbolMappings do
         else: "\n=== Symbol Mapping Migration ==="
     )
 
-    resolved =
-      Repo.all(
-        from(sm in "legacy_symbol_mappings",
-          where: sm.status == "resolved",
-          select: %{
-            isin: sm.isin,
-            finnhub_symbol: sm.finnhub_symbol,
-            exchange: sm.exchange,
-            security_name: sm.security_name
-          }
-        )
-      )
+    resolved = load_resolved_mappings()
 
     IO.puts("Found #{length(resolved)} resolved mappings")
 
     results =
       Enum.reduce(resolved, %{migrated: 0, skipped: 0, no_instrument: 0}, fn mapping, acc ->
-        case Repo.get_by(Instrument, isin: mapping.isin) do
-          nil ->
-            IO.puts("  SKIP (no instrument): #{mapping.isin} -> #{mapping.finnhub_symbol}")
-            %{acc | no_instrument: acc.no_instrument + 1}
-
-          instrument ->
-            # Extract exchange from finnhub symbol (e.g., "KESKOB.HE" -> "HE")
-            exchange = extract_exchange(mapping.finnhub_symbol, mapping.exchange)
-            symbol = extract_symbol(mapping.finnhub_symbol)
-
-            existing =
-              Repo.one(
-                from(a in InstrumentAlias,
-                  where: a.instrument_id == ^instrument.id and a.symbol == ^symbol,
-                  where:
-                    ^if(exchange,
-                      do: dynamic([a], a.exchange == ^exchange),
-                      else: dynamic([a], is_nil(a.exchange))
-                    ),
-                  limit: 1
-                )
-              )
-
-            if existing do
-              %{acc | skipped: acc.skipped + 1}
-            else
-              if dry_run? do
-                IO.puts("  WOULD CREATE: #{instrument.isin} -> #{symbol} (#{exchange})")
-                %{acc | migrated: acc.migrated + 1}
-              else
-                changeset =
-                  InstrumentAlias.changeset(%InstrumentAlias{}, %{
-                    instrument_id: instrument.id,
-                    symbol: symbol,
-                    exchange: exchange,
-                    source: "symbol_mapping"
-                  })
-
-                case Repo.insert(changeset) do
-                  {:ok, _} ->
-                    %{acc | migrated: acc.migrated + 1}
-
-                  {:error, cs} ->
-                    IO.puts("  ERROR: #{mapping.isin} -> #{inspect(cs.errors)}")
-                    %{acc | skipped: acc.skipped + 1}
-                end
-              end
-            end
-        end
+        process_mapping(mapping, acc, dry_run?)
       end)
 
+    print_results(results, dry_run?)
+  end
+
+  defp load_resolved_mappings do
+    Repo.all(
+      from(sm in "legacy_symbol_mappings",
+        where: sm.status == "resolved",
+        select: %{
+          isin: sm.isin,
+          finnhub_symbol: sm.finnhub_symbol,
+          exchange: sm.exchange,
+          security_name: sm.security_name
+        }
+      )
+    )
+  end
+
+  defp process_mapping(mapping, acc, dry_run?) do
+    case Repo.get_by(Instrument, isin: mapping.isin) do
+      nil ->
+        IO.puts("  SKIP (no instrument): #{mapping.isin} -> #{mapping.finnhub_symbol}")
+        %{acc | no_instrument: acc.no_instrument + 1}
+
+      instrument ->
+        migrate_instrument_alias(instrument, mapping, acc, dry_run?)
+    end
+  end
+
+  defp migrate_instrument_alias(instrument, mapping, acc, dry_run?) do
+    exchange = extract_exchange(mapping.finnhub_symbol, mapping.exchange)
+    symbol = extract_symbol(mapping.finnhub_symbol)
+
+    if alias_exists?(instrument.id, symbol, exchange) do
+      %{acc | skipped: acc.skipped + 1}
+    else
+      insert_or_preview_alias(instrument, symbol, exchange, mapping, acc, dry_run?)
+    end
+  end
+
+  defp alias_exists?(instrument_id, symbol, exchange) do
+    Repo.exists?(
+      from(a in InstrumentAlias,
+        where: a.instrument_id == ^instrument_id and a.symbol == ^symbol,
+        where:
+          ^if(exchange,
+            do: dynamic([a], a.exchange == ^exchange),
+            else: dynamic([a], is_nil(a.exchange))
+          )
+      )
+    )
+  end
+
+  defp insert_or_preview_alias(_instrument, symbol, exchange, _mapping, acc, true = _dry_run?) do
+    IO.puts("  WOULD CREATE: -> #{symbol} (#{exchange})")
+    %{acc | migrated: acc.migrated + 1}
+  end
+
+  defp insert_or_preview_alias(instrument, symbol, exchange, mapping, acc, false = _dry_run?) do
+    changeset =
+      InstrumentAlias.changeset(%InstrumentAlias{}, %{
+        instrument_id: instrument.id,
+        symbol: symbol,
+        exchange: exchange,
+        source: "symbol_mapping"
+      })
+
+    case Repo.insert(changeset) do
+      {:ok, _} ->
+        %{acc | migrated: acc.migrated + 1}
+
+      {:error, cs} ->
+        IO.puts("  ERROR: #{mapping.isin} -> #{inspect(cs.errors)}")
+        %{acc | skipped: acc.skipped + 1}
+    end
+  end
+
+  defp print_results(results, dry_run?) do
     unmappable_count =
       Repo.one(
         from(sm in "legacy_symbol_mappings",

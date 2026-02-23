@@ -144,43 +144,46 @@ defmodule Mix.Tasks.Backfill.Aliases do
 
     Mix.shell().info("=== Backfilling instrument aliases ===\n")
 
-    unless dry_run do
-      split_count = split_comma_aliases()
-      Mix.shell().info("Step 1: Split #{split_count} comma-separated aliases\n")
+    run_core_steps(dry_run)
+    if variants, do: run_variant_steps(dry_run)
+    print_summary()
+  end
 
-      primary_count = set_primary_flags()
-      Mix.shell().info("Step 2: Set is_primary on #{primary_count} instruments\n")
+  defp run_core_steps(true = _dry_run) do
+    preview_comma_aliases()
+    preview_primary_flags()
+    preview_base_names()
+  end
 
-      base_count = fix_base_names()
-      Mix.shell().info("Step 3: Fixed #{base_count} instrument base names\n")
-    end
+  defp run_core_steps(false = _dry_run) do
+    split_count = split_comma_aliases()
+    Mix.shell().info("Step 1: Split #{split_count} comma-separated aliases\n")
+
+    primary_count = set_primary_flags()
+    Mix.shell().info("Step 2: Set is_primary on #{primary_count} instruments\n")
+
+    base_count = fix_base_names()
+    Mix.shell().info("Step 3: Fixed #{base_count} instrument base names\n")
+  end
+
+  defp run_variant_steps(dry_run) do
+    Mix.shell().info("\n=== Collecting variant aliases ===\n")
 
     if dry_run do
-      preview_comma_aliases()
-      preview_primary_flags()
-      preview_base_names()
+      preview_variants()
+    else
+      pos_count = collect_position_variants()
+      Mix.shell().info("Step 3a: Added #{pos_count} aliases from positions\n")
+
+      sold_count = collect_sold_position_variants()
+      Mix.shell().info("Step 3b: Added #{sold_count} aliases from sold_positions\n")
+
+      trade_count = collect_trade_variants()
+      Mix.shell().info("Step 3c: Added #{trade_count} aliases from trades\n")
     end
+  end
 
-    if variants do
-      Mix.shell().info("\n=== Collecting variant aliases ===\n")
-
-      unless dry_run do
-        pos_count = collect_position_variants()
-        Mix.shell().info("Step 3a: Added #{pos_count} aliases from positions\n")
-
-        sold_count = collect_sold_position_variants()
-        Mix.shell().info("Step 3b: Added #{sold_count} aliases from sold_positions\n")
-
-        trade_count = collect_trade_variants()
-        Mix.shell().info("Step 3c: Added #{trade_count} aliases from trades\n")
-      end
-
-      if dry_run do
-        preview_variants()
-      end
-    end
-
-    # Summary
+  defp print_summary do
     total_aliases = Repo.one(from(a in InstrumentAlias, select: count()))
 
     primary_aliases =
