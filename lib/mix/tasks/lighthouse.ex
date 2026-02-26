@@ -1,6 +1,6 @@
 defmodule Mix.Tasks.Lighthouse do
   @moduledoc """
-  Runs Lighthouse audit against the local dev server.
+  Runs Lighthouse audit against the local server.
 
   ## Usage
 
@@ -9,8 +9,9 @@ defmodule Mix.Tasks.Lighthouse do
   ## Options
 
     * `--url` - URL to audit (default: http://localhost:4000)
-    * `--threshold` - Minimum performance score to pass (default: 50)
-    * `--start-server` - Start the Phoenix server automatically (default: false)
+    * `--threshold` - Minimum performance score to pass (default: 70)
+    * `--start-server` - Start the Phoenix server with production assets (default: false).
+      Runs `mix assets.deploy` (tailwind --minify, esbuild --minify, phx.digest) before starting.
 
   ## Requirements
 
@@ -30,7 +31,7 @@ defmodule Mix.Tasks.Lighthouse do
   @shortdoc "Run Lighthouse audit on local server"
 
   @default_url "http://localhost:4000"
-  @default_threshold 50
+  @default_threshold 70
 
   @impl Mix.Task
   def run(args) do
@@ -73,6 +74,8 @@ defmodule Mix.Tasks.Lighthouse do
   end
 
   defp maybe_start_server(true) do
+    Mix.shell().info("Building production assets...")
+    Mix.Task.run("assets.deploy")
     Mix.shell().info("Starting Phoenix server...")
     Application.ensure_all_started(:dividendsomatic)
     :server_started

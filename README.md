@@ -28,6 +28,14 @@ Portfolio and dividend tracking dashboard. Data is based on combined real data f
 - NimbleCSV, Contex (sparklines), Req (HTTP)
 
 
+## Code Quality
+
+- Tests: 696 passing
+- Credo: 0 issues (strict mode)
+- Lighthouse: 96 accessibility, 100 best practices, 100 SEO
+- Sobelow: clean (low-confidence only)
+- axe-core: WCAG AA passing
+
 ## License
 
 MIT

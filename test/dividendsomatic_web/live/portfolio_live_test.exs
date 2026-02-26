@@ -363,6 +363,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       assert html =~ "Features"
       assert html =~ "Dividend Tracking"
       assert html =~ "Security"
+      assert html =~ "Quality"
     end
   end
 

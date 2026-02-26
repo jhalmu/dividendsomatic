@@ -2165,6 +2165,176 @@
             </p>
           </div>
 
+          <%!-- Quality --%>
+          <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]">
+            <div class="terminal-section-label-inline" style="margin-bottom: var(--space-sm);">
+              Quality
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)]">
+              <%!-- Tests Passing --%>
+              <div
+                class="flex items-center gap-2"
+                style="font-family: var(--font-mono); font-size: 0.75rem;"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  style="color: var(--gain); flex-shrink: 0;"
+                  aria-hidden="true"
+                >
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+                <div>
+                  <div style="color: var(--gain); font-weight: 600;">696</div>
+                  <div style="color: var(--terminal-dim); font-size: 0.625rem;">
+                    Tests Passing
+                  </div>
+                </div>
+              </div>
+              <%!-- Credo Issues --%>
+              <div
+                class="flex items-center gap-2"
+                style="font-family: var(--font-mono); font-size: 0.75rem;"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  style="color: var(--gain); flex-shrink: 0;"
+                  aria-hidden="true"
+                >
+                  <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
+                </svg>
+                <div>
+                  <div style="color: var(--gain); font-weight: 600;">0</div>
+                  <div style="color: var(--terminal-dim); font-size: 0.625rem;">Credo Issues</div>
+                </div>
+              </div>
+              <%!-- Accessibility --%>
+              <div
+                class="flex items-center gap-2"
+                style="font-family: var(--font-mono); font-size: 0.75rem;"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  style="color: var(--terminal-accent); flex-shrink: 0;"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="4.5" r="2.5" /><path d="m10.2 6.3-3.9 3.26" /><path d="m14 6.3 3.9 3.26" /><path d="M4.24 12.87 8 15.18" /><path d="M16 15.18l3.76-2.31" /><path d="m8.12 15.36-2.83 6.6" /><path d="m15.88 15.36 2.83 6.6" />
+                </svg>
+                <div>
+                  <div style="color: var(--terminal-accent); font-weight: 600;">96</div>
+                  <div style="color: var(--terminal-dim); font-size: 0.625rem;">
+                    Accessibility
+                  </div>
+                </div>
+              </div>
+              <%!-- Best Practices --%>
+              <div
+                class="flex items-center gap-2"
+                style="font-family: var(--font-mono); font-size: 0.75rem;"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  style="color: var(--terminal-accent); flex-shrink: 0;"
+                  aria-hidden="true"
+                >
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+                <div>
+                  <div style="color: var(--terminal-accent); font-weight: 600;">100</div>
+                  <div style="color: var(--terminal-dim); font-size: 0.625rem;">
+                    Best Practices
+                  </div>
+                </div>
+              </div>
+              <%!-- SEO --%>
+              <div
+                class="flex items-center gap-2"
+                style="font-family: var(--font-mono); font-size: 0.75rem;"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  style="color: var(--terminal-accent); flex-shrink: 0;"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <div>
+                  <div style="color: var(--terminal-accent); font-weight: 600;">100</div>
+                  <div style="color: var(--terminal-dim); font-size: 0.625rem;">SEO</div>
+                </div>
+              </div>
+              <%!-- axe-core A11y --%>
+              <div
+                class="flex items-center gap-2"
+                style="font-family: var(--font-mono); font-size: 0.75rem;"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  style="color: var(--gain); flex-shrink: 0;"
+                  aria-hidden="true"
+                >
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><polyline points="9 12 11 14 15 10" />
+                </svg>
+                <div>
+                  <div style="color: var(--gain); font-weight: 600;">Pass</div>
+                  <div style="color: var(--terminal-dim); font-size: 0.625rem;">
+                    axe-core A11y
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--terminal-dim); margin-top: var(--space-xs);">
+              Sobelow security scan: clean (low-confidence only)
+            </p>
+          </div>
+
           <%!-- Links --%>
           <div class="terminal-card p-[var(--space-sm)]">
             <div class="flex items-center justify-center gap-[var(--space-md)]">
