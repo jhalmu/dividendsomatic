@@ -1,8 +1,8 @@
-# Session Report — 2026-02-26 (Lighthouse Performance Fix + Quality Badges)
+# Session Report — 2026-02-26 (Lighthouse Fix + Quality Badges + OAuth Fix)
 
 ## Overview
 
-Lighthouse performance fix: `mix lighthouse --start-server` now builds production assets (minified JS/CSS) before starting the server. Font loading optimized with preconnect hints and trimmed variants. Quality badges added to About tab and README.
+Lighthouse performance fix: `mix lighthouse --start-server` now builds production assets (minified JS/CSS) before starting the server. Font loading optimized with preconnect hints and trimmed variants. Quality badges added to About tab and README. Gmail OAuth refresh token had expired — re-authorized and restored auto-import on both dev and production.
 
 ## Changes Made
 
@@ -33,6 +33,15 @@ Lighthouse performance fix: `mix lighthouse --start-server` now builds productio
 ### Test Update
 - Added `Quality` assertion to About tab test
 
+### Gmail OAuth Fix
+- **Root cause**: Google OAuth refresh token expired/revoked on Feb 25
+- Production Oban logs showed `{:error, :token_refresh_failed}` since Feb 25 (3 retries → discarded)
+- Also found: OAuth Playground redirect URI was missing from client config, client secret paste was missing `G` prefix
+- Re-authorized via OAuth Playground, got new refresh token
+- Updated production `.env` + recreated container (`docker compose up -d`)
+- Manual import caught up: 5 new imports locally, 4 on production (Feb 24-25 snapshots + trades/dividends)
+- Local `.env` synced via Dropbox
+
 ## Files Modified
 
 | File | Changes |
@@ -43,6 +52,7 @@ Lighthouse performance fix: `mix lighthouse --start-server` now builds productio
 | `portfolio_live.html.heex` | Quality card in About tab |
 | `README.md` | Code Quality section |
 | `portfolio_live_test.exs` | Quality assertion in About tab test |
+| Production `.env` | New GOOGLE_REFRESH_TOKEN |
 
 ## Verification
 
@@ -51,13 +61,15 @@ Lighthouse performance fix: `mix lighthouse --start-server` now builds productio
 | `mix test.all` | 696 tests, 0 failures |
 | `mix credo --strict` | 0 issues |
 | `mix format` | Clean |
+| Gmail import (prod) | 4 imported, 0 errors |
+| Gmail import (dev) | 5 imported, 0 errors |
 
 ## Data Validation Summary
 
 - Total dividends checked: 2178
 - Issues: 679 (355 info, 324 warning) — same as baseline
 - Categories: duplicates (282), inconsistent amounts (154), currency mismatches (240), suspicious amounts (1), mixed types (2)
-- Portfolio balance: 8.07% difference (margin account warning) — unchanged
+- Portfolio balance: 14.81% difference (margin account warning) — slightly wider due to new snapshot with updated positions
 - No new data issues introduced
 
 ## GitHub Issues
