@@ -1209,6 +1209,86 @@ defmodule Dividendsomatic.Portfolio do
       else: Decimal.new("0")
   end
 
+  ## Concentration Analysis
+
+  @doc """
+  Computes portfolio concentration metrics from positions.
+  Returns top_1, top_3 weights and HHI (Herfindahl-Hirschman Index).
+  """
+  def compute_concentration(positions) when is_list(positions) do
+    weights =
+      positions
+      |> Enum.map(fn p -> Decimal.to_float(p.weight || Decimal.new("0")) end)
+      |> Enum.sort(:desc)
+
+    %{
+      top_1: Decimal.new("#{Enum.at(weights, 0, 0.0)}") |> Decimal.round(1),
+      top_3:
+        weights
+        |> Enum.take(3)
+        |> Enum.sum()
+        |> then(&Decimal.new("#{&1}"))
+        |> Decimal.round(1),
+      hhi:
+        weights
+        |> Enum.reduce(0.0, fn w, acc -> acc + w * w end)
+        |> then(&Decimal.new("#{&1}"))
+        |> Decimal.round(0),
+      count: length(weights)
+    }
+  end
+
+  def compute_concentration(_),
+    do: %{top_1: Decimal.new("0"), top_3: Decimal.new("0"), hhi: Decimal.new("0"), count: 0}
+
+  @doc """
+  Computes sector breakdown by joining positions with instruments.
+  Returns list of %{sector, value, pct, count} sorted by value descending.
+  """
+  def compute_sector_breakdown(positions) when is_list(positions) do
+    isins = positions |> Enum.map(& &1.isin) |> Enum.filter(& &1)
+
+    instrument_sectors =
+      if isins != [] do
+        from(i in Instrument,
+          where: i.isin in ^isins,
+          select: {i.isin, i.sector}
+        )
+        |> Repo.all()
+        |> Map.new()
+      else
+        %{}
+      end
+
+    total_value =
+      Enum.reduce(positions, Decimal.new("0"), fn p, acc ->
+        fx = p.fx_rate || Decimal.new("1")
+        Decimal.add(acc, Decimal.mult(p.value || Decimal.new("0"), fx))
+      end)
+
+    positions
+    |> Enum.group_by(fn p ->
+      instrument_sectors[p.isin] || "Unknown"
+    end)
+    |> Enum.map(fn {sector, group} ->
+      value =
+        Enum.reduce(group, Decimal.new("0"), fn p, acc ->
+          fx = p.fx_rate || Decimal.new("1")
+          Decimal.add(acc, Decimal.mult(p.value || Decimal.new("0"), fx))
+        end)
+
+      %{
+        sector: sector,
+        value: value,
+        pct: decimal_pct(value, total_value),
+        count: length(group)
+      }
+    end)
+    |> Enum.sort_by(fn e -> Decimal.to_float(e.value) end, :desc)
+  end
+
+  def compute_sector_breakdown(_), do: []
+
   ## FX Rate Lookup
 
   @doc """

@@ -11,7 +11,7 @@ defmodule Dividendsomatic.Portfolio.SchemaIntegrityTest do
 
   alias Dividendsomatic.Repo
 
-  defp create_instrument(attrs \\ %{}) do
+  defp create_instrument(attrs) do
     defaults = %{
       isin:
         "US#{:rand.uniform(999_999_999) |> Integer.to_string() |> String.pad_leading(10, "0")}",
@@ -40,7 +40,7 @@ defmodule Dividendsomatic.Portfolio.SchemaIntegrityTest do
     |> Repo.insert!()
   end
 
-  defp create_dividend_payment(instrument, attrs \\ %{}) do
+  defp create_dividend_payment(instrument, attrs) do
     defaults = %{
       external_id: "dp_#{Ecto.UUID.generate()}",
       instrument_id: instrument.id,

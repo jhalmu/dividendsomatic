@@ -10,17 +10,13 @@ defmodule DividendsomaticWeb.PortfolioLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    snapshot = Portfolio.get_latest_snapshot()
-    live_fg = get_fear_greed_live()
-
-    if connected?(socket) do
-      Process.send_after(self(), :refresh_fear_greed, @fg_refresh_interval)
-    end
-
     socket =
       socket
-      |> assign(:live_fear_greed, live_fg)
-      |> assign_snapshot(snapshot)
+      |> assign(:loading, true)
+      |> assign(:live_fear_greed, nil)
+      |> assign_snapshot(nil)
+
+    if connected?(socket), do: send(self(), :load_data)
 
     {:ok, socket}
   end
@@ -41,6 +37,14 @@ defmodule DividendsomaticWeb.PortfolioLive do
   end
 
   @impl true
+  def handle_params(%{"date" => date_string}, _uri, %{assigns: %{loading: true}} = socket) do
+    # Stash the requested date; :load_data will pick it up
+    case Date.from_iso8601(date_string) do
+      {:ok, date} -> {:noreply, assign(socket, :pending_date, date)}
+      _ -> {:noreply, socket}
+    end
+  end
+
   def handle_params(%{"date" => date_string}, _uri, socket) do
     case Date.from_iso8601(date_string) do
       {:ok, date} ->
@@ -265,21 +269,15 @@ defmodule DividendsomaticWeb.PortfolioLive do
     end
   end
 
-  def handle_event("switch_tab", %{"tab" => tab}, socket) do
-    socket = assign(socket, :active_tab, tab)
+  def handle_event("switch_tab", _params, %{assigns: %{loading: true}} = socket) do
+    {:noreply, socket}
+  end
 
-    # Lazy-load heavy data when Summary tab is first activated
+  def handle_event("switch_tab", %{"tab" => tab}, socket) do
     socket =
-      if tab == "summary" and not socket.assigns[:summary_loaded] do
-        socket
-        |> assign(:summary_loaded, true)
-        |> assign(:fx_exposure, Portfolio.compute_fx_exposure(socket.assigns.positions))
-        |> assign_pnl_summary()
-        |> assign_investment_summary()
-        |> assign_margin_equity()
-      else
-        socket
-      end
+      socket
+      |> assign(:active_tab, tab)
+      |> lazy_load_tab_data(tab)
 
     {:noreply, socket}
   end
@@ -293,6 +291,26 @@ defmodule DividendsomaticWeb.PortfolioLive do
   end
 
   @impl true
+  def handle_info(:load_data, socket) do
+    snapshot =
+      case socket.assigns[:pending_date] do
+        nil -> Portfolio.get_latest_snapshot()
+        date -> Portfolio.get_snapshot_by_date(date) || Portfolio.get_latest_snapshot()
+      end
+
+    live_fg = get_fear_greed_live()
+
+    Process.send_after(self(), :refresh_fear_greed, @fg_refresh_interval)
+
+    socket =
+      socket
+      |> assign(:loading, false)
+      |> assign(:live_fear_greed, live_fg)
+      |> assign_snapshot(snapshot)
+
+    {:noreply, socket}
+  end
+
   def handle_info(:refresh_fear_greed, socket) do
     live_fg = get_fear_greed_live()
     Process.send_after(self(), :refresh_fear_greed, @fg_refresh_interval)
@@ -311,6 +329,18 @@ defmodule DividendsomaticWeb.PortfolioLive do
   end
 
   # --- Function Components ---
+
+  attr :title, :string, required: true
+  attr :date, :any, required: true
+
+  defp tab_panel_header(assigns) do
+    ~H"""
+    <div class="terminal-panel-header">
+      <h2>{@title}</h2>
+      <span class="terminal-panel-date">{Calendar.strftime(@date, "%Y-%m-%d")}</span>
+    </div>
+    """
+  end
 
   attr :current_snapshot, :map, required: true
   attr :has_prev, :boolean, required: true
@@ -466,6 +496,92 @@ defmodule DividendsomaticWeb.PortfolioLive do
     """
   end
 
+  def about_panel(assigns) do
+    ~H"""
+    <div id="panel-about" class="animate-fade-in" role="tabpanel" aria-labelledby="tab-about">
+      <div class="terminal-card p-[var(--space-sm)]">
+        <div style="font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: var(--space-xs);">
+          dividends-o-matic
+        </div>
+        <p style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--terminal-muted); margin-bottom: var(--space-sm); line-height: 1.6;">
+          Portfolio and dividend tracking dashboard. Data is based on combined real data for testing purposes.
+        </p>
+        <ul style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--terminal-dim); line-height: 1.8; list-style: none; padding: 0; margin-bottom: var(--space-sm);">
+          <li>&#x25B8; Multi-format CSV import with unified portfolio history</li>
+          <li>&#x25B8; Dividend analytics, projections, and per-symbol breakdown</li>
+          <li>&#x25B8; Market data with multi-provider fallback chains</li>
+        </ul>
+        <div class="flex items-center gap-[var(--space-xs)]">
+          <a
+            href="https://github.com/jhalmu/dividendsomatic/issues"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn btn-sm btn-outline"
+          >
+            GitHub Issues
+          </a>
+          <a
+            href="https://bsky.app/profile/jhalmu.bsky.social"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn btn-sm btn-outline"
+          >
+            Bluesky
+          </a>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp lazy_load_tab_data(socket, "overview") do
+    if socket.assigns[:overview_loaded] do
+      socket
+    else
+      socket
+      |> assign(:overview_loaded, true)
+      |> assign(:fx_exposure, Portfolio.compute_fx_exposure(socket.assigns.positions))
+      |> assign(:concentration, Portfolio.compute_concentration(socket.assigns.positions))
+    end
+  end
+
+  defp lazy_load_tab_data(socket, "holdings") do
+    if socket.assigns[:holdings_loaded] do
+      socket
+    else
+      socket
+      |> assign(:holdings_loaded, true)
+      |> assign(:fx_exposure, Portfolio.compute_fx_exposure(socket.assigns.positions))
+      |> assign(:concentration, Portfolio.compute_concentration(socket.assigns.positions))
+      |> assign(:sector_breakdown, Portfolio.compute_sector_breakdown(socket.assigns.positions))
+    end
+  end
+
+  defp lazy_load_tab_data(socket, "income") do
+    if socket.assigns[:income_loaded] do
+      socket
+    else
+      socket
+      |> assign(:income_loaded, true)
+      |> assign(:margin_interest, Portfolio.total_actual_margin_interest())
+    end
+  end
+
+  defp lazy_load_tab_data(socket, "summary") do
+    if socket.assigns[:summary_loaded] do
+      socket
+    else
+      socket
+      |> assign(:summary_loaded, true)
+      |> assign(:fx_exposure, Portfolio.compute_fx_exposure(socket.assigns.positions))
+      |> assign_pnl_summary()
+      |> assign_investment_summary()
+      |> assign_margin_equity()
+    end
+  end
+
+  defp lazy_load_tab_data(socket, _tab), do: socket
+
   defp navigate_by_date_offset(socket, days) do
     if socket.assigns.current_snapshot do
       target = Date.add(socket.assigns.current_snapshot.date, days)
@@ -537,10 +653,21 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:waterfall_data, [])
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
-    |> assign(:active_tab, "performance")
+    |> assign(:active_tab, "overview")
     |> assign(:per_symbol_dividends, %{})
     |> assign(:dividend_summary_totals, %{})
     |> assign(:margin_equity, nil)
+    |> assign(:concentration, %{
+      top_1: Decimal.new("0"),
+      top_3: Decimal.new("0"),
+      hhi: Decimal.new("0"),
+      count: 0
+    })
+    |> assign(:sector_breakdown, [])
+    |> assign(:margin_interest, Decimal.new("0"))
+    |> assign(:overview_loaded, false)
+    |> assign(:holdings_loaded, false)
+    |> assign(:income_loaded, false)
     |> assign(:pnl, %{
       total_pnl: Decimal.new("0"),
       total_trades: 0,
@@ -637,12 +764,44 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:pnl, %{winners: [], losers: [], total_realized: Decimal.new("0")})
     |> assign(:investment_summary, nil)
     |> assign(:summary_loaded, false)
+    |> assign(:overview_loaded, false)
+    |> assign(:holdings_loaded, false)
+    |> assign(:income_loaded, false)
     |> assign(:margin_equity, nil)
-    |> assign_new(:active_tab, fn -> "performance" end)
-    |> maybe_load_summary()
+    |> assign(:concentration, %{
+      top_1: Decimal.new("0"),
+      top_3: Decimal.new("0"),
+      hhi: Decimal.new("0"),
+      count: 0
+    })
+    |> assign(:sector_breakdown, [])
+    |> assign(:margin_interest, Decimal.new("0"))
+    |> assign_new(:active_tab, fn -> "overview" end)
+    |> maybe_load_tab_data()
   end
 
-  defp maybe_load_summary(%{assigns: %{active_tab: "summary"}} = socket) do
+  defp maybe_load_tab_data(%{assigns: %{active_tab: "overview"}} = socket) do
+    socket
+    |> assign(:overview_loaded, true)
+    |> assign(:fx_exposure, Portfolio.compute_fx_exposure(socket.assigns.positions))
+    |> assign(:concentration, Portfolio.compute_concentration(socket.assigns.positions))
+  end
+
+  defp maybe_load_tab_data(%{assigns: %{active_tab: "holdings"}} = socket) do
+    socket
+    |> assign(:holdings_loaded, true)
+    |> assign(:fx_exposure, Portfolio.compute_fx_exposure(socket.assigns.positions))
+    |> assign(:concentration, Portfolio.compute_concentration(socket.assigns.positions))
+    |> assign(:sector_breakdown, Portfolio.compute_sector_breakdown(socket.assigns.positions))
+  end
+
+  defp maybe_load_tab_data(%{assigns: %{active_tab: "income"}} = socket) do
+    socket
+    |> assign(:income_loaded, true)
+    |> assign(:margin_interest, Portfolio.total_actual_margin_interest())
+  end
+
+  defp maybe_load_tab_data(%{assigns: %{active_tab: "summary"}} = socket) do
     socket
     |> assign(:summary_loaded, true)
     |> assign(:fx_exposure, Portfolio.compute_fx_exposure(socket.assigns.positions))
@@ -651,7 +810,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign_margin_equity()
   end
 
-  defp maybe_load_summary(socket), do: socket
+  defp maybe_load_tab_data(socket), do: socket
 
   defp compute_dividend_summary_totals(per_symbol) when map_size(per_symbol) == 0, do: %{}
 
@@ -967,12 +1126,77 @@ defmodule DividendsomaticWeb.PortfolioLive do
     }
   end
 
+  @doc false
+  def build_fx_donut_config(fx_data, _id_suffix \\ "") do
+    labels = Enum.map(fx_data, & &1.currency)
+    series = Enum.map(fx_data, fn fx -> Decimal.to_float(fx.pct) end)
+
+    colors = [
+      "#5EADF7",
+      "#FBBF24",
+      "#34D399",
+      "#F87171",
+      "#A78BFA",
+      "#FB923C"
+    ]
+
+    %{
+      chart: %{
+        type: "donut",
+        height: 220,
+        background: "transparent",
+        fontFamily: "'IBM Plex Mono', monospace"
+      },
+      series: series,
+      labels: labels,
+      colors: Enum.take(colors, length(labels)),
+      stroke: %{width: 1, colors: ["var(--terminal-bg)"]},
+      legend: %{
+        position: "bottom",
+        labels: %{colors: "#7E8BA3"},
+        fontSize: "11px",
+        fontFamily: "'IBM Plex Mono', monospace"
+      },
+      dataLabels: %{
+        enabled: true,
+        formatter: "PERCENT_FORMATTER",
+        style: %{fontSize: "11px", fontFamily: "'IBM Plex Mono', monospace"}
+      },
+      tooltip: %{
+        theme: "dark",
+        style: %{fontSize: "12px"}
+      },
+      plotOptions: %{
+        pie: %{
+          donut: %{
+            size: "60%",
+            labels: %{show: false}
+          }
+        }
+      }
+    }
+  end
+
   defp format_cost_type("commission"), do: "Commission"
   defp format_cost_type("withholding_tax"), do: "Withholding Tax"
   defp format_cost_type("foreign_tax"), do: "Foreign Tax"
   defp format_cost_type("loan_interest"), do: "Loan Interest"
   defp format_cost_type("capital_interest"), do: "Capital Interest"
   defp format_cost_type(other), do: String.capitalize(other)
+
+  defp fear_greed_color(nil), do: "yellow"
+
+  defp fear_greed_color(data) do
+    value = data["value"] || 50
+
+    cond do
+      value <= 25 -> "red"
+      value <= 45 -> "orange"
+      value <= 55 -> "yellow"
+      value <= 75 -> "emerald"
+      true -> "green"
+    end
+  end
 
   defp date_to_unix_ms(date) do
     date

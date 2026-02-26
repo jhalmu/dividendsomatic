@@ -4,7 +4,6 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
   import Phoenix.LiveViewTest
 
   alias Dividendsomatic.Portfolio
-  alias Dividendsomatic.Portfolio.{DividendPayment, Instrument, InstrumentAlias}
 
   @csv_data """
   "ReportDate","CurrencyPrimary","Symbol","Description","SubCategory","Quantity","MarkPrice","PositionValue","CostBasisPrice","CostBasisMoney","OpenPrice","PercentOfNAV","FifoPnlUnrealized","ListingExchange","AssetClass","FXRateToBase","ISIN","FIGI"
@@ -17,16 +16,91 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
   "2026-01-28","EUR","TELIA1","TELIA CO AB","COMMON","10000","3.858","38580","3.5871187","35871.187","3.5871187","16.34","2708.813","FWB","STK","1","SE0000667925","BBG000GJ9377"
   """
 
+  # Helper to connect and wait for async data load
+  defp live_connected(conn, path \\ ~p"/") do
+    {:ok, view, _loading_html} = live(conn, path)
+    html = render(view)
+    {:ok, view, html}
+  end
+
+  describe "loading state" do
+    test "should show loading indicator on initial render", %{conn: conn} do
+      {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ "loading-timer"
+      assert html =~ "Loading portfolio data"
+    end
+
+    test "should show Overview tab as active during loading", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ "Overview"
+      assert html =~ "panel-overview" or html =~ "panel-about"
+    end
+
+    test "should show disabled tab buttons during loading", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ "opacity: 0.4"
+      assert html =~ "disabled"
+    end
+  end
+
+  describe "overview tab" do
+    test "should show about panel content in overview", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ "dividends-o-matic"
+      assert html =~ "combined real data"
+      assert html =~ "GitHub Issues"
+      assert html =~ "Bluesky"
+    end
+
+    test "should show overview tab in loaded state", %{conn: conn} do
+      {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+
+      {:ok, view, _html} = live_connected(conn)
+
+      # Overview is the default tab after load
+      html = render(view)
+      assert html =~ "panel-overview"
+    end
+
+    test "should show stat grid in overview", %{conn: conn} do
+      {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+
+      {:ok, _view, html} = live_connected(conn)
+
+      assert html =~ "Portfolio"
+      assert html =~ "Unrealized"
+      assert html =~ "YTD Dividends"
+      assert html =~ "Total Return"
+    end
+
+    test "should show top holdings by weight", %{conn: conn} do
+      {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+
+      {:ok, _view, html} = live_connected(conn)
+
+      assert html =~ "Top Holdings by Weight"
+      assert html =~ "KESKOB"
+    end
+  end
+
   describe "empty state" do
     test "should render empty state when no data exists", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/")
+      html = render(view)
 
       assert html =~ "No Portfolio Data"
       assert html =~ "mix import.csv"
     end
 
     test "should show brand name in empty state", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/")
+      html = render(view)
 
       assert html =~ "dividends-o-matic"
     end
@@ -36,49 +110,53 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     test "should show the snapshot date", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, _view, html} = live_connected(conn)
 
       assert html =~ "2026-01-28"
     end
 
-    test "should show holdings table with Positions header", %{conn: conn} do
+    test "should show holdings table in holdings tab", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
+      html = render_click(view, "switch_tab", %{"tab" => "holdings"})
       assert html =~ "Positions"
     end
 
     test "should show portfolio value stat", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, _view, html} = live_connected(conn)
 
       assert html =~ "Portfolio Value"
     end
 
-    test "should show holding symbols in table", %{conn: conn} do
+    test "should show holding symbols in holdings tab", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@multi_holding_csv, ~D[2026-01-28])
 
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
+      html = render_click(view, "switch_tab", %{"tab" => "holdings"})
       assert html =~ "KESKOB"
       assert html =~ "TELIA1"
     end
 
-    test "should show holdings count", %{conn: conn} do
+    test "should show holdings count in holdings tab", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@multi_holding_csv, ~D[2026-01-28])
 
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
+      html = render_click(view, "switch_tab", %{"tab" => "holdings"})
       assert html =~ "2 holdings"
     end
 
-    test "should show table column headers", %{conn: conn} do
+    test "should show table column headers in holdings tab", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
+      html = render_click(view, "switch_tab", %{"tab" => "holdings"})
       assert html =~ "Symbol"
       assert html =~ "Description"
       assert html =~ "Qty"
@@ -91,7 +169,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-27])
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, _view, html} = live_connected(conn)
 
       assert html =~ "2/2"
     end
@@ -106,7 +184,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     end
 
     test "should navigate to previous snapshot", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/")
+      {:ok, view, html} = live_connected(conn)
 
       assert html =~ "2026-01-28"
 
@@ -116,7 +194,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     end
 
     test "should navigate to next snapshot", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
       render_hook(view, "navigate", %{"direction" => "prev"})
 
@@ -126,7 +204,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     end
 
     test "should navigate to first snapshot", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
       html = render_hook(view, "navigate", %{"direction" => "first"})
 
@@ -134,7 +212,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     end
 
     test "should navigate to last snapshot", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
       render_hook(view, "navigate", %{"direction" => "first"})
 
@@ -144,7 +222,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     end
 
     test "should disable prev button on first snapshot", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
       # Navigate to first
       render_hook(view, "navigate", %{"direction" => "first"})
@@ -160,7 +238,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-27])
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, _view, html} = live(conn, ~p"/portfolio/2026-01-27")
+      {:ok, _view, html} = live_connected(conn, ~p"/portfolio/2026-01-27")
 
       assert html =~ "2026-01-27"
     end
@@ -168,7 +246,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     test "should handle invalid date in URL params gracefully", %{conn: conn} do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, _view, html} = live_connected(conn)
 
       assert html =~ "2026-01-28"
     end
@@ -178,7 +256,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     test "should have the KeyboardNav hook on the page", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, _view, html} = live_connected(conn)
 
       assert html =~ ~s{phx-hook="KeyboardNav"}
     end
@@ -186,7 +264,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     test "should show keyboard shortcut hints", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, _view, html} = live_connected(conn)
 
       assert html =~ "navigate"
     end
@@ -196,7 +274,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     test "should show all stats cards", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, _view, html} = live_connected(conn)
 
       assert html =~ "Portfolio Value"
       assert html =~ "Unrealized P&amp;L"
@@ -209,7 +287,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     test "should show realized year card with sub-lines", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, _view, html} = live_connected(conn)
 
       assert html =~ "Realized #{Date.utc_today().year}"
       assert html =~ "Dividends:"
@@ -221,7 +299,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-27])
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
       # Switch to performance tab to see the chart
       html = render_click(view, "switch_tab", %{"tab" => "performance"})
@@ -233,7 +311,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     test "should not show chart with single snapshot", %{conn: conn} do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
       # Switch to performance tab — chart shouldn't appear with single snapshot
       html = render_click(view, "switch_tab", %{"tab" => "performance"})
@@ -245,12 +323,50 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-27])
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
       # Switch to performance tab to see the chart
       html = render_click(view, "switch_tab", %{"tab" => "performance"})
 
       assert html =~ "trading days"
+    end
+  end
+
+  describe "holdings tab" do
+    test "should show positions table in holdings tab", %{conn: conn} do
+      {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+
+      {:ok, view, _html} = live_connected(conn)
+
+      html = render_click(view, "switch_tab", %{"tab" => "holdings"})
+      assert html =~ "panel-holdings"
+      assert html =~ "Positions"
+      assert html =~ "KESKOB"
+    end
+
+    test "should show concentration risk", %{conn: conn} do
+      {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+
+      {:ok, view, _html} = live_connected(conn)
+
+      html = render_click(view, "switch_tab", %{"tab" => "holdings"})
+      assert html =~ "Concentration Risk"
+      assert html =~ "Top 1"
+      assert html =~ "HHI"
+    end
+  end
+
+  describe "income tab" do
+    test "should show income tab with dividend stats", %{conn: conn} do
+      {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+
+      {:ok, view, _html} = live_connected(conn)
+
+      html = render_click(view, "switch_tab", %{"tab" => "income"})
+      assert html =~ "panel-income"
+      assert html =~ "Gross Dividends"
+      assert html =~ "Net Dividends"
+      assert html =~ "Net Income"
     end
   end
 
@@ -263,7 +379,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
 
     test "should show FX exposure table when multiple currencies exist", %{conn: conn} do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@multi_currency_csv, ~D[2026-01-28])
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
       html = render_hook(view, "switch_tab", %{"tab" => "summary"})
       assert html =~ "Currency Exposure"
@@ -274,7 +390,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
 
     test "should hide FX exposure when single currency", %{conn: conn} do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
       html = render_hook(view, "switch_tab", %{"tab" => "summary"})
       refute html =~ "fx-exposure"
@@ -300,7 +416,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     end
 
     test "should show realized P&L section with summary stats", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
       html = render_hook(view, "switch_tab", %{"tab" => "summary"})
       assert html =~ "Realized P&amp;L"
@@ -312,7 +428,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     end
 
     test "should show top winners table with AAPL", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
       html = render_hook(view, "switch_tab", %{"tab" => "summary"})
       assert html =~ "Top Winners"
@@ -320,14 +436,14 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     end
 
     test "should link sold symbol to stock page", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
       html = render_hook(view, "switch_tab", %{"tab" => "summary"})
       assert html =~ ~s{href="/stocks/AAPL"}
     end
 
     test "should show holding period years", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
       html = render_hook(view, "switch_tab", %{"tab" => "summary"})
       assert html =~ "2025"
@@ -335,7 +451,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     end
 
     test "should show year filter buttons", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
       html = render_hook(view, "switch_tab", %{"tab" => "summary"})
       # Should have "All" button and year buttons
@@ -355,7 +471,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
           sale_date: ~D[2025-06-15]
         })
 
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
       # Switch to summary tab first
       html = render_hook(view, "switch_tab", %{"tab" => "summary"})
@@ -381,7 +497,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     end
 
     test "should toggle show all symbols", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
       html = render_hook(view, "switch_tab", %{"tab" => "summary"})
       assert html =~ "Show all"
@@ -402,53 +518,12 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
 
     test "should show SHORT badge for negative quantity", %{conn: conn} do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@short_csv, ~D[2026-01-28])
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live_connected(conn)
 
+      # SHORT badge is now in holdings tab
+      html = render_click(view, "switch_tab", %{"tab" => "holdings"})
       assert html =~ "short-badge"
       assert html =~ "SHORT"
     end
-  end
-
-  defp get_or_create_instrument(symbol, isin) do
-    case Dividendsomatic.Repo.get_by(Instrument, isin: isin) do
-      nil ->
-        {:ok, instrument} =
-          %Instrument{}
-          |> Instrument.changeset(%{isin: isin, name: "#{symbol} Corp"})
-          |> Dividendsomatic.Repo.insert()
-
-        {:ok, alias_record} =
-          %InstrumentAlias{}
-          |> InstrumentAlias.changeset(%{
-            instrument_id: instrument.id,
-            symbol: symbol,
-            source: "test"
-          })
-          |> Dividendsomatic.Repo.insert()
-
-        {instrument, alias_record}
-
-      instrument ->
-        alias_record =
-          Dividendsomatic.Repo.get_by(InstrumentAlias,
-            instrument_id: instrument.id,
-            symbol: symbol
-          )
-
-        {instrument, alias_record}
-    end
-  end
-
-  defp insert_dividend_payment(instrument_id, pay_date, amount, currency) do
-    %DividendPayment{}
-    |> DividendPayment.changeset(%{
-      external_id: "test-div-#{System.unique_integer([:positive])}",
-      instrument_id: instrument_id,
-      pay_date: pay_date,
-      gross_amount: Decimal.new(amount),
-      net_amount: Decimal.new(amount),
-      currency: currency
-    })
-    |> Dividendsomatic.Repo.insert!()
   end
 end

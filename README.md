@@ -1,24 +1,21 @@
 # Dividendsomatic
 
-Portfolio and dividend tracking system for multi-broker data. Built with Phoenix LiveView, custom terminal-themed UI, and PostgreSQL.
+Portfolio and dividend tracking dashboard. Data is based on combined real data for testing purposes. Built with Phoenix LiveView, custom terminal-themed UI, and PostgreSQL.
 
 ## Features
 
-- **Multi-broker import:** IBKR Flex CSV, Nordnet CSV, Lynx 9A tax reports
-- **Automated daily import:** AppleScript email fetcher + Oban cron (weekdays)
+- **Multiple CSV formats and tax reports** with automated daily import
 - **Unified portfolio history:** All sources write to one schema, no runtime reconstruction
-- **Portfolio viewer:** Date navigation (arrow keys), date slider, year filters
-- **Custom SVG charts:** Portfolio value + cost basis lines, era-aware gap rendering
-- **Separate dividend chart:** Monthly bars + cumulative line with year-aware labels
+- **Portfolio viewer:** Date navigation (arrow keys), date picker, year filters
+- **Interactive charts:** Portfolio value, dividend history with monthly + cumulative views
 - **Investment summary:** Net invested, realized/unrealized P&L, dividends, costs, total return
-- **Dividend analytics:** Per-year tracking, cash flow, projections, IEx diagnostics
+- **Dividend analytics:** Per-year tracking, cash flow, projections, per-symbol breakdown
 - **Realized P&L:** Grouped by symbol, year filters, top winners/losers, EUR conversion
-- **Market data:** Multi-provider (Finnhub + Yahoo Finance + EODHD) with fallback chains
+- **Multi-provider market data** with fallback chains
 - **Fear & Greed gauge:** Market sentiment with 365-day history
-- **Stock detail pages:** External links (Yahoo, SeekingAlpha, Nordnet)
-- **Data coverage page:** Broker timelines, per-stock gaps, dividend gaps
+- **Stock detail pages:** External links to financial data providers
+- **Data coverage page:** Source timelines, per-stock gaps, dividend gaps
 - **FX exposure:** Currency breakdown with EUR conversion
-- **Chart animations:** Path drawing, pulsing markers
 - **WCAG AA accessible** (axe-core tested)
 
 ## Tech Stack

@@ -57,6 +57,18 @@ const Hooks = {
         this.el.closest("form").dispatchEvent(new Event("submit", {bubbles: true, cancelable: true}))
       })
     }
+  },
+  LoadingTimer: {
+    mounted() {
+      this.start = Date.now()
+      this.timer = setInterval(() => {
+        const s = Math.floor((Date.now() - this.start) / 1000)
+        this.el.textContent = `Loading portfolio data... ${s}s`
+      }, 1000)
+    },
+    destroyed() {
+      clearInterval(this.timer)
+    }
   }
 }
 

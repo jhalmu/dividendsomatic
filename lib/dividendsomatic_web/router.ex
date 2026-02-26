@@ -7,7 +7,16 @@ defmodule DividendsomaticWeb.Router do
     plug :fetch_live_flash
     plug :put_root_layout, html: {DividendsomaticWeb.Layouts, :root}
     plug :protect_from_forgery
-    plug :put_secure_browser_headers
+
+    plug :put_secure_browser_headers, %{
+      "content-security-policy" =>
+        "default-src 'self'; " <>
+          "script-src 'self' 'sha256-geVXv4pwpaPSv3nLygzylNMdvrI9U7xiVCzar2OLXek='; " <>
+          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " <>
+          "font-src 'self' https://fonts.gstatic.com; " <>
+          "img-src 'self' data:; " <>
+          "connect-src 'self' ws: wss:;"
+    }
   end
 
   pipeline :api do

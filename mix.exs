@@ -70,12 +70,12 @@ defmodule Dividendsomatic.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:phoenix, "~> 1.8.3"},
+      {:phoenix, "~> 1.8.4"},
       {:phoenix_ecto, "~> 4.7.0"},
       {:ecto_sql, "~> 3.13.4"},
       {:postgrex, "~> 0.19"},
       {:phoenix_html, "~> 4.3.0"},
-      {:phoenix_live_view, "~> 1.1.22"},
+      {:phoenix_live_view, "~> 1.1.24"},
       {:heroicons,
        github: "tailwindlabs/heroicons",
        tag: "v2.2.0",
@@ -83,12 +83,12 @@ defmodule Dividendsomatic.MixProject do
        app: false,
        compile: false,
        depth: 1},
-      {:swoosh, "~> 1.21.0"},
+      {:swoosh, "~> 1.22.1"},
       {:req, "~> 0.5.17"},
       {:gettext, "~> 0.26.2"},
       {:jason, "~> 1.4.4"},
       {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.10.2"},
+      {:bandit, "~> 1.10.3"},
 
       # Project-specific
       {:nimble_csv, "~> 1.3.0"},
@@ -103,8 +103,8 @@ defmodule Dividendsomatic.MixProject do
 
       # Dev and Test
       {:phoenix_test, "~> 0.9.1", only: :test, runtime: false},
-      {:phoenix_test_playwright, "~> 0.10.1", only: :test, runtime: false},
-      {:playwright_ex, "~> 0.3.2", only: :test, runtime: false},
+      {:phoenix_test_playwright, "~> 0.12.1", only: :test, runtime: false},
+      {:playwright_ex, "~> 0.4.0", only: :test, runtime: false},
       {:floki, "~> 0.38.0", only: :test},
       {:a11y_audit, "~> 0.3.1", only: :test, runtime: false},
       {:esbuild, "~> 0.10.0", runtime: Mix.env() == :dev},
@@ -115,8 +115,8 @@ defmodule Dividendsomatic.MixProject do
       {:dialyxir, "~> 1.4.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.14.1", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1.5", only: [:dev, :test], runtime: false},
-      {:lazy_html, "~> 0.1.8", only: :test},
-      {:tidewave, "~> 0.5.4", only: :dev},
+      {:lazy_html, "~> 0.1.10", only: :test},
+      {:tidewave, "~> 0.5.5", only: :dev},
       {:igniter, "~> 0.7", only: [:dev, :test]}
     ]
   end

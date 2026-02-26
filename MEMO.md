@@ -71,7 +71,18 @@ mix ecto.reset              # Drop + create + migrate
 **Status:** Live at https://dividends-o-matic.com — full CI/CD pipeline, Gmail auto-import active
 **Branch:** `main`
 
-**Latest session (2026-02-23 PIL Dedup + Yield Fix + Credo Cleanup):**
+**Latest session (2026-02-26 Dashboard Visual Uplift):**
+- **Tab restructure** — About | Performance | Dividends | Summary → Overview | Performance | Income | Holdings | Summary
+- **Overview tab** — 6-cell stat grid (value, day change, F&G, unrealized P&L, YTD divs, total return), FX donut, concentration bars, recent dividends
+- **Holdings tab** (new) — positions table moved from Zone 1, FX donut + sector breakdown, concentration risk (HHI, top-1, top-3)
+- **Income tab** (renamed from Dividends) — gross/net/withholding stats, costs & fees section, net income summary
+- **Unified tab headers** — `tab_panel_header/1` component on all tabs
+- **Backend** — `compute_concentration/1`, `compute_sector_breakdown/1` in portfolio.ex
+- **Frontend** — `build_fx_donut_config/1`, `fear_greed_color/1`, `lazy_load_tab_data/2` per-tab loading
+- **Bug fix** — runtime crash in Recent Dividends (wrong field access on `%{dividend: ..., income: ...}` struct)
+- 696 tests, 0 failures, 0 credo warnings
+
+**Previous session (2026-02-23 PIL Dedup + Yield Fix + Credo Cleanup):**
 - **PIL dedup fix** — `compute_annual_dividend_per_share` deduplicates by `(ex_date, per_share)` to prevent PIL/withholding splits from inflating annual rate ~2×
 - **Dashboard TTM date range** — extended to load 365 days (was current year only), fixing AGNC/ORC/KESKOB yields
 - **Frequency detection dedup** — `Enum.uniq()` on dates before gap computation to prevent PIL 0-day gaps
@@ -349,7 +360,7 @@ mix ecto.reset              # Drop + create + migrate
 - **All 6 legacy tables dropped** — data migrated, schemas deleted, imports rewritten
 - SchemaIntegrity system (5 checks: orphan, null field, FK integrity, duplicate, alias quality) + Oban daily worker
 - Deterministic alias system: 567 aliases, 349 primary, is_primary flag + priority ordering
-- 686 tests + 21 Playwright E2E tests, 0 credo warnings
+- 696 tests + 21 Playwright E2E tests, 0 credo warnings
 
 **Next priorities:**
 - Remaining 162 instruments without sector (delisted/unknown symbols — may need manual mapping)
