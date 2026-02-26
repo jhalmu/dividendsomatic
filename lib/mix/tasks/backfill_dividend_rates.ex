@@ -212,8 +212,8 @@ defmodule Mix.Tasks.Backfill.DividendRates do
     IO.puts("\nPhase 2: TTM computation (#{length(instruments)} instruments with payments)")
 
     Enum.reduce(instruments, {0, 0, 0}, fn instrument, {updated, skipped, no_data} ->
-      if instrument.dividend_source == "manual" do
-        IO.puts("  #{instrument.name || instrument.isin} — manual source, skipping")
+      if instrument.dividend_source in ["manual", "declared"] do
+        IO.puts("  #{instrument.name || instrument.isin} — #{instrument.dividend_source} source, skipping")
         {updated, skipped + 1, no_data}
       else
         compute_ttm_for_instrument(instrument, dry_run?, force?, {updated, skipped, no_data})

@@ -1039,8 +1039,8 @@ defmodule Dividendsomatic.Portfolio do
   defp ttm_source_label(_frequency), do: "ttm_sum"
 
   defp select_best_rate(true, stored_rate, stored_source, _ttm, _ttm_source)
-       when stored_source in ["manual", "ttm_computed"] do
-    # 1. Manual or TTM-computed stored rate — trusted, use immediately
+       when stored_source in ["manual", "ttm_computed", "declared"] do
+    # 1. Manual, declared, or TTM-computed stored rate — trusted, use immediately
     {stored_rate, stored_source}
   end
 
