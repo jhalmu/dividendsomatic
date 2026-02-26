@@ -372,20 +372,25 @@
             </div>
           </div>
 
-          <%!-- Card 2: Portfolio Value + Debt --%>
+          <%!-- Card 2: Portfolio Value + Own Money + Debt --%>
           <div class="terminal-stat">
             <div class="terminal-stat-label">Portfolio Value</div>
             <div class="terminal-stat-value">
               {format_euro(@total_value)}
             </div>
-            <%= if @margin_debt do %>
-              <div class="terminal-stat-sub">
+            <div class="terminal-stat-sub">
+              <%= if Decimal.compare(@net_invested, Decimal.new("0")) != :eq do %>
+                <div style="color: var(--terminal-muted);">
+                  Own money: {format_euro_signed(@net_invested)}
+                </div>
+              <% end %>
+              <%= if @margin_debt do %>
                 <div style="color: var(--terminal-dim);">
                   Debt: {format_euro_signed(@margin_debt)}
                 </div>
                 <div>Net: {format_euro_signed(@net_value)}</div>
-              </div>
-            <% end %>
+              <% end %>
+            </div>
           </div>
 
           <%!-- Card 3: Realized {@dividend_year} --%>
@@ -753,7 +758,12 @@
           <%= if length(@waterfall_data) > 0 do %>
             <div class="terminal-chart mb-[var(--space-xs)]">
               <div class="terminal-chart-header">
-                <div class="terminal-chart-title">P&amp;L Waterfall</div>
+                <div class="terminal-chart-title">
+                  P&amp;L Waterfall
+                  <span style="font-size: 0.625rem; color: var(--terminal-dim); font-weight: 400; margin-left: var(--space-xs);">
+                    {List.first(@waterfall_data).month} &rarr; {List.last(@waterfall_data).month}
+                  </span>
+                </div>
                 <div
                   class="terminal-chart-legend"
                   aria-label="Waterfall chart legend"
@@ -801,7 +811,12 @@
             <%!-- Cumulative P&L --%>
             <div class="terminal-chart mb-[var(--space-xs)]">
               <div class="terminal-chart-header">
-                <div class="terminal-chart-title">Cumulative P&amp;L</div>
+                <div class="terminal-chart-title">
+                  Cumulative P&amp;L
+                  <span style="font-size: 0.625rem; color: var(--terminal-dim); font-weight: 400; margin-left: var(--space-xs);">
+                    {List.first(@waterfall_data).month} &rarr; {List.last(@waterfall_data).month}
+                  </span>
+                </div>
                 <div
                   class="terminal-chart-legend"
                   aria-label="Cumulative P&L chart legend"
@@ -1967,45 +1982,75 @@
           aria-labelledby="tab-about"
           class="animate-fade-in"
         >
-          <%!-- Branded Header --%>
-          <div class="text-center py-[var(--space-lg)]">
-            <h2 style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--terminal-text);">
-              dividends-o-matic
-            </h2>
-            <div style="font-family: var(--font-display); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.15em; color: var(--terminal-dim); margin-top: var(--space-xs);">
-              sisu &amp; dividends
-            </div>
-          </div>
+          <.tab_panel_header title="About" date={@current_snapshot.date} />
 
-          <%!-- Description --%>
+          <%!-- Branded Header + Description --%>
           <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]">
+            <div class="text-center mb-[var(--space-sm)]">
+              <h2 style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--terminal-text);">
+                dividends-o-matic
+              </h2>
+              <div style="font-family: var(--font-display); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.15em; color: var(--terminal-dim); margin-top: var(--space-xs);">
+                sisu &amp; dividends
+              </div>
+            </div>
             <p style="font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.6; color: var(--terminal-muted);">
-              A personal portfolio tracker built for dividend investors who use Interactive Brokers.
-              Import your Flex Query CSV reports and get instant visibility into holdings, income streams,
-              realized P&amp;L, cost coverage, and long-term performance &mdash; all in a terminal-inspired
-              interface designed for clarity and speed.
+              A personal dividend portfolio tracker designed for clarity and speed.
+              Track your holdings, monitor dividend income streams, and browse historical
+              snapshots of your portfolio over time &mdash; all in a terminal-inspired interface.
             </p>
           </div>
 
-          <%!-- Feature Grid --%>
+          <%!-- Data Sources --%>
+          <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]">
+            <div class="terminal-section-label-inline" style="margin-bottom: var(--space-sm);">
+              Data Sources
+            </div>
+            <p style="font-family: var(--font-mono); font-size: 0.75rem; line-height: 1.6; color: var(--terminal-muted); margin-bottom: var(--space-sm);">
+              Portfolio data is collected from multiple sources depending on availability:
+            </p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-[var(--space-xs)]">
+              <div class="text-center">
+                <div style="font-family: var(--font-display); font-size: 0.75rem; font-weight: 600; color: var(--terminal-text);">
+                  CSV
+                </div>
+                <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);">
+                  Exported reports
+                </div>
+              </div>
+              <div class="text-center">
+                <div style="font-family: var(--font-display); font-size: 0.75rem; font-weight: 600; color: var(--terminal-text);">
+                  PDF
+                </div>
+                <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);">
+                  Parsed statements
+                </div>
+              </div>
+              <div class="text-center">
+                <div style="font-family: var(--font-display); font-size: 0.75rem; font-weight: 600; color: var(--terminal-text);">
+                  API
+                </div>
+                <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);">
+                  Automated feeds
+                </div>
+              </div>
+              <div class="text-center">
+                <div style="font-family: var(--font-display); font-size: 0.75rem; font-weight: 600; color: var(--terminal-text);">
+                  Manual
+                </div>
+                <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-dim);">
+                  When no other way
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <%!-- Features --%>
           <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]">
             <div class="terminal-section-label-inline" style="margin-bottom: var(--space-sm);">
               Features
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-[var(--space-sm)]">
-              <div class="flex items-start gap-[var(--space-xs)]">
-                <span style="color: var(--terminal-accent); font-size: 0.75rem; margin-top: 2px;">
-                  &#9654;
-                </span>
-                <div>
-                  <div style="font-family: var(--font-display); font-size: 0.75rem; font-weight: 600; color: var(--terminal-text);">
-                    CSV Import
-                  </div>
-                  <div style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--terminal-dim);">
-                    IBKR Flex Query reports with automatic parsing
-                  </div>
-                </div>
-              </div>
               <div class="flex items-start gap-[var(--space-xs)]">
                 <span style="color: var(--chart-dividend); font-size: 0.75rem; margin-top: 2px;">
                   &#9654;
@@ -2016,6 +2061,19 @@
                   </div>
                   <div style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--terminal-dim);">
                     Per-symbol income, yield-on-cost, monthly projections
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-start gap-[var(--space-xs)]">
+                <span style="color: var(--terminal-accent); font-size: 0.75rem; margin-top: 2px;">
+                  &#9654;
+                </span>
+                <div>
+                  <div style="font-family: var(--font-display); font-size: 0.75rem; font-weight: 600; color: var(--terminal-text);">
+                    Historical Snapshots
+                  </div>
+                  <div style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--terminal-dim);">
+                    Browse any date, navigate day-by-day or jump by weeks, months, years
                   </div>
                 </div>
               </div>
@@ -2072,6 +2130,30 @@
                 </div>
               </div>
             </div>
+          </div>
+
+          <%!-- Tech & Security --%>
+          <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]">
+            <div class="terminal-section-label-inline" style="margin-bottom: var(--space-sm);">
+              Tech
+            </div>
+            <p style="font-family: var(--font-mono); font-size: 0.75rem; line-height: 1.6; color: var(--terminal-muted);">
+              Built with Elixir and Phoenix LiveView for real-time updates without page reloads.
+              PostgreSQL stores all portfolio data. Charts are rendered with ApexCharts and custom SVG.
+              The UI uses DaisyUI components with a custom terminal-inspired design system.
+            </p>
+          </div>
+
+          <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]">
+            <div class="terminal-section-label-inline" style="margin-bottom: var(--space-sm);">
+              Security
+            </div>
+            <p style="font-family: var(--font-mono); font-size: 0.75rem; line-height: 1.6; color: var(--terminal-muted);">
+              Single-user application &mdash; no authentication layer, no public access.
+              All data stays local in your own database. No portfolio data is sent to third parties.
+              Secrets and credentials are managed via environment variables, never stored in code.
+              CSV files and database files are excluded from version control.
+            </p>
           </div>
 
           <%!-- Links --%>

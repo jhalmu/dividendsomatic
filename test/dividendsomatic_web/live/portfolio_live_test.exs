@@ -359,9 +359,10 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       assert html =~ "panel-about"
       assert html =~ "dividends-o-matic"
       assert html =~ "sisu"
+      assert html =~ "Data Sources"
       assert html =~ "Features"
-      assert html =~ "CSV Import"
       assert html =~ "Dividend Tracking"
+      assert html =~ "Security"
     end
   end
 

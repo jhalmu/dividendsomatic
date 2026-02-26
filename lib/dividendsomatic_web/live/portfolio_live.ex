@@ -600,6 +600,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:fx_exposure, [])
     |> assign(:investment_summary, nil)
     |> assign(:waterfall_data, [])
+    |> assign(:net_invested, Decimal.new("0"))
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
     |> assign(:active_tab, "holdings")
@@ -707,6 +708,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:fear_greed, get_fear_greed_for_snapshot(socket, snapshot))
     |> assign(:fx_exposure, [])
     |> assign(:waterfall_data, [])
+    |> assign_net_invested()
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
     |> assign(:pnl, %{winners: [], losers: [], total_realized: Decimal.new("0")})
@@ -867,6 +869,11 @@ defmodule DividendsomaticWeb.PortfolioLive do
         |> assign(:margin_debt, margin_debt)
         |> assign(:net_value, net_value)
     end
+  end
+
+  defp assign_net_invested(socket) do
+    dw = Portfolio.total_deposits_withdrawals()
+    assign(socket, :net_invested, dw.net_invested)
   end
 
   defp assign_pnl_summary(socket) do

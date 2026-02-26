@@ -1,51 +1,47 @@
-# Session Report — 2026-02-26 (Dashboard Visual Uplift)
+# Session Report — 2026-02-26 (Dashboard Polish)
 
 ## Overview
 
-Implemented the Dashboard Visual Uplift plan: restructured tabs from About | Performance | Dividends | Summary to Overview | Performance | Income | Holdings | Summary. Added unified tab headers, stat grids, FX donut charts, concentration bars, and reorganized content across tabs for better information architecture.
+Dashboard polish session: About tab content rewrite, chart reorganization (split dividend chart, move waterfall to Income, separate cumulative charts), Zone 1 color fixes, and "Own Money" stat addition.
 
 ## Changes Made
 
-### Tab Structure (5 tabs, renamed/new)
-- **Overview** (replaced About): 6-cell stat grid (portfolio value, day change, F&G, unrealized P&L, YTD dividends, total return), FX exposure donut chart, top holdings concentration bars, recent dividends list, collapsed about section
-- **Performance** (enhanced): existing chart + new key metrics grid (positions, currencies, avg weight, costs)
-- **Income** (renamed from Dividends): gross/net/withholding stat row, dividend chart, per-symbol breakdown, costs & fees section, net income summary
-- **Holdings** (new): positions table moved from Zone 1, FX donut + sector breakdown in 2-col grid, concentration risk stats (top-1, top-3, HHI)
-- **Summary** (enhanced): unified header applied
+### About Tab Rewrite
+- Uses `tab_panel_header` like all other tabs (consistent template)
+- Branded heading moved inside card
+- Removed broker/API references — generic data source description
+- Added Data Sources grid: CSV, PDF, API, Manual
+- Focused messaging: dividend tracking + historical browsing
+- Added Tech section (Elixir, Phoenix LiveView, PostgreSQL, ApexCharts, DaisyUI)
+- Added Security section (single-user, local data, env vars, no third-party sharing)
 
-### Backend (portfolio.ex)
-- `compute_concentration/1` — HHI, top-1, top-3 weight metrics
-- `compute_sector_breakdown/1` — joins positions with instruments for sector data
+### Chart Reorganization
+- **Dividend chart split**: bars-only in Income tab, cumulative line in Performance tab
+- `serialize_dividend_chart/1` returns bars only; new `serialize_cumulative_chart/1` for cumulative
+- `build_dividend_apex_config` simplified (single y-axis, single color)
+- New `build_cumulative_apex_config/1` (amber area chart with gradient fill)
+- **P&L Waterfall** moved from Summary → Income, always visible (no toggle button)
+- **Cumulative P&L** separated from waterfall into standalone SVG chart (`render_waterfall_cumulative_chart/1`)
+- Both waterfall and cumulative charts show date range in title (first → last month)
 
-### Frontend (portfolio_live.ex)
-- `tab_panel_header/1` — unified header component for all tabs
-- `build_fx_donut_config/1` — ApexCharts donut for FX exposure
-- `fear_greed_color/1` — CSS class helper for F&G badge
-- `lazy_load_tab_data/2` — extracted per-tab data loading (fixes credo complexity)
-- New assigns: `overview_loaded`, `holdings_loaded`, `income_loaded`, `concentration`, `sector_breakdown`, `margin_interest`
+### Zone 1 Stat Card Changes
+- Debt line: `var(--loss)` → `var(--terminal-dim)` (informational, not alarming)
+- Costs line: same color fix
+- Card 2 (Portfolio Value): added "Own money" sub-line showing net invested (deposits - withdrawals)
+- New `assign_net_invested/1` loads `total_deposits_withdrawals()` eagerly
 
-### CSS (app.css)
-- `.terminal-panel-header` — dark surface header with title + date
-- `.concentration-bar` / `.concentration-bar-track` — horizontal weight bars
-- `.overview-stat-grid` — 3-col grid (2-col mobile)
+### Tab Strip
+- 5 tabs: Holdings | Performance | Income | Summary | About
+- About tab button added to both loading and active states
 
-### Bug Fix
-- Fixed runtime crash in Recent Dividends section: `@recent_dividends` items are `%{dividend: %{...}, income: Decimal}` but template accessed `div.symbol` instead of `entry.dividend.symbol`
-
-## Files Modified (13 files, +2412 / -1312 lines)
+## Files Modified
 
 | File | Changes |
 |------|---------|
-| `portfolio_live.html.heex` | Complete template rewrite with new tab structure |
-| `portfolio_live.ex` | New components, lazy-loading, chart config |
-| `portfolio.ex` | `compute_concentration/1`, `compute_sector_breakdown/1` |
-| `app.css` | Panel header, concentration bars, stat grid styles |
-| `portfolio_live_test.exs` | Updated for new tab names + new tab tests |
-| `portfolio_page_test.exs` | Updated E2E tests for new tab structure |
-| `router.ex` | Minor route updates |
-| `mix.exs` / `mix.lock` | Dependency updates |
-| `README.md` | Updated |
-| Other test files | Minor tab name updates |
+| `portfolio_live.html.heex` | About tab rewrite, chart moves, color fixes, own money stat, date ranges |
+| `portfolio_live.ex` | Split chart serializers, cumulative config, net_invested assign, waterfall eager loading |
+| `portfolio_chart.ex` | Removed cumulative from waterfall SVG, new `render_waterfall_cumulative_chart/1` |
+| `portfolio_live_test.exs` | Updated About tab assertions, new loading state test |
 
 ## Verification
 
@@ -61,13 +57,9 @@ Implemented the Dashboard Visual Uplift plan: restructured tabs from About | Per
 - Total dividends checked: 2178
 - Issues: 679 (355 info, 324 warning) — same as baseline
 - Categories: duplicates (282), inconsistent amounts (154), currency mismatches (240), suspicious amounts (1), mixed types (2)
-- Portfolio balance: 8.07% difference (margin account warning) — unchanged from prior sessions
+- Portfolio balance: 8.07% difference (margin account warning) — unchanged
 - No new data issues introduced
 
 ## GitHub Issues
 
 No open issues.
-
-## Uncommitted
-
-All changes are uncommitted (13 modified files). Ready for commit when requested.

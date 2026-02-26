@@ -157,18 +157,17 @@ defmodule DividendsomaticWeb.E2E.PortfolioPageTest do
       conn
       |> visit(~p"/portfolio/2026-01-28")
       |> assert_has("#portfolio-view")
-      # Holdings are now in the holdings tab, but symbols appear in overview top holdings
+      # Holdings is now the default tab — symbols visible immediately
       |> assert_has("div", text: "KESKOB")
       |> assert_has("div", text: "AAPL")
     end
 
     @tag :playwright
-    test "should show holdings table with positions in holdings tab", %{conn: conn} do
+    test "should show holdings table with positions in default tab", %{conn: conn} do
       seed_portfolio_data()
 
       conn
       |> visit(~p"/portfolio/2026-01-28")
-      |> click_button("Holdings")
       |> assert_has("table")
       |> assert_has("td", text: "KESKOB")
       |> assert_has("td", text: "AAPL")
@@ -180,7 +179,6 @@ defmodule DividendsomaticWeb.E2E.PortfolioPageTest do
 
       conn
       |> visit(~p"/portfolio/2026-01-28")
-      |> click_button("Holdings")
       |> click_link("KESKOB")
       |> assert_has("h1", text: "KESKOB")
     end
@@ -199,13 +197,13 @@ defmodule DividendsomaticWeb.E2E.PortfolioPageTest do
 
   describe "Tab Navigation" do
     @tag :playwright
-    test "should show overview tab as default", %{conn: conn} do
+    test "should show holdings tab as default", %{conn: conn} do
       seed_portfolio_data()
 
       conn
       |> visit(~p"/portfolio/2026-01-28")
       |> assert_has("[role='tablist']")
-      |> assert_has("[role='tab'][aria-controls='panel-overview']")
+      |> assert_has("[role='tab'][aria-controls='panel-holdings']")
     end
 
     @tag :playwright
