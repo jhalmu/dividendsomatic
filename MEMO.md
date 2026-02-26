@@ -71,15 +71,17 @@ mix ecto.reset              # Drop + create + migrate
 **Status:** Live at https://dividends-o-matic.com — full CI/CD pipeline, Gmail auto-import active
 **Branch:** `main`
 
-**Latest session (2026-02-26 Dashboard Visual Uplift):**
-- **Tab restructure** — About | Performance | Dividends | Summary → Overview | Performance | Income | Holdings | Summary
-- **Overview tab** — 6-cell stat grid (value, day change, F&G, unrealized P&L, YTD divs, total return), FX donut, concentration bars, recent dividends
-- **Holdings tab** (new) — positions table moved from Zone 1, FX donut + sector breakdown, concentration risk (HHI, top-1, top-3)
-- **Income tab** (renamed from Dividends) — gross/net/withholding stats, costs & fees section, net income summary
-- **Unified tab headers** — `tab_panel_header/1` component on all tabs
-- **Backend** — `compute_concentration/1`, `compute_sector_breakdown/1` in portfolio.ex
-- **Frontend** — `build_fx_donut_config/1`, `fear_greed_color/1`, `lazy_load_tab_data/2` per-tab loading
-- **Bug fix** — runtime crash in Recent Dividends (wrong field access on `%{dividend: ..., income: ...}` struct)
+**Latest session (2026-02-26 IBKR Declared Dividend Rates):**
+- **Declared rates** — replaced TTM + frequency detection chain with simple `per_payment × ppy × qty × fx`
+- **New fields** — `dividend_per_payment` + `payments_per_year` on instruments
+- **Parsers** — FlexPortfolioAccrualsParser (new), Activity Statement "Change in Dividend Accruals" section
+- **Backfill** — 11 instruments seeded with IBKR reference rates (AGNC, CSWC, FSK, KESKOB, MANTA, NDA FI, OBDC, ORC, TCPC, TRIN, ABB)
+- **Validation** — auto-updates declared rate when actual payment diverges >10%
+- **UI** — Freq column with M/Q/S/A/IR badges in income table
+- 696 tests, 0 failures, 2 credo refactoring suggestions
+
+**Previous session (2026-02-26 Dashboard Visual Uplift):**
+- Tab restructure, Overview/Holdings/Income tabs, concentration bars, FX donut
 - 696 tests, 0 failures, 0 credo warnings
 
 **Previous session (2026-02-23 PIL Dedup + Yield Fix + Credo Cleanup):**
