@@ -94,6 +94,7 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
     nav_result = import_nav_snapshot(sections)
     borrow_fee_result = import_borrow_fees(sections, is_consolidated)
     fx_result = import_fx_rates(sections)
+    accruals_result = import_dividend_accruals(sections, is_consolidated)
 
     %{
       file: Path.basename(file_path),
@@ -105,7 +106,8 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
       corporate_actions: corporate_action_result,
       nav: nav_result,
       borrow_fees: borrow_fee_result,
-      fx_rates: fx_result
+      fx_rates: fx_result,
+      dividend_accruals: accruals_result
     }
   end
 
@@ -513,9 +515,15 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
     {inserted, skipped, errors} =
       Enum.reduce(paired, {0, 0, []}, fn attrs, {ins, skip, errs} ->
         case insert_if_new(DividendPayment, attrs) do
-          {:ok, :inserted} -> {ins + 1, skip, errs}
-          {:ok, :skipped} -> {ins, skip + 1, errs}
-          {:error, reason} -> {ins, skip, [reason | errs]}
+          {:ok, :inserted} ->
+            validate_dividend_vs_declared(attrs)
+            {ins + 1, skip, errs}
+
+          {:ok, :skipped} ->
+            {ins, skip + 1, errs}
+
+          {:error, reason} ->
+            {ins, skip, [reason | errs]}
         end
       end)
 
@@ -621,6 +629,172 @@ defmodule Dividendsomatic.Portfolio.IbkrActivityParser do
       end
 
     {isin, per_share}
+  end
+
+  # --- Dividend vs Declared Rate Validation ---
+
+  # When a dividend payment is inserted, compare its per_share rate against
+  # the instrument's declared dividend_per_payment. Warns on >10% divergence
+  # and auto-updates the declared rate if the actual rate changed.
+  defp validate_dividend_vs_declared(%{instrument_id: instrument_id, per_share: per_share}) do
+    instrument = Repo.get(Instrument, instrument_id)
+
+    with %Instrument{dividend_per_payment: declared} <- instrument,
+         true <- not is_nil(declared) and not is_nil(per_share),
+         actual <- Decimal.abs(per_share),
+         true <- Decimal.compare(actual, Decimal.new("0")) == :gt,
+         true <- Decimal.compare(declared, Decimal.new("0")) == :gt do
+      ratio = Decimal.div(actual, declared)
+
+      cond do
+        # >10% higher than declared
+        Decimal.compare(ratio, Decimal.new("1.10")) == :gt ->
+          Logger.warning(
+            "  Dividend rate change: #{instrument.name || instrument.isin} " <>
+              "declared=#{declared} actual=#{actual} (+#{pct_diff(ratio)}%) — updating instrument"
+          )
+
+          update_declared_rate(instrument, actual)
+
+        # >10% lower than declared
+        Decimal.compare(ratio, Decimal.new("0.90")) == :lt ->
+          Logger.warning(
+            "  Dividend rate change: #{instrument.name || instrument.isin} " <>
+              "declared=#{declared} actual=#{actual} (#{pct_diff(ratio)}%) — updating instrument"
+          )
+
+          update_declared_rate(instrument, actual)
+
+        true ->
+          :ok
+      end
+    else
+      _ -> :ok
+    end
+  rescue
+    _ -> :ok
+  end
+
+  defp validate_dividend_vs_declared(_attrs), do: :ok
+
+  defp pct_diff(ratio) do
+    ratio
+    |> Decimal.sub(Decimal.new("1"))
+    |> Decimal.mult(Decimal.new("100"))
+    |> Decimal.round(1)
+    |> Decimal.to_string()
+  end
+
+  defp update_declared_rate(instrument, new_per_payment) do
+    attrs = %{
+      dividend_per_payment: new_per_payment,
+      dividend_source: "payment_observed",
+      dividend_updated_at: DateTime.utc_now()
+    }
+
+    # Also update annual rate if payments_per_year is set
+    attrs =
+      if instrument.payments_per_year && instrument.payments_per_year > 0 do
+        annual = Decimal.mult(new_per_payment, Decimal.new(instrument.payments_per_year))
+        Map.put(attrs, :dividend_rate, annual)
+      else
+        attrs
+      end
+
+    instrument
+    |> Instrument.changeset(attrs)
+    |> Repo.update()
+  end
+
+  # --- Change in Dividend Accruals ---
+
+  # Parses "Change in Dividend Accruals" section to extract declared per-share rates.
+  # Only processes "Po" (posted) rows, skips "Re" (reversed).
+  # Updates instrument.dividend_per_payment with the latest GrossRate.
+  defp import_dividend_accruals(sections, is_consolidated) do
+    rows = Map.get(sections, "Change in Dividend Accruals", [])
+
+    if rows == [] do
+      %{updated: 0, skipped: 0}
+    else
+      results =
+        rows
+        |> Enum.map(&parse_accrual_row(&1, is_consolidated))
+        |> Enum.reject(&is_nil/1)
+
+      {updated, skipped} =
+        Enum.reduce(results, {0, 0}, fn accrual, {upd, skip} ->
+          case upsert_instrument_dividend_rate(accrual) do
+            {:ok, _} -> {upd + 1, skip}
+            _ -> {upd, skip + 1}
+          end
+        end)
+
+      Logger.info("  Dividend Accruals: #{updated} instrument rates updated, #{skipped} skipped")
+
+      %{updated: updated, skipped: skipped}
+    end
+  end
+
+  # Standard: Currency, Symbol, Date, ExDate, PayDate, Quantity, Tax, Fee, GrossRate, GrossAmount, NetAmount, Code
+  # Consolidated adds Account after Currency
+  defp parse_accrual_row(row, is_consolidated) do
+    offset = if is_consolidated, do: 1, else: 0
+
+    currency = Enum.at(row, 0, "")
+    symbol = Enum.at(row, 0 + offset + 1, "")
+    _date_str = Enum.at(row, 0 + offset + 2, "")
+    ex_date_str = Enum.at(row, 0 + offset + 3, "")
+    pay_date_str = Enum.at(row, 0 + offset + 4, "")
+    quantity_str = Enum.at(row, 0 + offset + 5, "")
+    _tax_str = Enum.at(row, 0 + offset + 6, "")
+    _fee_str = Enum.at(row, 0 + offset + 7, "")
+    gross_rate_str = Enum.at(row, 0 + offset + 8, "")
+    _gross_amount_str = Enum.at(row, 0 + offset + 9, "")
+    _net_amount_str = Enum.at(row, 0 + offset + 10, "")
+    code = Enum.at(row, 0 + offset + 11, "")
+
+    # Skip Total rows and reversed entries
+    if currency in ["Total", ""] or symbol == "" or String.contains?(code, "Re") do
+      nil
+    else
+      gross_rate = parse_decimal(gross_rate_str)
+
+      if gross_rate && not Decimal.equal?(gross_rate, 0) do
+        %{
+          symbol: symbol,
+          currency: currency,
+          ex_date: parse_date(ex_date_str),
+          pay_date: parse_date(pay_date_str),
+          quantity: parse_decimal(quantity_str),
+          gross_rate: Decimal.abs(gross_rate)
+        }
+      end
+    end
+  end
+
+  defp upsert_instrument_dividend_rate(accrual) do
+    case resolve_instrument_by_symbol(accrual.symbol, accrual.currency) do
+      nil ->
+        Logger.debug(
+          "  Accrual: no instrument for symbol=#{accrual.symbol}, currency=#{accrual.currency}"
+        )
+
+        :skip
+
+      instrument_id ->
+        instrument = Repo.get!(Instrument, instrument_id)
+
+        attrs = %{
+          dividend_per_payment: accrual.gross_rate,
+          dividend_source: "ibkr_accruals",
+          dividend_updated_at: DateTime.utc_now()
+        }
+
+        instrument
+        |> Instrument.changeset(attrs)
+        |> Repo.update()
+    end
   end
 
   # --- Cash Flows (Deposits & Withdrawals) ---

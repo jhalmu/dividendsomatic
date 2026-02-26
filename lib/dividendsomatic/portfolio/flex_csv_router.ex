@@ -11,12 +11,14 @@ defmodule Dividendsomatic.Portfolio.FlexCsvRouter do
   - `:dividends` — Dividend records (has GrossRate + NetAmount)
   - `:trades` — Trade executions (has TradeID + Buy/Sell)
   - `:actions` — Account activity (has ActivityCode + TransactionID)
+  - `:portfolio_with_accruals` — Portfolio + Dividend Accruals (has MarkPrice section + GrossRate section)
   - `:activity_statement` — IBKR Activity Statement (multi-section, starts with "Statement,")
   - `:cash_report` — Cash Report summary (has ClientAccountID + StartingCash + EndingCash)
   """
 
   @type csv_type ::
           :portfolio
+          | :portfolio_with_accruals
           | :dividends
           | :trades
           | :actions
@@ -31,9 +33,18 @@ defmodule Dividendsomatic.Portfolio.FlexCsvRouter do
   """
   @spec detect_csv_type(String.t()) :: csv_type()
   def detect_csv_type(csv_string) when is_binary(csv_string) do
-    csv_string
-    |> first_header_line()
-    |> classify_headers()
+    type =
+      csv_string
+      |> first_header_line()
+      |> classify_headers()
+
+    # A portfolio CSV that also contains a second header with GrossRate
+    # is a combined portfolio+accruals file
+    if type == :portfolio and has_accruals_section?(csv_string) do
+      :portfolio_with_accruals
+    else
+      type
+    end
   end
 
   @doc """
@@ -112,5 +123,16 @@ defmodule Dividendsomatic.Portfolio.FlexCsvRouter do
 
   defp has_headers?(header_line, required) do
     Enum.all?(required, &String.contains?(header_line, &1))
+  end
+
+  # Checks if a portfolio CSV also contains a second header row with accruals columns
+  defp has_accruals_section?(csv_string) do
+    csv_string
+    |> String.split(~r/\r?\n/)
+    |> Enum.drop(1)
+    |> Enum.any?(fn line ->
+      trimmed = String.trim(line)
+      has_headers?(trimmed, ["GrossRate", "ExDate"])
+    end)
   end
 end

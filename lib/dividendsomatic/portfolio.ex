@@ -872,11 +872,28 @@ defmodule Dividendsomatic.Portfolio do
 
     pos_map = Map.new(positions, fn p -> {p.symbol, p} end)
 
-    Map.new(divs_by_symbol, fn {symbol, divs} ->
-      pos = Map.get(pos_map, symbol)
-      divs_with_income = build_divs_with_income(divs, positions_map)
-      {symbol, build_symbol_dividend_data(divs_with_income, divs, pos, instrument_div_map)}
-    end)
+    # Symbols with dividend history
+    from_history =
+      Map.new(divs_by_symbol, fn {symbol, divs} ->
+        pos = Map.get(pos_map, symbol)
+        divs_with_income = build_divs_with_income(divs, positions_map)
+        {symbol, build_symbol_dividend_data(divs_with_income, divs, pos, instrument_div_map)}
+      end)
+
+    # Positions with declared rates but no dividend history yet
+    from_declared =
+      positions
+      |> Enum.reject(fn p -> Map.has_key?(from_history, p.symbol) end)
+      |> Enum.filter(fn p ->
+        isin = p.isin
+        data = if isin, do: Map.get(instrument_div_map, isin)
+        data && data[:dividend_per_payment] && data[:payments_per_year]
+      end)
+      |> Map.new(fn pos ->
+        {pos.symbol, build_symbol_dividend_data([], [], pos, instrument_div_map)}
+      end)
+
+    Map.merge(from_declared, from_history)
   end
 
   defp build_divs_with_income(divs, positions_map) do
@@ -886,11 +903,82 @@ defmodule Dividendsomatic.Portfolio do
   end
 
   defp build_symbol_dividend_data(divs_with_income, raw_divs, pos, instrument_div_map) do
-    # Enrich total_net dividends that lack per_share: derive from net_amount / position qty
+    isin = if pos, do: pos.isin, else: nil
+    instrument_data = if isin, do: Map.get(instrument_div_map, isin)
+
+    # Prefer declared per-payment rates from IBKR (simple multiplication)
+    case declared_rate_path(instrument_data) do
+      {:declared, per_payment, ppy, annual_per_share} ->
+        build_from_declared_rate(
+          divs_with_income,
+          raw_divs,
+          pos,
+          per_payment,
+          ppy,
+          annual_per_share
+        )
+
+      :fallback ->
+        build_from_ttm_rate(divs_with_income, raw_divs, pos, instrument_div_map)
+    end
+  end
+
+  # Use declared rates when dividend_per_payment and payments_per_year are both set
+  defp declared_rate_path(nil), do: :fallback
+
+  defp declared_rate_path(instrument_data) do
+    per_payment = instrument_data[:dividend_per_payment]
+    ppy = instrument_data[:payments_per_year]
+
+    if per_payment && ppy && ppy > 0 &&
+         Decimal.compare(per_payment, Decimal.new("0")) == :gt do
+      annual = Decimal.mult(per_payment, Decimal.new(ppy))
+      {:declared, per_payment, ppy, annual}
+    else
+      :fallback
+    end
+  end
+
+  defp build_from_declared_rate(
+         divs_with_income,
+         raw_divs,
+         pos,
+         _per_payment,
+         ppy,
+         annual_per_share
+       ) do
+    div_fx_rate = latest_dividend_fx_rate(raw_divs)
+    yield_on_cost = symbol_yield_on_cost(annual_per_share, pos, div_fx_rate)
+    current_yield = symbol_current_yield(annual_per_share, pos, div_fx_rate)
+    projected_annual = symbol_projected_annual(annual_per_share, pos, div_fx_rate)
+    ytd_paid = symbol_ytd_paid(divs_with_income)
+
+    frequency = payments_per_year_to_frequency(ppy)
+
+    %{
+      est_monthly: symbol_est_monthly(projected_annual),
+      annual_per_share: annual_per_share,
+      projected_annual: projected_annual,
+      est_remaining: symbol_est_remaining(projected_annual, ytd_paid),
+      yield_on_cost: yield_on_cost,
+      current_yield: current_yield,
+      rule72: symbol_rule72(yield_on_cost),
+      payment_frequency: frequency,
+      dividend_source: "declared"
+    }
+  end
+
+  defp payments_per_year_to_frequency(12), do: :monthly
+  defp payments_per_year_to_frequency(4), do: :quarterly
+  defp payments_per_year_to_frequency(2), do: :semi_annual
+  defp payments_per_year_to_frequency(1), do: :annual
+  defp payments_per_year_to_frequency(_), do: :irregular
+
+  # Fallback: existing TTM + frequency detection logic
+  defp build_from_ttm_rate(divs_with_income, raw_divs, pos, instrument_div_map) do
     enriched = enrich_missing_per_share(divs_with_income, pos)
     detected = detect_payment_frequency(raw_divs)
 
-    # Fall back to stored instrument frequency when detection can't determine it
     frequency =
       if detected == :unknown do
         isin = if pos, do: pos.isin, else: nil
@@ -988,14 +1076,16 @@ defmodule Dividendsomatic.Portfolio do
 
   defp build_instrument_dividend_map do
     Instrument
-    |> where([i], not is_nil(i.dividend_rate))
+    |> where([i], not is_nil(i.dividend_rate) or not is_nil(i.dividend_per_payment))
     |> select(
       [i],
       {i.isin,
        %{
          dividend_rate: i.dividend_rate,
          dividend_frequency: i.dividend_frequency,
-         dividend_source: i.dividend_source
+         dividend_source: i.dividend_source,
+         dividend_per_payment: i.dividend_per_payment,
+         payments_per_year: i.payments_per_year
        }}
     )
     |> Repo.all()

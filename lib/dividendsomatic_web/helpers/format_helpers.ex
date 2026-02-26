@@ -53,6 +53,20 @@ defmodule DividendsomaticWeb.Helpers.FormatHelpers do
     format_euro_number(decimal, sign)
   end
 
+  def frequency_label(:monthly), do: "M"
+  def frequency_label(:quarterly), do: "Q"
+  def frequency_label(:semi_annual), do: "S"
+  def frequency_label(:annual), do: "A"
+  def frequency_label(:irregular), do: "IR"
+  def frequency_label(_), do: "?"
+
+  def frequency_title(:monthly), do: "Monthly (12×/yr)"
+  def frequency_title(:quarterly), do: "Quarterly (4×/yr)"
+  def frequency_title(:semi_annual), do: "Semi-annual (2×/yr)"
+  def frequency_title(:annual), do: "Annual (1×/yr)"
+  def frequency_title(:irregular), do: "Irregular schedule"
+  def frequency_title(_), do: "Unknown frequency"
+
   def pnl_badge_class(pnl) do
     pnl = pnl || Decimal.new("0")
 

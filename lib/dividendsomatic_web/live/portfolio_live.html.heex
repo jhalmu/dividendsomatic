@@ -855,6 +855,7 @@
                   <thead>
                     <tr>
                       <th scope="col">Symbol</th>
+                      <th scope="col" style="text-align: center;">Freq</th>
                       <th scope="col" style="text-align: right;">Est. Monthly</th>
                       <th scope="col" style="text-align: right;">Est. Annual</th>
                       <th scope="col" style="text-align: right;">YoC</th>
@@ -872,14 +873,14 @@
                           >
                             {symbol}
                           </.link>
-                          <%= if data.payment_frequency == :monthly do %>
-                            <span
-                              style="display: inline-block; background: var(--terminal-muted); color: var(--terminal-bg); font-size: 0.45rem; font-weight: 700; padding: 0px 3px; border-radius: 3px; margin-left: 3px; vertical-align: middle;"
-                              title="Monthly dividend payer"
-                            >
-                              M
-                            </span>
-                          <% end %>
+                        </td>
+                        <td style="text-align: center;">
+                          <span
+                            style="display: inline-block; background: var(--terminal-muted); color: var(--terminal-bg); font-size: 0.5rem; font-weight: 700; padding: 1px 4px; border-radius: 3px; letter-spacing: 0.05em;"
+                            title={frequency_title(data.payment_frequency)}
+                          >
+                            {frequency_label(data.payment_frequency)}
+                          </span>
                         </td>
                         <td class="terminal-number" style="text-align: right; color: var(--gain);">
                           {format_decimal(data.est_monthly)}
@@ -1149,14 +1150,12 @@
                             <span style="color: var(--gain);">
                               {format_decimal(sym_div.est_monthly)}
                             </span>
-                            <%= if sym_div.payment_frequency == :monthly do %>
-                              <span
-                                style="display: inline-block; background: var(--terminal-muted); color: var(--terminal-bg); font-size: 0.45rem; font-weight: 700; padding: 0px 3px; border-radius: 3px; margin-left: 3px; vertical-align: middle; letter-spacing: 0.05em;"
-                                title="Monthly dividend payer"
-                              >
-                                M
-                              </span>
-                            <% end %>
+                            <span
+                              style="display: inline-block; background: var(--terminal-muted); color: var(--terminal-bg); font-size: 0.4rem; font-weight: 700; padding: 0px 3px; border-radius: 3px; margin-left: 3px; vertical-align: middle; letter-spacing: 0.05em;"
+                              title={frequency_title(sym_div.payment_frequency)}
+                            >
+                              {frequency_label(sym_div.payment_frequency)}
+                            </span>
                           <% else %>
                             <span
                               style="color: var(--terminal-dim); opacity: 0.6;"

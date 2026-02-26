@@ -21,20 +21,92 @@ defmodule Mix.Tasks.Backfill.DividendRates do
 
   @shortdoc "Backfill dividend rates from payment history and manual overrides"
 
-  # Manual overrides for instruments where Yahoo returns incorrect data.
-  # These are set with dividend_source: "manual" and protected from overwrite.
+  # IBKR declared per-share rates as source of truth.
+  # dividend_rate = dividend_per_payment × payments_per_year (annual)
+  # All rates set with dividend_source: "declared" and protected from overwrite.
+  #
+  # IBKR Reference (target values):
+  # AGNC $0.12/mo, CSWC $0.1934/mo, FSK $0.645/q, KESKOB €0.22/q,
+  # MANTA €0.33/yr, NDA FI €0.94/yr, OBDC $0.37/5x, ORC $0.12/mo,
+  # TCPC $0.25/q, TRIN $0.17/mo
   @manual_overrides %{
-    "SE0000667925" => %{dividend_rate: Decimal.new("2.03"), dividend_frequency: "quarterly"},
-    # TRIN: base monthly $0.17 × 12 = $2.04 (excludes quarterly supplementals).
-    # IBKR reference yield 13.63% uses base rate only.
-    "US8964423086" => %{dividend_rate: Decimal.new("2.04"), dividend_frequency: "monthly"},
-    # TCPC: quarterly $0.25 × 4 = $1.00. BDC with PIL splits that inflate TTM.
-    "US09259E1082" => %{dividend_rate: Decimal.new("1.00"), dividend_frequency: "quarterly"},
-    # KESKOB: quarterly €0.22 × 4 = €0.88/year. Only 1 installment in data so far.
-    "FI0009000202" => %{dividend_rate: Decimal.new("0.88"), dividend_frequency: "quarterly"},
-    # Nordea: switching to semi-annual in 2026. 0.96 is FY2025 dividend;
-    # mid-year 2026 payment TBD (~50% of H1 profit). Update when announced.
-    "FI4000297767" => %{dividend_rate: Decimal.new("0.96"), dividend_frequency: "semi_annual"}
+    # AGNC: monthly $0.12 × 12 = $1.44
+    "US00123Q1040" => %{
+      dividend_per_payment: Decimal.new("0.12"),
+      payments_per_year: 12,
+      dividend_rate: Decimal.new("1.44"),
+      dividend_frequency: "monthly"
+    },
+    # CSWC: monthly $0.1934 × 12 = $2.3208 (base; supplementals excluded)
+    "US22822P1012" => %{
+      dividend_per_payment: Decimal.new("0.1934"),
+      payments_per_year: 12,
+      dividend_rate: Decimal.new("2.3208"),
+      dividend_frequency: "monthly"
+    },
+    # FSK: quarterly $0.645 × 4 = $2.58
+    "US3023FL1045" => %{
+      dividend_per_payment: Decimal.new("0.645"),
+      payments_per_year: 4,
+      dividend_rate: Decimal.new("2.58"),
+      dividend_frequency: "quarterly"
+    },
+    # KESKOB: quarterly €0.22 × 4 = €0.88
+    "FI0009000202" => %{
+      dividend_per_payment: Decimal.new("0.22"),
+      payments_per_year: 4,
+      dividend_rate: Decimal.new("0.88"),
+      dividend_frequency: "quarterly"
+    },
+    # MANTA: annual €0.33 × 1 = €0.33
+    "FI4000540470" => %{
+      dividend_per_payment: Decimal.new("0.33"),
+      payments_per_year: 1,
+      dividend_rate: Decimal.new("0.33"),
+      dividend_frequency: "annual"
+    },
+    # NDA FI (Nordea): annual €0.94 × 1 = €0.94
+    "FI4000297767" => %{
+      dividend_per_payment: Decimal.new("0.94"),
+      payments_per_year: 1,
+      dividend_rate: Decimal.new("0.94"),
+      dividend_frequency: "annual"
+    },
+    # OBDC: 5 payments/year $0.37 × 5 = $1.85
+    "US27579R1041" => %{
+      dividend_per_payment: Decimal.new("0.37"),
+      payments_per_year: 5,
+      dividend_rate: Decimal.new("1.85"),
+      dividend_frequency: "irregular"
+    },
+    # ORC: monthly $0.12 × 12 = $1.44
+    "US68571X3017" => %{
+      dividend_per_payment: Decimal.new("0.12"),
+      payments_per_year: 12,
+      dividend_rate: Decimal.new("1.44"),
+      dividend_frequency: "monthly"
+    },
+    # TCPC: quarterly $0.25 × 4 = $1.00
+    "US09259E1082" => %{
+      dividend_per_payment: Decimal.new("0.25"),
+      payments_per_year: 4,
+      dividend_rate: Decimal.new("1.00"),
+      dividend_frequency: "quarterly"
+    },
+    # TRIN: monthly $0.17 × 12 = $2.04 (base only, excludes supplementals)
+    "US8964423086" => %{
+      dividend_per_payment: Decimal.new("0.17"),
+      payments_per_year: 12,
+      dividend_rate: Decimal.new("2.04"),
+      dividend_frequency: "monthly"
+    },
+    # ABB: quarterly CHF 2.03/yr (legacy override kept)
+    "SE0000667925" => %{
+      dividend_per_payment: Decimal.new("0.5075"),
+      payments_per_year: 4,
+      dividend_rate: Decimal.new("2.03"),
+      dividend_frequency: "quarterly"
+    }
   }
 
   def run(args) do
@@ -87,10 +159,15 @@ defmodule Mix.Tasks.Backfill.DividendRates do
   end
 
   defp apply_single_override(instrument, isin, data, dry_run?, acc) do
+    per_pay = data[:dividend_per_payment]
+    freq = data[:payments_per_year]
     IO.write("  #{instrument.name || isin} (#{isin})")
 
     if dry_run? do
-      IO.puts(" — would set rate=#{data.dividend_rate} freq=#{data.dividend_frequency}")
+      IO.puts(
+        " — would set per_payment=#{per_pay} × #{freq}/yr = #{data.dividend_rate} freq=#{data.dividend_frequency}"
+      )
+
       increment_applied(acc)
     else
       persist_manual_override(instrument, data, acc)
@@ -98,16 +175,22 @@ defmodule Mix.Tasks.Backfill.DividendRates do
   end
 
   defp persist_manual_override(instrument, data, acc) do
-    attrs = %{
-      dividend_rate: data.dividend_rate,
-      dividend_frequency: data.dividend_frequency,
-      dividend_source: "manual",
-      dividend_updated_at: DateTime.utc_now() |> DateTime.truncate(:second)
-    }
+    attrs =
+      %{
+        dividend_rate: data.dividend_rate,
+        dividend_frequency: data.dividend_frequency,
+        dividend_source: "declared",
+        dividend_updated_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      }
+      |> maybe_put(:dividend_per_payment, data[:dividend_per_payment])
+      |> maybe_put(:payments_per_year, data[:payments_per_year])
 
     case instrument |> Instrument.changeset(attrs) |> Repo.update() do
       {:ok, _} ->
-        IO.puts(" — set rate=#{data.dividend_rate} freq=#{data.dividend_frequency}")
+        IO.puts(
+          " — set per_payment=#{data[:dividend_per_payment]} × #{data[:payments_per_year]}/yr freq=#{data.dividend_frequency}"
+        )
+
         increment_applied(acc)
 
       {:error, reason} ->
@@ -115,6 +198,9 @@ defmodule Mix.Tasks.Backfill.DividendRates do
         increment_skipped(acc)
     end
   end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp increment_applied({applied, skipped}), do: {applied + 1, skipped}
   defp increment_skipped({applied, skipped}), do: {applied, skipped + 1}
@@ -250,22 +336,36 @@ defmodule Mix.Tasks.Backfill.DividendRates do
   end
 
   defp do_update(instrument, ttm_rate, frequency, dry_run?, reason, name) do
+    ppy = frequency_to_payments_per_year(frequency)
+
+    per_payment =
+      if ppy > 0, do: Decimal.div(ttm_rate, Decimal.new(ppy)), else: nil
+
     if dry_run? do
-      IO.puts("  #{name} — would update: #{reason} freq=#{frequency}")
+      IO.puts("  #{name} — would update: #{reason} freq=#{frequency} ppy=#{ppy}")
     else
-      attrs = %{
-        dividend_rate: ttm_rate,
-        dividend_frequency: frequency,
-        dividend_source: "ttm_computed",
-        dividend_updated_at: DateTime.utc_now() |> DateTime.truncate(:second)
-      }
+      attrs =
+        %{
+          dividend_rate: ttm_rate,
+          dividend_frequency: frequency,
+          dividend_source: "ttm_computed",
+          dividend_updated_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        }
+        |> maybe_put(:payments_per_year, if(ppy > 0, do: ppy))
+        |> maybe_put(:dividend_per_payment, per_payment)
 
       case instrument |> Instrument.changeset(attrs) |> Repo.update() do
-        {:ok, _} -> IO.puts("  #{name} — updated: #{reason} freq=#{frequency}")
+        {:ok, _} -> IO.puts("  #{name} — updated: #{reason} freq=#{frequency} ppy=#{ppy}")
         {:error, err} -> IO.puts("  #{name} — FAILED: #{inspect(err)}")
       end
     end
   end
+
+  defp frequency_to_payments_per_year("monthly"), do: 12
+  defp frequency_to_payments_per_year("quarterly"), do: 4
+  defp frequency_to_payments_per_year("semi-annual"), do: 2
+  defp frequency_to_payments_per_year("annual"), do: 1
+  defp frequency_to_payments_per_year(_), do: 0
 
   defp diverges?(current, ttm) do
     ratio = Decimal.div(current, ttm)

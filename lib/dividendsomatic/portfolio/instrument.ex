@@ -30,7 +30,9 @@ defmodule Dividendsomatic.Portfolio.Instrument do
     :ex_dividend_date,
     :payout_ratio,
     :dividend_source,
-    :dividend_updated_at
+    :dividend_updated_at,
+    :dividend_per_payment,
+    :payments_per_year
   ]
 
   schema "instruments" do
@@ -58,6 +60,8 @@ defmodule Dividendsomatic.Portfolio.Instrument do
     field :payout_ratio, :decimal
     field :dividend_source, :string
     field :dividend_updated_at, :utc_datetime
+    field :dividend_per_payment, :decimal
+    field :payments_per_year, :integer
 
     has_many :aliases, Dividendsomatic.Portfolio.InstrumentAlias
     has_many :trades, Dividendsomatic.Portfolio.Trade

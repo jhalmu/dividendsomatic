@@ -24,6 +24,7 @@ defmodule Dividendsomatic.DataIngestion.FlexImportOrchestrator do
   alias Dividendsomatic.Portfolio.{
     DividendPayment,
     FlexCsvRouter,
+    FlexPortfolioAccrualsParser,
     IbkrActivityParser,
     IntegrityChecker,
     Trade
@@ -110,6 +111,17 @@ defmodule Dividendsomatic.DataIngestion.FlexImportOrchestrator do
       {:error, reason} ->
         {:error, "portfolio import failed for #{filename}: #{inspect(reason)}"}
     end
+  end
+
+  defp route_import(:portfolio_with_accruals, content, _path, filename) do
+    {:ok, result} = FlexPortfolioAccrualsParser.import(content)
+
+    Logger.info(
+      "FlexImportOrchestrator: #{filename} portfolio+accruals → " <>
+        "portfolio: #{inspect(result.portfolio)}, accruals: #{inspect(result.accruals)}"
+    )
+
+    {:ok, :portfolio_with_accruals, result}
   end
 
   defp route_import(:activity_statement, _content, path, filename) do
@@ -353,7 +365,7 @@ defmodule Dividendsomatic.DataIngestion.FlexImportOrchestrator do
     end
 
     %{
-      portfolio: count.(:portfolio),
+      portfolio: count.(:portfolio) + count.(:portfolio_with_accruals),
       activity_statement: count.(:activity_statement),
       dividends: count.(:dividends),
       trades: count.(:trades),
