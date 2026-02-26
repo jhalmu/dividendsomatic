@@ -283,11 +283,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
   end
 
   def handle_event("toggle_waterfall", _params, socket) do
-    if socket.assigns.show_waterfall do
-      {:noreply, assign(socket, show_waterfall: false, waterfall_data: [])}
-    else
-      {:noreply, assign(socket, show_waterfall: true, waterfall_data: Portfolio.waterfall_data())}
-    end
+    {:noreply, socket}
   end
 
   @impl true
@@ -496,55 +492,6 @@ defmodule DividendsomaticWeb.PortfolioLive do
     """
   end
 
-  def about_panel(assigns) do
-    ~H"""
-    <div id="panel-about" class="animate-fade-in" role="tabpanel" aria-labelledby="tab-about">
-      <div class="terminal-card p-[var(--space-sm)]">
-        <div style="font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: var(--space-xs);">
-          dividends-o-matic
-        </div>
-        <p style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--terminal-muted); margin-bottom: var(--space-sm); line-height: 1.6;">
-          Portfolio and dividend tracking dashboard. Data is based on combined real data for testing purposes.
-        </p>
-        <ul style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--terminal-dim); line-height: 1.8; list-style: none; padding: 0; margin-bottom: var(--space-sm);">
-          <li>&#x25B8; Multi-format CSV import with unified portfolio history</li>
-          <li>&#x25B8; Dividend analytics, projections, and per-symbol breakdown</li>
-          <li>&#x25B8; Market data with multi-provider fallback chains</li>
-        </ul>
-        <div class="flex items-center gap-[var(--space-xs)]">
-          <a
-            href="https://github.com/jhalmu/dividendsomatic/issues"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="btn btn-sm btn-outline"
-          >
-            GitHub Issues
-          </a>
-          <a
-            href="https://bsky.app/profile/jhalmu.bsky.social"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="btn btn-sm btn-outline"
-          >
-            Bluesky
-          </a>
-        </div>
-      </div>
-    </div>
-    """
-  end
-
-  defp lazy_load_tab_data(socket, "overview") do
-    if socket.assigns[:overview_loaded] do
-      socket
-    else
-      socket
-      |> assign(:overview_loaded, true)
-      |> assign(:fx_exposure, Portfolio.compute_fx_exposure(socket.assigns.positions))
-      |> assign(:concentration, Portfolio.compute_concentration(socket.assigns.positions))
-    end
-  end
-
   defp lazy_load_tab_data(socket, "holdings") do
     if socket.assigns[:holdings_loaded] do
       socket
@@ -564,6 +511,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
       socket
       |> assign(:income_loaded, true)
       |> assign(:margin_interest, Portfolio.total_actual_margin_interest())
+      |> assign(:waterfall_data, Portfolio.waterfall_data())
     end
   end
 
@@ -646,14 +594,15 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:costs_summary, %{by_type: %{}, total: Decimal.new("0"), count: 0})
     |> assign(:realized_pnl_total, Decimal.new("0"))
     |> assign(:total_return, Decimal.new("0"))
+    |> assign(:margin_debt, nil)
+    |> assign(:net_value, Decimal.new("0"))
     |> assign(:fear_greed, nil)
     |> assign(:fx_exposure, [])
     |> assign(:investment_summary, nil)
-    |> assign(:show_waterfall, false)
     |> assign(:waterfall_data, [])
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
-    |> assign(:active_tab, "overview")
+    |> assign(:active_tab, "holdings")
     |> assign(:per_symbol_dividends, %{})
     |> assign(:dividend_summary_totals, %{})
     |> assign(:margin_equity, nil)
@@ -665,7 +614,6 @@ defmodule DividendsomaticWeb.PortfolioLive do
     })
     |> assign(:sector_breakdown, [])
     |> assign(:margin_interest, Decimal.new("0"))
-    |> assign(:overview_loaded, false)
     |> assign(:holdings_loaded, false)
     |> assign(:income_loaded, false)
     |> assign(:pnl, %{
@@ -755,16 +703,15 @@ defmodule DividendsomaticWeb.PortfolioLive do
     |> assign(:costs_this_year, Portfolio.total_costs_for_year(year))
     |> assign(:costs_summary, Portfolio.costs_summary())
     |> assign_realized_and_total_return(year, dividend_dashboard.total_for_year)
+    |> assign_margin_debt()
     |> assign(:fear_greed, get_fear_greed_for_snapshot(socket, snapshot))
     |> assign(:fx_exposure, [])
-    |> assign(:show_waterfall, false)
     |> assign(:waterfall_data, [])
     |> assign(:pnl_year, nil)
     |> assign(:pnl_show_all, false)
     |> assign(:pnl, %{winners: [], losers: [], total_realized: Decimal.new("0")})
     |> assign(:investment_summary, nil)
     |> assign(:summary_loaded, false)
-    |> assign(:overview_loaded, false)
     |> assign(:holdings_loaded, false)
     |> assign(:income_loaded, false)
     |> assign(:margin_equity, nil)
@@ -776,15 +723,8 @@ defmodule DividendsomaticWeb.PortfolioLive do
     })
     |> assign(:sector_breakdown, [])
     |> assign(:margin_interest, Decimal.new("0"))
-    |> assign_new(:active_tab, fn -> "overview" end)
+    |> assign_new(:active_tab, fn -> "holdings" end)
     |> maybe_load_tab_data()
-  end
-
-  defp maybe_load_tab_data(%{assigns: %{active_tab: "overview"}} = socket) do
-    socket
-    |> assign(:overview_loaded, true)
-    |> assign(:fx_exposure, Portfolio.compute_fx_exposure(socket.assigns.positions))
-    |> assign(:concentration, Portfolio.compute_concentration(socket.assigns.positions))
   end
 
   defp maybe_load_tab_data(%{assigns: %{active_tab: "holdings"}} = socket) do
@@ -799,6 +739,7 @@ defmodule DividendsomaticWeb.PortfolioLive do
     socket
     |> assign(:income_loaded, true)
     |> assign(:margin_interest, Portfolio.total_actual_margin_interest())
+    |> assign(:waterfall_data, Portfolio.waterfall_data())
   end
 
   defp maybe_load_tab_data(%{assigns: %{active_tab: "summary"}} = socket) do
@@ -901,11 +842,31 @@ defmodule DividendsomaticWeb.PortfolioLive do
 
   defp assign_realized_and_total_return(socket, year, dividend_total) do
     realized = Portfolio.total_realized_pnl(year)
-    total_return = Decimal.add(realized, dividend_total)
+    costs = socket.assigns.costs_this_year
+    total_return = realized |> Decimal.add(dividend_total) |> Decimal.sub(costs)
 
     socket
     |> assign(:realized_pnl_total, realized)
     |> assign(:total_return, total_return)
+  end
+
+  defp assign_margin_debt(socket) do
+    case Portfolio.get_latest_margin_equity() do
+      nil ->
+        socket
+        |> assign(:margin_debt, nil)
+        |> assign(:net_value, socket.assigns.total_value)
+
+      snapshot ->
+        debt = snapshot.margin_loan || Decimal.new("0")
+        # debt is positive in DB, display as negative
+        margin_debt = Decimal.negate(debt)
+        net_value = Decimal.add(socket.assigns.total_value, margin_debt)
+
+        socket
+        |> assign(:margin_debt, margin_debt)
+        |> assign(:net_value, net_value)
+    end
   end
 
   defp assign_pnl_summary(socket) do
@@ -979,15 +940,25 @@ defmodule DividendsomaticWeb.PortfolioLive do
         Float.round(Decimal.to_float(m.total), 2)
       end)
 
-    # Compute cumulative from monthly totals
+    %{
+      series: [
+        %{name: "Monthly", type: "bar", data: monthly_data}
+      ],
+      categories: categories
+    }
+  end
+
+  @doc false
+  def serialize_cumulative_chart(dividend_by_month) do
+    categories = Enum.map(dividend_by_month, fn m -> m.month end)
+
     cumulative_data =
       dividend_by_month
       |> Enum.scan(0.0, fn m, acc -> Float.round(acc + Decimal.to_float(m.total), 2) end)
 
     %{
       series: [
-        %{name: "Monthly", type: "bar", data: monthly_data},
-        %{name: "Cumulative", type: "line", data: cumulative_data}
+        %{name: "Cumulative", type: "area", data: cumulative_data}
       ],
       categories: categories
     }
@@ -1080,11 +1051,11 @@ defmodule DividendsomaticWeb.PortfolioLive do
         }
       },
       stroke: %{
-        width: [0, 2.5],
+        width: 0,
         curve: "smooth"
       },
-      colors: ["#FBBF24", "#F59E0B"],
-      fill: %{opacity: [0.85, 1]},
+      colors: ["#FBBF24"],
+      fill: %{opacity: 0.85},
       xaxis: %{
         categories: categories,
         labels: %{
@@ -1095,21 +1066,11 @@ defmodule DividendsomaticWeb.PortfolioLive do
         axisBorder: %{show: false},
         axisTicks: %{show: false}
       },
-      yaxis: [
-        %{
-          title: %{text: ""},
-          labels: %{
-            style: %{colors: "#4C5772", fontSize: "10px"}
-          }
-        },
-        %{
-          opposite: true,
-          title: %{text: ""},
-          labels: %{
-            style: %{colors: "#4C5772", fontSize: "10px"}
-          }
+      yaxis: %{
+        labels: %{
+          style: %{colors: "#4C5772", fontSize: "10px"}
         }
-      ],
+      },
       grid: %{
         borderColor: "rgba(76, 87, 114, 0.12)",
         strokeDashArray: 3,
@@ -1127,53 +1088,63 @@ defmodule DividendsomaticWeb.PortfolioLive do
   end
 
   @doc false
-  def build_fx_donut_config(fx_data, _id_suffix \\ "") do
-    labels = Enum.map(fx_data, & &1.currency)
-    series = Enum.map(fx_data, fn fx -> Decimal.to_float(fx.pct) end)
-
-    colors = [
-      "#5EADF7",
-      "#FBBF24",
-      "#34D399",
-      "#F87171",
-      "#A78BFA",
-      "#FB923C"
-    ]
-
+  def build_cumulative_apex_config(%{series: series, categories: categories}) do
     %{
       chart: %{
-        type: "donut",
+        type: "area",
         height: 220,
+        toolbar: %{show: false},
+        fontFamily: "'IBM Plex Mono', monospace",
         background: "transparent",
-        fontFamily: "'IBM Plex Mono', monospace"
+        animations: %{
+          enabled: true,
+          easing: "easeinout",
+          speed: 600
+        }
       },
       series: series,
-      labels: labels,
-      colors: Enum.take(colors, length(labels)),
-      stroke: %{width: 1, colors: ["var(--terminal-bg)"]},
-      legend: %{
-        position: "bottom",
-        labels: %{colors: "#7E8BA3"},
-        fontSize: "11px",
-        fontFamily: "'IBM Plex Mono', monospace"
+      stroke: %{
+        width: 2.5,
+        curve: "smooth"
       },
-      dataLabels: %{
-        enabled: true,
-        formatter: "PERCENT_FORMATTER",
-        style: %{fontSize: "11px", fontFamily: "'IBM Plex Mono', monospace"}
+      colors: ["#F59E0B"],
+      fill: %{
+        type: "gradient",
+        gradient: %{
+          shadeIntensity: 1,
+          opacityFrom: 0.15,
+          opacityTo: 0.02,
+          stops: [0, 85, 100]
+        }
+      },
+      xaxis: %{
+        categories: categories,
+        labels: %{
+          style: %{colors: "#4C5772", fontSize: "10px"},
+          rotate: -45,
+          rotateAlways: false
+        },
+        axisBorder: %{show: false},
+        axisTicks: %{show: false}
+      },
+      yaxis: %{
+        labels: %{
+          style: %{colors: "#4C5772", fontSize: "10px"}
+        }
+      },
+      grid: %{
+        borderColor: "rgba(76, 87, 114, 0.12)",
+        strokeDashArray: 3,
+        xaxis: %{lines: %{show: false}}
       },
       tooltip: %{
         theme: "dark",
+        shared: true,
+        intersect: false,
         style: %{fontSize: "12px"}
       },
-      plotOptions: %{
-        pie: %{
-          donut: %{
-            size: "60%",
-            labels: %{show: false}
-          }
-        }
-      }
+      legend: %{show: false},
+      dataLabels: %{enabled: false}
     }
   end
 
@@ -1183,20 +1154,6 @@ defmodule DividendsomaticWeb.PortfolioLive do
   defp format_cost_type("loan_interest"), do: "Loan Interest"
   defp format_cost_type("capital_interest"), do: "Capital Interest"
   defp format_cost_type(other), do: String.capitalize(other)
-
-  defp fear_greed_color(nil), do: "yellow"
-
-  defp fear_greed_color(data) do
-    value = data["value"] || 50
-
-    cond do
-      value <= 25 -> "red"
-      value <= 45 -> "orange"
-      value <= 55 -> "yellow"
-      value <= 75 -> "emerald"
-      true -> "green"
-    end
-  end
 
   defp date_to_unix_ms(date) do
     date

@@ -583,30 +583,6 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     zero_line =
       ~s[<line x1="#{@ml}" y1="#{zero_y}" x2="#{@ml + @pw}" y2="#{zero_y}" stroke="#475569" stroke-width="1"/>]
 
-    # Cumulative line overlay
-    cum_line =
-      cumulative_data
-      |> Enum.with_index()
-      |> Enum.map_join(" ", fn {d, i} ->
-        cx = r(@ml + i * (bar_w + bar_gap) + bar_w / 2)
-        cy = r(y_fn.(Decimal.to_float(d.cumulative)))
-        if i == 0, do: "M#{cx} #{cy}", else: "L#{cx} #{cy}"
-      end)
-
-    cum_svg =
-      ~s[<path d="#{cum_line}" fill="none" stroke="#e2e8f0" stroke-width="1.5" stroke-linejoin="round" opacity="0.8"/>]
-
-    # Cumulative end label
-    last = List.last(cumulative_data)
-    last_cx = r(@ml + (n - 1) * (bar_w + bar_gap) + bar_w / 2)
-    last_cy = r(y_fn.(Decimal.to_float(last.cumulative)))
-
-    {label_x, anchor} =
-      if last_cx > @w - 80, do: {last_cx - 8, "end"}, else: {last_cx + 8, "start"}
-
-    cum_label =
-      ~s[<text x="#{label_x}" y="#{r(last_cy - 4)}" fill="#e2e8f0" font-size="7" font-weight="600" text-anchor="#{anchor}">#{format_compact(Decimal.to_float(last.cumulative))}</text>]
-
     # X labels
     x_labels =
       cumulative_data
@@ -647,8 +623,6 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
       #{grid}
       #{bars}
       #{zero_line}
-      #{cum_svg}
-      #{cum_label}
       #{x_labels}
       #{y_labels}
     </svg>
@@ -656,6 +630,144 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
   end
 
   def render_waterfall_chart(_), do: Phoenix.HTML.raw("")
+
+  @doc """
+  Renders a standalone cumulative P&L line chart from waterfall data.
+  """
+  def render_waterfall_cumulative_chart([_ | _] = data) do
+    mt = 25
+    chart_h = 140
+    chart_bottom = mt + chart_h
+    total_h = chart_bottom + 30
+
+    n = length(data)
+    zero = Decimal.new("0")
+
+    # Compute cumulative running total
+    {cumulative_data, _} =
+      Enum.map_reduce(data, zero, fn d, acc ->
+        net =
+          d.deposits
+          |> Decimal.add(d.dividends)
+          |> Decimal.add(d.realized_pnl)
+          |> Decimal.sub(d.withdrawals)
+          |> Decimal.sub(d.costs)
+
+        cum = Decimal.add(acc, net)
+        {Map.put(d, :cumulative, cum), cum}
+      end)
+
+    cum_floats = Enum.map(cumulative_data, fn d -> Decimal.to_float(d.cumulative) end)
+    y_max = Enum.max(cum_floats)
+    y_min = Enum.min(cum_floats)
+
+    y_range = max(y_max - y_min, 1.0) * 1.15
+    y_lo = y_min - (y_range - (y_max - y_min)) / 2
+
+    y_fn = fn v -> mt + chart_h - (v - y_lo) / y_range * chart_h end
+
+    bar_gap = 2
+    step = (@pw - bar_gap * (n - 1)) / n
+
+    # Grid lines
+    grid =
+      for i <- 0..4 do
+        gy = r(mt + chart_h - i / 4 * chart_h)
+
+        ~s[<line x1="#{@ml}" y1="#{gy}" x2="#{@ml + @pw}" y2="#{gy}" stroke="#1e293b" stroke-width="1"/>]
+      end
+      |> Enum.join("\n")
+
+    # Y labels
+    y_labels =
+      for i <- 0..4 do
+        gy = r(mt + chart_h - i / 4 * chart_h + 3)
+        val = y_lo + i / 4 * y_range
+
+        ~s[<text x="#{@ml - 8}" y="#{gy}" fill="#475569" font-size="7" text-anchor="end">#{format_compact(val)}</text>]
+      end
+      |> Enum.join("\n")
+
+    # Zero baseline
+    zero_y = r(y_fn.(0.0))
+
+    zero_line =
+      if y_min < 0 do
+        ~s[<line x1="#{@ml}" y1="#{zero_y}" x2="#{@ml + @pw}" y2="#{zero_y}" stroke="#475569" stroke-width="1" stroke-dasharray="4"/>]
+      else
+        ""
+      end
+
+    # Gradient fill under the line
+    points =
+      cumulative_data
+      |> Enum.with_index()
+      |> Enum.map_join(" ", fn {d, i} ->
+        cx = r(@ml + i * (step + bar_gap) + step / 2)
+        cy = r(y_fn.(Decimal.to_float(d.cumulative)))
+        "#{cx},#{cy}"
+      end)
+
+    first_x = r(@ml + step / 2)
+    last_x = r(@ml + (n - 1) * (step + bar_gap) + step / 2)
+
+    fill_svg =
+      ~s[<polygon points="#{first_x},#{r(y_fn.(0.0))} #{points} #{last_x},#{r(y_fn.(0.0))}" fill="#e2e8f0" opacity="0.06"/>]
+
+    # Line
+    line_path =
+      cumulative_data
+      |> Enum.with_index()
+      |> Enum.map_join(" ", fn {d, i} ->
+        cx = r(@ml + i * (step + bar_gap) + step / 2)
+        cy = r(y_fn.(Decimal.to_float(d.cumulative)))
+        if i == 0, do: "M#{cx} #{cy}", else: "L#{cx} #{cy}"
+      end)
+
+    line_svg =
+      ~s[<path d="#{line_path}" fill="none" stroke="#e2e8f0" stroke-width="2" stroke-linejoin="round" opacity="0.9"/>]
+
+    # End label
+    last = List.last(cumulative_data)
+    last_cx = r(@ml + (n - 1) * (step + bar_gap) + step / 2)
+    last_cy = r(y_fn.(Decimal.to_float(last.cumulative)))
+
+    {label_x, anchor} =
+      if last_cx > @w - 80, do: {last_cx - 8, "end"}, else: {last_cx + 8, "start"}
+
+    end_label =
+      ~s[<text x="#{label_x}" y="#{r(last_cy - 4)}" fill="#e2e8f0" font-size="8" font-weight="600" text-anchor="#{anchor}">#{format_compact(Decimal.to_float(last.cumulative))}</text>]
+
+    # X labels
+    x_labels =
+      cumulative_data
+      |> Enum.with_index()
+      |> Enum.map_join("\n", fn {d, i} ->
+        lx = r(@ml + i * (step + bar_gap) + step / 2)
+        show = n <= 36 or rem(i, max(div(n, 24), 1)) == 0
+        month_label = format_month_label(d.month, n)
+
+        if show do
+          ~s[<text x="#{lx}" y="#{r(chart_bottom + 12)}" fill="#475569" font-size="7" text-anchor="middle">#{month_label}</text>]
+        else
+          ""
+        end
+      end)
+
+    Phoenix.HTML.raw("""
+    <svg width="#{@w}" height="#{round(total_h)}" viewBox="0 0 #{@w} #{round(total_h)}" xmlns="http://www.w3.org/2000/svg" style="font-family: 'JetBrains Mono', monospace;">
+      #{grid}
+      #{zero_line}
+      #{fill_svg}
+      #{line_svg}
+      #{end_label}
+      #{x_labels}
+      #{y_labels}
+    </svg>
+    """)
+  end
+
+  def render_waterfall_cumulative_chart(_), do: Phoenix.HTML.raw("")
 
   defp waterfall_bar(d, bx, bar_w, zero_y, y_range, bar_h) do
     pnl_f = Decimal.to_float(d.realized_pnl)

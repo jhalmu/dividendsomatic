@@ -33,11 +33,11 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       assert html =~ "Loading portfolio data"
     end
 
-    test "should show Overview tab as active during loading", %{conn: conn} do
+    test "should show Holdings tab as active during loading", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
 
-      assert html =~ "Overview"
-      assert html =~ "panel-overview" or html =~ "panel-about"
+      assert html =~ "Holdings"
+      assert html =~ "panel-holdings"
     end
 
     test "should show disabled tab buttons during loading", %{conn: conn} do
@@ -46,37 +46,22 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       assert html =~ "opacity: 0.4"
       assert html =~ "disabled"
     end
-  end
 
-  describe "overview tab" do
-    test "should show about panel content in overview", %{conn: conn} do
+    test "should show About tab button during loading", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
 
-      assert html =~ "dividends-o-matic"
-      assert html =~ "combined real data"
-      assert html =~ "GitHub Issues"
-      assert html =~ "Bluesky"
+      assert html =~ "About"
     end
+  end
 
-    test "should show overview tab in loaded state", %{conn: conn} do
+  describe "default holdings tab" do
+    test "should show holdings tab as default after load", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
       {:ok, view, _html} = live_connected(conn)
 
-      # Overview is the default tab after load
       html = render(view)
-      assert html =~ "panel-overview"
-    end
-
-    test "should show stat grid in overview", %{conn: conn} do
-      {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
-
-      {:ok, _view, html} = live_connected(conn)
-
-      assert html =~ "Portfolio"
-      assert html =~ "Unrealized"
-      assert html =~ "YTD Dividends"
-      assert html =~ "Total Return"
+      assert html =~ "panel-holdings"
     end
 
     test "should show top holdings by weight", %{conn: conn} do
@@ -115,12 +100,11 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       assert html =~ "2026-01-28"
     end
 
-    test "should show holdings table in holdings tab", %{conn: conn} do
+    test "should show holdings table in default tab", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, view, _html} = live_connected(conn)
+      {:ok, _view, html} = live_connected(conn)
 
-      html = render_click(view, "switch_tab", %{"tab" => "holdings"})
       assert html =~ "Positions"
     end
 
@@ -132,31 +116,28 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       assert html =~ "Portfolio Value"
     end
 
-    test "should show holding symbols in holdings tab", %{conn: conn} do
+    test "should show holding symbols in default holdings tab", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@multi_holding_csv, ~D[2026-01-28])
 
-      {:ok, view, _html} = live_connected(conn)
+      {:ok, _view, html} = live_connected(conn)
 
-      html = render_click(view, "switch_tab", %{"tab" => "holdings"})
       assert html =~ "KESKOB"
       assert html =~ "TELIA1"
     end
 
-    test "should show holdings count in holdings tab", %{conn: conn} do
+    test "should show holdings count in default holdings tab", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@multi_holding_csv, ~D[2026-01-28])
 
-      {:ok, view, _html} = live_connected(conn)
+      {:ok, _view, html} = live_connected(conn)
 
-      html = render_click(view, "switch_tab", %{"tab" => "holdings"})
       assert html =~ "2 holdings"
     end
 
-    test "should show table column headers in holdings tab", %{conn: conn} do
+    test "should show table column headers in default holdings tab", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, view, _html} = live_connected(conn)
+      {:ok, _view, html} = live_connected(conn)
 
-      html = render_click(view, "switch_tab", %{"tab" => "holdings"})
       assert html =~ "Symbol"
       assert html =~ "Description"
       assert html =~ "Qty"
@@ -336,9 +317,8 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     test "should show positions table in holdings tab", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, view, _html} = live_connected(conn)
+      {:ok, _view, html} = live_connected(conn)
 
-      html = render_click(view, "switch_tab", %{"tab" => "holdings"})
       assert html =~ "panel-holdings"
       assert html =~ "Positions"
       assert html =~ "KESKOB"
@@ -347,9 +327,8 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
     test "should show concentration risk", %{conn: conn} do
       {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
 
-      {:ok, view, _html} = live_connected(conn)
+      {:ok, _view, html} = live_connected(conn)
 
-      html = render_click(view, "switch_tab", %{"tab" => "holdings"})
       assert html =~ "Concentration Risk"
       assert html =~ "Top 1"
       assert html =~ "HHI"
@@ -367,6 +346,22 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       assert html =~ "Gross Dividends"
       assert html =~ "Net Dividends"
       assert html =~ "Net Income"
+    end
+  end
+
+  describe "about tab" do
+    test "should show about tab with branded content", %{conn: conn} do
+      {:ok, _snapshot} = Portfolio.create_snapshot_from_csv(@csv_data, ~D[2026-01-28])
+
+      {:ok, view, _html} = live_connected(conn)
+
+      html = render_click(view, "switch_tab", %{"tab" => "about"})
+      assert html =~ "panel-about"
+      assert html =~ "dividends-o-matic"
+      assert html =~ "sisu"
+      assert html =~ "Features"
+      assert html =~ "CSV Import"
+      assert html =~ "Dividend Tracking"
     end
   end
 
@@ -518,10 +513,9 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
 
     test "should show SHORT badge for negative quantity", %{conn: conn} do
       {:ok, _} = Portfolio.create_snapshot_from_csv(@short_csv, ~D[2026-01-28])
-      {:ok, view, _html} = live_connected(conn)
+      {:ok, _view, html} = live_connected(conn)
 
-      # SHORT badge is now in holdings tab
-      html = render_click(view, "switch_tab", %{"tab" => "holdings"})
+      # SHORT badge is in the default holdings tab
       assert html =~ "short-badge"
       assert html =~ "SHORT"
     end

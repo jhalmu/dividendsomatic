@@ -35,13 +35,13 @@
            ═══════════════════════════════════════ --%>
       <div class="tab-strip animate-fade-in" role="tablist">
         <button
-          id="tab-overview"
+          id="tab-holdings"
           class="tab-strip-btn active"
           role="tab"
           aria-selected="true"
-          aria-controls="panel-overview"
+          aria-controls="panel-holdings"
         >
-          Overview
+          Holdings
         </button>
         <button
           class="tab-strip-btn"
@@ -68,7 +68,7 @@
           disabled
           style="opacity: 0.4;"
         >
-          Holdings
+          Summary
         </button>
         <button
           class="tab-strip-btn"
@@ -77,11 +77,9 @@
           disabled
           style="opacity: 0.4;"
         >
-          Summary
+          About
         </button>
       </div>
-
-      <.about_panel />
 
       <%!-- Full-screen loading overlay --%>
       <div style="position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(4px);">
@@ -374,15 +372,20 @@
             </div>
           </div>
 
-          <%!-- Card 2: Portfolio Value --%>
+          <%!-- Card 2: Portfolio Value + Debt --%>
           <div class="terminal-stat">
             <div class="terminal-stat-label">Portfolio Value</div>
             <div class="terminal-stat-value">
               {format_euro(@total_value)}
             </div>
-            <div class="terminal-stat-sub">
-              Costs: {format_euro_decimal(@costs_this_year)}
-            </div>
+            <%= if @margin_debt do %>
+              <div class="terminal-stat-sub">
+                <div style="color: var(--terminal-dim);">
+                  Debt: {format_euro_signed(@margin_debt)}
+                </div>
+                <div>Net: {format_euro_signed(@net_value)}</div>
+              </div>
+            <% end %>
           </div>
 
           <%!-- Card 3: Realized {@dividend_year} --%>
@@ -394,6 +397,11 @@
             <div class="terminal-stat-sub">
               <div>P&amp;L: {format_euro_signed(@realized_pnl_total)}</div>
               <div>Dividends: {format_euro_decimal(@dividend_total)}</div>
+              <%= if Decimal.compare(@costs_this_year, Decimal.new("0")) == :gt do %>
+                <div style="color: var(--terminal-dim);">
+                  Costs: -{format_euro_decimal(@costs_this_year)}
+                </div>
+              <% end %>
             </div>
           </div>
 
@@ -419,15 +427,15 @@
         <%!-- Tab Strip --%>
         <div class="tab-strip animate-fade-in animate-delay-2" role="tablist">
           <button
-            id="tab-overview"
+            id="tab-holdings"
             phx-click="switch_tab"
-            phx-value-tab="overview"
-            class={"tab-strip-btn #{if @active_tab == "overview", do: "active"}"}
+            phx-value-tab="holdings"
+            class={"tab-strip-btn #{if @active_tab == "holdings", do: "active"}"}
             role="tab"
-            aria-selected={to_string(@active_tab == "overview")}
-            aria-controls="panel-overview"
+            aria-selected={to_string(@active_tab == "holdings")}
+            aria-controls="panel-holdings"
           >
-            Overview
+            Holdings
           </button>
           <button
             id="tab-performance"
@@ -452,17 +460,6 @@
             Income
           </button>
           <button
-            id="tab-holdings"
-            phx-click="switch_tab"
-            phx-value-tab="holdings"
-            class={"tab-strip-btn #{if @active_tab == "holdings", do: "active"}"}
-            role="tab"
-            aria-selected={to_string(@active_tab == "holdings")}
-            aria-controls="panel-holdings"
-          >
-            Holdings
-          </button>
-          <button
             id="tab-summary"
             phx-click="switch_tab"
             phx-value-tab="summary"
@@ -473,213 +470,17 @@
           >
             Summary
           </button>
-        </div>
-
-        <%!-- ══════════════════════════════════
-             Tab: Overview (replaces About)
-             ══════════════════════════════════ --%>
-        <div
-          :if={@active_tab == "overview"}
-          id="panel-overview"
-          role="tabpanel"
-          aria-labelledby="tab-overview"
-          class="animate-fade-in"
-        >
-          <.tab_panel_header title="Overview" date={@current_snapshot.date} />
-
-          <%!-- 6-cell stat grid --%>
-          <div class="overview-stat-grid mb-[var(--space-xs)]">
-            <div class="terminal-stat">
-              <div class="terminal-stat-label">Portfolio</div>
-              <div class="terminal-stat-value" style="font-size: 1.125rem;">
-                {format_euro(@total_value)}
-              </div>
-            </div>
-
-            <div class={"terminal-stat terminal-stat-accent #{if !pnl_positive?(@total_pnl), do: "negative"}"}>
-              <div class="terminal-stat-label">Unrealized</div>
-              <div
-                class={"terminal-stat-value #{if pnl_positive?(@total_pnl), do: "gain", else: "loss"}"}
-                style="font-size: 1.125rem;"
-              >
-                {format_euro_signed(@total_pnl)}
-              </div>
-            </div>
-
-            <%= if @fear_greed do %>
-              <div class="terminal-stat">
-                <div class="terminal-stat-label">Fear &amp; Greed</div>
-                <div class="flex items-center gap-[var(--space-xs)] mt-1">
-                  <span class="terminal-stat-value" style="font-size: 1.125rem;">
-                    {@fear_greed["value"]}
-                  </span>
-                  <span class={"terminal-fear-greed-badge #{fear_greed_color(@fear_greed)}"}>
-                    {@fear_greed["value_classification"]}
-                  </span>
-                </div>
-              </div>
-            <% else %>
-              <div class="terminal-stat">
-                <div class="terminal-stat-label">Holdings</div>
-                <div class="terminal-stat-value" style="font-size: 1.125rem;">
-                  {length(@positions)}
-                </div>
-              </div>
-            <% end %>
-
-            <div class="terminal-stat" style="color: var(--chart-dividend);">
-              <div class="terminal-stat-label">YTD Dividends</div>
-              <div
-                class="terminal-stat-value"
-                style="font-size: 1.125rem; color: var(--chart-dividend);"
-              >
-                {format_euro_decimal(@dividend_total)}
-              </div>
-            </div>
-
-            <div class={"terminal-stat #{if pnl_positive?(@total_return), do: "", else: "negative"}"}>
-              <div class="terminal-stat-label">Total Return {@dividend_year}</div>
-              <div
-                class={"terminal-stat-value #{if pnl_positive?(@total_return), do: "gain", else: "loss"}"}
-                style="font-size: 1.125rem;"
-              >
-                {format_euro_signed(@total_return)}
-              </div>
-            </div>
-
-            <div class="terminal-stat">
-              <div class="terminal-stat-label">Positions</div>
-              <div class="terminal-stat-value" style="font-size: 1.125rem;">
-                {length(@positions)}
-              </div>
-              <div class="terminal-stat-sub">
-                Costs: {format_euro_decimal(@costs_this_year)}
-              </div>
-            </div>
-          </div>
-
-          <%!-- Currency Exposure Donut --%>
-          <%= if length(@fx_exposure) > 1 do %>
-            <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]">
-              <div class="terminal-section-label-inline" style="margin-bottom: var(--space-xs);">
-                Currency Exposure
-              </div>
-              <div
-                id="fx-donut-overview"
-                phx-hook="ApexChartHook"
-                phx-update="ignore"
-                data-chart-config={Jason.encode!(build_fx_donut_config(@fx_exposure, "overview"))}
-              >
-              </div>
-            </div>
-          <% end %>
-
-          <%!-- Top Holdings by Weight --%>
-          <%= if length(@positions) > 0 do %>
-            <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]">
-              <div class="terminal-section-label-inline" style="margin-bottom: var(--space-xs);">
-                Top Holdings by Weight
-              </div>
-              <%= for pos <- @positions do %>
-                <div
-                  class="flex items-center gap-[var(--space-sm)] mb-[var(--space-xs)]"
-                  style="font-family: var(--font-mono); font-size: 0.75rem;"
-                >
-                  <.link
-                    navigate={~p"/stocks/#{pos.symbol}"}
-                    class="terminal-symbol hover:underline"
-                    style="min-width: 5rem;"
-                  >
-                    {pos.symbol}
-                  </.link>
-                  <div class="flex-1">
-                    <div class="concentration-bar-track">
-                      <div
-                        class="concentration-bar"
-                        style={"width: #{min(100, max(0, Decimal.to_float(pos.weight || Decimal.new("0"))))}%;"}
-                      >
-                      </div>
-                    </div>
-                  </div>
-                  <span style="color: var(--terminal-muted); min-width: 3.5rem; text-align: right;">
-                    {format_decimal(pos.weight)}%
-                  </span>
-                </div>
-              <% end %>
-            </div>
-          <% end %>
-
-          <%!-- Recent Dividends --%>
-          <%= if length(@recent_dividends) > 0 do %>
-            <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]">
-              <div class="terminal-section-label-inline" style="margin-bottom: var(--space-xs);">
-                Recent Dividends
-              </div>
-              <%= for entry <- Enum.take(@recent_dividends, 5) do %>
-                <div class="terminal-dividend-row">
-                  <span class="terminal-dividend-symbol">{entry.dividend.symbol}</span>
-                  <span class="terminal-dividend-date">
-                    {Calendar.strftime(entry.dividend.pay_date, "%b %d")}
-                  </span>
-                  <span class="terminal-dividend-amount">
-                    {format_euro_decimal(entry.income)}
-                  </span>
-                </div>
-              <% end %>
-            </div>
-          <% end %>
-
-          <%!-- About (collapsed) --%>
-          <details class="terminal-card mb-[var(--space-xs)]">
-            <summary class="terminal-details-summary">
-              <span style="font-family: var(--font-display); font-size: 0.6875rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; color: var(--terminal-dim);">
-                About dividends-o-matic
-              </span>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke-width="2"
-                stroke="currentColor"
-                class="chevron-icon"
-                aria-hidden="true"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M19.5 8.25l-7.5 7.5-7.5-7.5"
-                />
-              </svg>
-            </summary>
-            <div class="p-[var(--space-sm)] pt-0">
-              <p style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--terminal-muted); margin-bottom: var(--space-sm); line-height: 1.6;">
-                Portfolio and dividend tracking dashboard. Data is based on combined real data for testing purposes.
-              </p>
-              <ul style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--terminal-dim); line-height: 1.8; list-style: none; padding: 0; margin-bottom: var(--space-sm);">
-                <li>&#x25B8; Multi-format CSV import with unified portfolio history</li>
-                <li>&#x25B8; Dividend analytics, projections, and per-symbol breakdown</li>
-                <li>&#x25B8; Market data with multi-provider fallback chains</li>
-              </ul>
-              <div class="flex items-center gap-[var(--space-xs)]">
-                <a
-                  href="https://github.com/jhalmu/dividendsomatic/issues"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="btn btn-sm btn-outline"
-                >
-                  GitHub Issues
-                </a>
-                <a
-                  href="https://bsky.app/profile/jhalmu.bsky.social"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="btn btn-sm btn-outline"
-                >
-                  Bluesky
-                </a>
-              </div>
-            </div>
-          </details>
+          <button
+            id="tab-about"
+            phx-click="switch_tab"
+            phx-value-tab="about"
+            class={"tab-strip-btn #{if @active_tab == "about", do: "active"}"}
+            role="tab"
+            aria-selected={to_string(@active_tab == "about")}
+            aria-controls="panel-about"
+          >
+            About
+          </button>
         </div>
 
         <%!-- ══════════════════════════════════
@@ -844,6 +645,37 @@
               </div>
             </div>
           <% end %>
+
+          <%!-- Cumulative Dividends --%>
+          <%= if length(@dividend_by_month) > 0 do %>
+            <div class="terminal-chart mt-[var(--space-xs)]">
+              <div class="terminal-chart-header">
+                <div class="terminal-chart-title">Cumulative Dividends</div>
+                <div
+                  class="terminal-chart-legend"
+                  aria-label="Cumulative dividend chart legend"
+                  style="justify-content: flex-end;"
+                >
+                  <span class="terminal-legend-item">
+                    <span
+                      class="terminal-legend-line"
+                      style="background: var(--chart-cumulative);"
+                    >
+                    </span>
+                    Cumulative
+                  </span>
+                </div>
+              </div>
+              <% cum_json = serialize_cumulative_chart(@dividend_by_month) %>
+              <div
+                id="cumulative-dividend-apex-chart"
+                phx-hook="ApexChartHook"
+                phx-update="ignore"
+                data-chart-config={Jason.encode!(build_cumulative_apex_config(cum_json))}
+              >
+              </div>
+            </div>
+          <% end %>
         </div>
 
         <%!-- ══════════════════════════════════
@@ -900,14 +732,6 @@
                     </span>
                     Monthly
                   </span>
-                  <span class="terminal-legend-item">
-                    <span
-                      class="terminal-legend-line"
-                      style="background: var(--chart-cumulative);"
-                    >
-                    </span>
-                    Cumulative
-                  </span>
                 </div>
               </div>
               <% div_json = serialize_dividend_chart(@dividend_by_month) %>
@@ -922,6 +746,77 @@
           <% else %>
             <div class="text-center py-[var(--space-md)]" style="color: var(--terminal-dim);">
               No dividend data for this period.
+            </div>
+          <% end %>
+
+          <%!-- P&L Waterfall --%>
+          <%= if length(@waterfall_data) > 0 do %>
+            <div class="terminal-chart mb-[var(--space-xs)]">
+              <div class="terminal-chart-header">
+                <div class="terminal-chart-title">P&amp;L Waterfall</div>
+                <div
+                  class="terminal-chart-legend"
+                  aria-label="Waterfall chart legend"
+                  style="justify-content: flex-end;"
+                >
+                  <span class="terminal-legend-item">
+                    <span class="terminal-legend-line" style="background: var(--gain);"></span>
+                    Deposits
+                  </span>
+                  <span class="terminal-legend-item">
+                    <span
+                      class="terminal-legend-line"
+                      style="background: var(--chart-dividend);"
+                    >
+                    </span>
+                    Dividends
+                  </span>
+                  <span class="terminal-legend-item">
+                    <span
+                      class="terminal-legend-line"
+                      style="background: var(--terminal-accent);"
+                    >
+                    </span>
+                    Realized P&amp;L
+                  </span>
+                  <span class="terminal-legend-item">
+                    <span class="terminal-legend-line" style="background: var(--loss);"></span>
+                    Costs
+                  </span>
+                  <span class="terminal-legend-item">
+                    <span
+                      class="terminal-legend-line"
+                      style="background: var(--chart-cumulative);"
+                    >
+                    </span>
+                    Withdrawals
+                  </span>
+                </div>
+              </div>
+              {DividendsomaticWeb.Components.PortfolioChart.render_waterfall_chart(
+                @waterfall_data
+              )}
+            </div>
+
+            <%!-- Cumulative P&L --%>
+            <div class="terminal-chart mb-[var(--space-xs)]">
+              <div class="terminal-chart-header">
+                <div class="terminal-chart-title">Cumulative P&amp;L</div>
+                <div
+                  class="terminal-chart-legend"
+                  aria-label="Cumulative P&L chart legend"
+                  style="justify-content: flex-end;"
+                >
+                  <span class="terminal-legend-item">
+                    <span class="terminal-legend-line" style="background: var(--terminal-text);">
+                    </span>
+                    Cumulative
+                  </span>
+                </div>
+              </div>
+              {DividendsomaticWeb.Components.PortfolioChart.render_waterfall_cumulative_chart(
+                @waterfall_data
+              )}
             </div>
           <% end %>
 
@@ -1075,6 +970,41 @@
           class="animate-fade-in"
         >
           <.tab_panel_header title="Holdings" date={@current_snapshot.date} />
+
+          <%!-- Top Holdings by Weight --%>
+          <%= if length(@positions) > 0 do %>
+            <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]">
+              <div class="terminal-section-label-inline" style="margin-bottom: var(--space-xs);">
+                Top Holdings by Weight
+              </div>
+              <%= for pos <- @positions do %>
+                <div
+                  class="flex items-center gap-[var(--space-sm)] mb-[var(--space-xs)]"
+                  style="font-family: var(--font-mono); font-size: 0.75rem;"
+                >
+                  <.link
+                    navigate={~p"/stocks/#{pos.symbol}"}
+                    class="terminal-symbol hover:underline"
+                    style="min-width: 5rem;"
+                  >
+                    {pos.symbol}
+                  </.link>
+                  <div class="flex-1">
+                    <div class="concentration-bar-track">
+                      <div
+                        class="concentration-bar"
+                        style={"width: #{min(100, max(0, Decimal.to_float(pos.weight || Decimal.new("0"))))}%;"}
+                      >
+                      </div>
+                    </div>
+                  </div>
+                  <span style="color: var(--terminal-muted); min-width: 3.5rem; text-align: right;">
+                    {format_decimal(pos.weight)}%
+                  </span>
+                </div>
+              <% end %>
+            </div>
+          <% end %>
 
           <%!-- Positions Table --%>
           <div class="terminal-card mb-[var(--space-xs)]">
@@ -1360,21 +1290,34 @@
 
           <%!-- FX Exposure + Sector Breakdown --%>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-[var(--space-xs)] mb-[var(--space-xs)]">
-            <%!-- FX Exposure Donut --%>
+            <%!-- FX Exposure --%>
             <%= if length(@fx_exposure) > 1 do %>
               <div class="terminal-card p-[var(--space-sm)]">
                 <div class="terminal-section-label-inline" style="margin-bottom: var(--space-xs);">
                   FX Exposure
                 </div>
-                <div
-                  id="fx-donut-holdings"
-                  phx-hook="ApexChartHook"
-                  phx-update="ignore"
-                  data-chart-config={
-                    Jason.encode!(build_fx_donut_config(@fx_exposure, "holdings"))
-                  }
-                >
-                </div>
+                <%= for fx <- @fx_exposure do %>
+                  <div
+                    class="flex items-center gap-[var(--space-sm)] mb-[var(--space-xs)]"
+                    style="font-family: var(--font-mono); font-size: 0.75rem;"
+                  >
+                    <span style="min-width: 3rem; color: var(--terminal-muted);">
+                      {fx.currency}
+                    </span>
+                    <div class="flex-1">
+                      <div class="concentration-bar-track">
+                        <div
+                          class="concentration-bar"
+                          style={"width: #{min(100, max(0, Decimal.to_float(fx.pct)))}%; background: var(--terminal-accent);"}
+                        >
+                        </div>
+                      </div>
+                    </div>
+                    <span style="color: var(--terminal-dim); min-width: 3rem; text-align: right;">
+                      {format_decimal(fx.pct)}%
+                    </span>
+                  </div>
+                <% end %>
               </div>
             <% end %>
 
@@ -2012,73 +1955,163 @@
               </div>
             </div>
           <% end %>
+        </div>
 
-          <%!-- P&L Waterfall (collapsible) --%>
-          <div class="mb-[var(--space-xs)]">
-            <button
-              phx-click="toggle_waterfall"
-              class="btn btn-xs btn-outline w-full"
-              aria-expanded={to_string(@show_waterfall)}
-            >
-              <%= if @show_waterfall do %>
-                Hide P&amp;L Waterfall
-              <% else %>
-                Show P&amp;L Waterfall
-              <% end %>
-            </button>
-            <%= if @show_waterfall and length(@waterfall_data) > 0 do %>
-              <div class="terminal-chart mt-[var(--space-xs)]">
-                <div class="terminal-chart-header">
-                  <div class="terminal-chart-title">P&amp;L Waterfall</div>
-                  <div
-                    class="terminal-chart-legend"
-                    aria-label="Waterfall chart legend"
-                    style="justify-content: flex-end;"
-                  >
-                    <span class="terminal-legend-item">
-                      <span class="terminal-legend-line" style="background: var(--gain);"></span>
-                      Deposits
-                    </span>
-                    <span class="terminal-legend-item">
-                      <span
-                        class="terminal-legend-line"
-                        style="background: var(--chart-dividend);"
-                      >
-                      </span>
-                      Dividends
-                    </span>
-                    <span class="terminal-legend-item">
-                      <span
-                        class="terminal-legend-line"
-                        style="background: var(--terminal-accent);"
-                      >
-                      </span>
-                      Realized P&amp;L
-                    </span>
-                    <span class="terminal-legend-item">
-                      <span class="terminal-legend-line" style="background: var(--loss);"></span>
-                      Costs
-                    </span>
-                    <span class="terminal-legend-item">
-                      <span
-                        class="terminal-legend-line"
-                        style="background: var(--chart-cumulative);"
-                      >
-                      </span>
-                      Withdrawals
-                    </span>
-                    <span class="terminal-legend-item">
-                      <span class="terminal-legend-line" style="background: var(--terminal-text);">
-                      </span>
-                      Cumulative
-                    </span>
+        <%!-- ══════════════════════════════════
+             Tab: About
+             ══════════════════════════════════ --%>
+        <div
+          :if={@active_tab == "about"}
+          id="panel-about"
+          role="tabpanel"
+          aria-labelledby="tab-about"
+          class="animate-fade-in"
+        >
+          <%!-- Branded Header --%>
+          <div class="text-center py-[var(--space-lg)]">
+            <h2 style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--terminal-text);">
+              dividends-o-matic
+            </h2>
+            <div style="font-family: var(--font-display); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.15em; color: var(--terminal-dim); margin-top: var(--space-xs);">
+              sisu &amp; dividends
+            </div>
+          </div>
+
+          <%!-- Description --%>
+          <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]">
+            <p style="font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.6; color: var(--terminal-muted);">
+              A personal portfolio tracker built for dividend investors who use Interactive Brokers.
+              Import your Flex Query CSV reports and get instant visibility into holdings, income streams,
+              realized P&amp;L, cost coverage, and long-term performance &mdash; all in a terminal-inspired
+              interface designed for clarity and speed.
+            </p>
+          </div>
+
+          <%!-- Feature Grid --%>
+          <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]">
+            <div class="terminal-section-label-inline" style="margin-bottom: var(--space-sm);">
+              Features
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-[var(--space-sm)]">
+              <div class="flex items-start gap-[var(--space-xs)]">
+                <span style="color: var(--terminal-accent); font-size: 0.75rem; margin-top: 2px;">
+                  &#9654;
+                </span>
+                <div>
+                  <div style="font-family: var(--font-display); font-size: 0.75rem; font-weight: 600; color: var(--terminal-text);">
+                    CSV Import
+                  </div>
+                  <div style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--terminal-dim);">
+                    IBKR Flex Query reports with automatic parsing
                   </div>
                 </div>
-                {DividendsomaticWeb.Components.PortfolioChart.render_waterfall_chart(
-                  @waterfall_data
-                )}
               </div>
-            <% end %>
+              <div class="flex items-start gap-[var(--space-xs)]">
+                <span style="color: var(--chart-dividend); font-size: 0.75rem; margin-top: 2px;">
+                  &#9654;
+                </span>
+                <div>
+                  <div style="font-family: var(--font-display); font-size: 0.75rem; font-weight: 600; color: var(--terminal-text);">
+                    Dividend Tracking
+                  </div>
+                  <div style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--terminal-dim);">
+                    Per-symbol income, yield-on-cost, monthly projections
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-start gap-[var(--space-xs)]">
+                <span style="color: var(--gain); font-size: 0.75rem; margin-top: 2px;">
+                  &#9654;
+                </span>
+                <div>
+                  <div style="font-family: var(--font-display); font-size: 0.75rem; font-weight: 600; color: var(--terminal-text);">
+                    Performance Charts
+                  </div>
+                  <div style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--terminal-dim);">
+                    Portfolio value, cumulative dividends, P&amp;L waterfall
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-start gap-[var(--space-xs)]">
+                <span style="color: var(--loss); font-size: 0.75rem; margin-top: 2px;">
+                  &#9654;
+                </span>
+                <div>
+                  <div style="font-family: var(--font-display); font-size: 0.75rem; font-weight: 600; color: var(--terminal-text);">
+                    Cost Analysis
+                  </div>
+                  <div style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--terminal-dim);">
+                    Commissions, withholding tax, margin interest breakdown
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-start gap-[var(--space-xs)]">
+                <span style="color: var(--chart-cumulative); font-size: 0.75rem; margin-top: 2px;">
+                  &#9654;
+                </span>
+                <div>
+                  <div style="font-family: var(--font-display); font-size: 0.75rem; font-weight: 600; color: var(--terminal-text);">
+                    Risk Metrics
+                  </div>
+                  <div style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--terminal-dim);">
+                    Concentration risk, FX exposure, sector breakdown
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-start gap-[var(--space-xs)]">
+                <span style="color: var(--terminal-muted); font-size: 0.75rem; margin-top: 2px;">
+                  &#9654;
+                </span>
+                <div>
+                  <div style="font-family: var(--font-display); font-size: 0.75rem; font-weight: 600; color: var(--terminal-text);">
+                    Market Sentiment
+                  </div>
+                  <div style="font-family: var(--font-mono); font-size: 0.6875rem; color: var(--terminal-dim);">
+                    Fear &amp; Greed index with historical snapshots
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <%!-- Links --%>
+          <div class="terminal-card p-[var(--space-sm)]">
+            <div class="flex items-center justify-center gap-[var(--space-md)]">
+              <a
+                href="https://github.com/jhalmu/dividendsomatic/issues"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex items-center gap-[var(--space-xs)] hover:opacity-80 transition-opacity"
+                style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--terminal-muted); text-decoration: none;"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  class="w-4 h-4"
+                >
+                  <path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z" />
+                </svg>
+                GitHub Issues
+              </a>
+              <a
+                href="https://bsky.app/profile/jhalmu.bsky.social"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex items-center gap-[var(--space-xs)] hover:opacity-80 transition-opacity"
+                style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--terminal-muted); text-decoration: none;"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 568 501"
+                  fill="currentColor"
+                  class="w-4 h-4"
+                >
+                  <path d="M123.121 33.664C188.241 82.553 258.281 181.68 284 234.873c25.719-53.192 95.759-152.32 160.879-201.21C491.866-1.611 568-28.906 568 57.947c0 17.346-9.945 145.713-15.778 166.555-20.275 72.453-94.155 90.933-159.875 79.748C507.222 323.8 536.444 388.56 473.333 453.32c-119.86 122.992-172.272-30.859-185.702-70.281-2.462-7.227-3.614-10.608-3.631-7.733-.017-2.875-1.169.506-3.631 7.733-13.43 39.422-65.842 193.273-185.702 70.281-63.111-64.76-33.89-129.52 80.986-149.071-65.72 11.185-139.6-7.295-159.875-79.748C10.945 203.659 1 75.291 1 57.946 1-28.906 76.135-1.612 123.121 33.664Z" />
+                </svg>
+                Bluesky
+              </a>
+            </div>
           </div>
         </div>
 
