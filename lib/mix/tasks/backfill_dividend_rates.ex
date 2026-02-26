@@ -37,15 +37,15 @@ defmodule Mix.Tasks.Backfill.DividendRates do
       dividend_rate: Decimal.new("1.44"),
       dividend_frequency: "monthly"
     },
-    # CSWC: monthly $0.1934 × 12 = $2.3208 (base; supplementals excluded)
-    "US22822P1012" => %{
+    # CSWC (Capital Southwest): monthly $0.1934 × 12 = $2.3208 (base; supplementals excluded)
+    "US1405011073" => %{
       dividend_per_payment: Decimal.new("0.1934"),
       payments_per_year: 12,
       dividend_rate: Decimal.new("2.3208"),
       dividend_frequency: "monthly"
     },
-    # FSK: quarterly $0.645 × 4 = $2.58
-    "US3023FL1045" => %{
+    # FSK (FS KKR Capital): quarterly $0.645 × 4 = $2.58
+    "US3026352068" => %{
       dividend_per_payment: Decimal.new("0.645"),
       payments_per_year: 4,
       dividend_rate: Decimal.new("2.58"),
@@ -58,8 +58,8 @@ defmodule Mix.Tasks.Backfill.DividendRates do
       dividend_rate: Decimal.new("0.88"),
       dividend_frequency: "quarterly"
     },
-    # MANTA: annual €0.33 × 1 = €0.33
-    "FI4000540470" => %{
+    # MANTA (Mandatum): annual €0.33 × 1 = €0.33
+    "FI4000552526" => %{
       dividend_per_payment: Decimal.new("0.33"),
       payments_per_year: 1,
       dividend_rate: Decimal.new("0.33"),
@@ -72,8 +72,8 @@ defmodule Mix.Tasks.Backfill.DividendRates do
       dividend_rate: Decimal.new("0.94"),
       dividend_frequency: "annual"
     },
-    # OBDC: 5 payments/year $0.37 × 5 = $1.85
-    "US27579R1041" => %{
+    # OBDC (Owl Rock / Blue Owl): 5 payments/year $0.37 × 5 = $1.85
+    "US69121K1043" => %{
       dividend_per_payment: Decimal.new("0.37"),
       payments_per_year: 5,
       dividend_rate: Decimal.new("1.85"),
