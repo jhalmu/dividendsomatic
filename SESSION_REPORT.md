@@ -83,6 +83,36 @@ Replaced complex TTM + frequency detection + PIL dedup + extrapolation chain wit
 | `lib/dividendsomatic_web/helpers/format_helpers.ex` | Frequency helpers |
 | `lib/dividendsomatic_web/live/portfolio_live.html.heex` | Freq column + badges |
 
+## EOD — CI/CD Fix
+
+**CI/CD failure** on commit `4e9aa5d` — `mix format --check-formatted` caught a long line in `backfill_dividend_rates.ex:216`. Fixed with `mix format`.
+
+## Data Validation Summary
+
+```
+Total checked: 2178
+Issues found:  679 (324 warnings, 355 info)
+
+By type:
+  duplicate:              282 warnings (cross-source same-day records)
+  inconsistent_amount:    154 info (per-share variance >10x from median)
+  isin_currency_mismatch: 240 info (CA-ISIN stocks paid in USD — expected for US-listed Canadian)
+  suspicious_amount:      1 warning (OPP $207.45 — likely stock split artifact)
+  mixed_amount_types:     2 info (ORC, RIV have both per_share and total_net records)
+
+Portfolio Balance Check:
+  Net invested:   €173,452.62
+  Expected value: €73,410.24
+  Current value:  €86,168.86
+  Difference:     €12,758.62 (14.81%)
+  Status:         ⚠ WARNING (5-20%, margin account)
+```
+
+## GitHub Issues
+
+No open issues. All #1-#22 closed.
+
 ## Test Results
 
 696 tests, 0 failures (27 excluded)
+Credo: 2 refactoring suggestions (nesting depth — pre-existing, non-blocking)
