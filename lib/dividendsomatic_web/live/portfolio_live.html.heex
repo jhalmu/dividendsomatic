@@ -39,7 +39,6 @@
           class="tab-strip-btn active"
           role="tab"
           aria-selected="true"
-          aria-controls="panel-holdings"
         >
           Holdings
         </button>
@@ -655,7 +654,12 @@
           <%= if length(@dividend_by_month) > 0 do %>
             <div class="terminal-chart mt-[var(--space-xs)]">
               <div class="terminal-chart-header">
-                <div class="terminal-chart-title">Cumulative Dividends</div>
+                <div class="terminal-chart-title">
+                  Cumulative Dividends
+                  <span style="font-size: 0.625rem; color: var(--terminal-dim); font-weight: 400; margin-left: var(--space-xs);">
+                    {List.first(@dividend_by_month).month} &rarr; {List.last(@dividend_by_month).month}
+                  </span>
+                </div>
                 <div
                   class="terminal-chart-legend"
                   aria-label="Cumulative dividend chart legend"
@@ -726,7 +730,12 @@
           <%= if length(@dividend_by_month) > 0 do %>
             <div class="terminal-chart mb-[var(--space-xs)]">
               <div class="terminal-chart-header">
-                <div class="terminal-chart-title">Dividend History</div>
+                <div class="terminal-chart-title">
+                  Dividend History
+                  <span style="font-size: 0.625rem; color: var(--terminal-dim); font-weight: 400; margin-left: var(--space-xs);">
+                    {List.first(@dividend_by_month).month} &rarr; {List.last(@dividend_by_month).month}
+                  </span>
+                </div>
                 <div
                   class="terminal-chart-legend"
                   aria-label="Dividend chart legend"

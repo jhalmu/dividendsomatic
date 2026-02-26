@@ -37,7 +37,7 @@ defmodule DividendsomaticWeb.PortfolioLiveTest do
       {:ok, _view, html} = live(conn, ~p"/")
 
       assert html =~ "Holdings"
-      assert html =~ "panel-holdings"
+      assert html =~ "tab-holdings"
     end
 
     test "should show disabled tab buttons during loading", %{conn: conn} do

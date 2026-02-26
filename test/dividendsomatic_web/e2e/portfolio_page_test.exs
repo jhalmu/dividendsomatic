@@ -179,7 +179,9 @@ defmodule DividendsomaticWeb.E2E.PortfolioPageTest do
 
       conn
       |> visit(~p"/portfolio/2026-01-28")
-      |> click_link("KESKOB")
+      |> within("table", fn session ->
+        session |> click_link("KESKOB")
+      end)
       |> assert_has("h1", text: "KESKOB")
     end
   end

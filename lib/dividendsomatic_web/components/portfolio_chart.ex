@@ -525,7 +525,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     mt = 25
     bar_h = 200
     chart_bottom = mt + bar_h
-    total_h = chart_bottom + 30
+    total_h = chart_bottom + 50
 
     n = length(data)
     bar_gap = 2
@@ -583,21 +583,8 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     zero_line =
       ~s[<line x1="#{@ml}" y1="#{zero_y}" x2="#{@ml + @pw}" y2="#{zero_y}" stroke="#475569" stroke-width="1"/>]
 
-    # X labels
-    x_labels =
-      cumulative_data
-      |> Enum.with_index()
-      |> Enum.map_join("\n", fn {d, i} ->
-        lx = r(@ml + i * (bar_w + bar_gap) + bar_w / 2)
-        show = n <= 36 or rem(i, max(div(n, 24), 1)) == 0
-        month_label = format_month_label(d.month, n)
-
-        if show do
-          ~s[<text x="#{lx}" y="#{r(chart_bottom + 12)}" fill="#475569" font-size="7" text-anchor="middle">#{month_label}</text>]
-        else
-          ""
-        end
-      end)
+    # X labels (YYYY-MM format, rotated like ApexCharts)
+    x_labels = waterfall_x_labels(cumulative_data, n, bar_w, bar_gap, chart_bottom)
 
     # Y labels
     y_labels =
@@ -638,7 +625,7 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     mt = 25
     chart_h = 140
     chart_bottom = mt + chart_h
-    total_h = chart_bottom + 30
+    total_h = chart_bottom + 50
 
     n = length(data)
     zero = Decimal.new("0")
@@ -738,21 +725,8 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
     end_label =
       ~s[<text x="#{label_x}" y="#{r(last_cy - 4)}" fill="#e2e8f0" font-size="8" font-weight="600" text-anchor="#{anchor}">#{format_compact(Decimal.to_float(last.cumulative))}</text>]
 
-    # X labels
-    x_labels =
-      cumulative_data
-      |> Enum.with_index()
-      |> Enum.map_join("\n", fn {d, i} ->
-        lx = r(@ml + i * (step + bar_gap) + step / 2)
-        show = n <= 36 or rem(i, max(div(n, 24), 1)) == 0
-        month_label = format_month_label(d.month, n)
-
-        if show do
-          ~s[<text x="#{lx}" y="#{r(chart_bottom + 12)}" fill="#475569" font-size="7" text-anchor="middle">#{month_label}</text>]
-        else
-          ""
-        end
-      end)
+    # X labels (YYYY-MM format, rotated like ApexCharts)
+    x_labels = waterfall_x_labels(cumulative_data, n, step, bar_gap, chart_bottom)
 
     Phoenix.HTML.raw("""
     <svg width="#{@w}" height="#{round(total_h)}" viewBox="0 0 #{@w} #{round(total_h)}" xmlns="http://www.w3.org/2000/svg" style="font-family: 'JetBrains Mono', monospace;">
@@ -768,6 +742,25 @@ defmodule DividendsomaticWeb.Components.PortfolioChart do
   end
 
   def render_waterfall_cumulative_chart(_), do: Phoenix.HTML.raw("")
+
+  # Shared x-axis labels for waterfall and cumulative charts: YYYY-MM rotated -45°
+  defp waterfall_x_labels(data, n, bar_w, bar_gap, chart_bottom) do
+    label_step = max(div(n, 24), 1)
+
+    data
+    |> Enum.with_index()
+    |> Enum.map_join("\n", fn {d, i} ->
+      lx = r(@ml + i * (bar_w + bar_gap) + bar_w / 2)
+      ly = r(chart_bottom + 10)
+      show = n <= 36 or rem(i, label_step) == 0
+
+      if show do
+        ~s[<text x="#{lx}" y="#{ly}" fill="#475569" font-size="7" text-anchor="end" transform="rotate(-45, #{lx}, #{ly})">#{d.month}</text>]
+      else
+        ""
+      end
+    end)
+  end
 
   defp waterfall_bar(d, bx, bar_w, zero_y, y_range, bar_h) do
     pnl_f = Decimal.to_float(d.realized_pnl)
