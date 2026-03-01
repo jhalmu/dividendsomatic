@@ -71,7 +71,14 @@ mix ecto.reset              # Drop + create + migrate
 **Status:** Live at https://dividends-o-matic.com — full CI/CD pipeline, Gmail auto-import active
 **Branch:** `main`
 
-**Latest session (2026-02-26 IBKR Declared Dividend Rates):**
+**Latest session (2026-03-01 Fix Hetzner Deploy SSH):**
+- `deploy` user account was locked on Hetzner server — SSH auth failed for CI/CD deploys
+- Fixed: `sudo passwd -u deploy` (unlock account), `sudo chsh -s /bin/bash deploy` (set shell)
+- Generated new ed25519 keypair, updated `DEPLOY_SSH_KEY` secret in production environment
+- Both Homesite and dividendsomatic repos now share the same deploy key
+- CI/CD pipeline verified working (Homesite re-run passed, dividendsomatic key ready for next push)
+
+**Previous session (2026-02-26 IBKR Declared Dividend Rates):**
 - **Declared rates** — replaced TTM + frequency detection chain with simple `per_payment × ppy × qty × fx`
 - **New fields** — `dividend_per_payment` + `payments_per_year` on instruments
 - **Parsers** — FlexPortfolioAccrualsParser (new), Activity Statement "Change in Dividend Accruals" section
