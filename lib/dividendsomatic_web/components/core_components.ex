@@ -61,7 +61,7 @@ defmodule DividendsomaticWeb.CoreComponents do
       {@rest}
     >
       <div class={[
-        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap",
+        "alert max-w-80 text-wrap w-80 sm:max-w-96 sm:w-96",
         @kind == :info && "alert-info",
         @kind == :error && "alert-error"
       ]}>
@@ -72,7 +72,7 @@ defmodule DividendsomaticWeb.CoreComponents do
           <p>{msg}</p>
         </div>
         <div class="flex-1" />
-        <button type="button" class="group self-start cursor-pointer" aria-label={gettext("close")}>
+        <button type="button" class="group cursor-pointer self-start" aria-label={gettext("close")}>
           <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
         </button>
       </div>
@@ -214,7 +214,7 @@ defmodule DividendsomaticWeb.CoreComponents do
         <select
           id={@id}
           name={@name}
-          class={[@class || "w-full select", @errors != [] && (@error_class || "select-error")]}
+          class={[@class || "select w-full", @errors != [] && (@error_class || "select-error")]}
           multiple={@multiple}
           {@rest}
         >
@@ -235,10 +235,7 @@ defmodule DividendsomaticWeb.CoreComponents do
         <textarea
           id={@id}
           name={@name}
-          class={[
-            @class || "w-full textarea",
-            @errors != [] && (@error_class || "textarea-error")
-          ]}
+          class={[@class || "textarea w-full", @errors != [] && (@error_class || "textarea-error")]}
           {@rest}
         >{Form.normalize_value("textarea", @value)}</textarea>
       </label>
@@ -258,10 +255,7 @@ defmodule DividendsomaticWeb.CoreComponents do
           name={@name}
           id={@id}
           value={Form.normalize_value(@type, @value)}
-          class={[
-            @class || "w-full input",
-            @errors != [] && (@error_class || "input-error")
-          ]}
+          class={[@class || "input w-full", @errors != [] && (@error_class || "input-error")]}
           {@rest}
         />
       </label>
@@ -273,7 +267,7 @@ defmodule DividendsomaticWeb.CoreComponents do
   # Helper used by inputs to generate form errors
   defp error(assigns) do
     ~H"""
-    <p class="mt-[var(--space-xs)] flex gap-[var(--space-xs)] items-center text-[var(--text-sm)] text-error">
+    <p class="mt-[var(--space-xs)] gap-[var(--space-xs)] text-[var(--text-sm)] text-error flex items-center">
       <.icon name="hero-exclamation-circle" class="size-5" />
       {render_slot(@inner_block)}
     </p>
@@ -290,7 +284,7 @@ defmodule DividendsomaticWeb.CoreComponents do
   def header(assigns) do
     ~H"""
     <header class={[
-      @actions != [] && "flex items-center justify-between gap-[var(--space-md)]",
+      @actions != [] && "gap-[var(--space-md)] flex items-center justify-between",
       "pb-[var(--space-sm)]"
     ]}>
       <div>
@@ -338,7 +332,7 @@ defmodule DividendsomaticWeb.CoreComponents do
       end
 
     ~H"""
-    <table class="table table-zebra">
+    <table class="table-zebra table">
       <thead>
         <tr>
           <th :for={col <- @col}>{col[:label]}</th>
@@ -357,7 +351,7 @@ defmodule DividendsomaticWeb.CoreComponents do
             {render_slot(col, @row_item.(row))}
           </td>
           <td :if={@action != []} class="w-0 font-semibold">
-            <div class="flex gap-[var(--space-sm)]">
+            <div class="gap-[var(--space-sm)] flex">
               <%= for action <- @action do %>
                 {render_slot(action, @row_item.(row))}
               <% end %>

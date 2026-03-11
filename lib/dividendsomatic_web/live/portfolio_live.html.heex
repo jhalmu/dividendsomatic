@@ -1,5 +1,5 @@
 <main id="portfolio-view" class="terminal-theme" phx-hook="KeyboardNav" role="main">
-  <div class="max-w-[var(--content-max-width)] mx-auto px-[var(--space-sm)] sm:px-[var(--space-md)] lg:px-[var(--space-lg)] py-[var(--space-md)]">
+  <div class="max-w-[var(--content-max-width)] px-[var(--space-sm)] py-[var(--space-md)] mx-auto sm:px-[var(--space-md)] lg:px-[var(--space-lg)]">
     <!-- Brand + Motto + Theme Toggle -->
     <div class="terminal-branding">
       <.link navigate={~p"/"} style="text-decoration: none; color: inherit;">
@@ -18,7 +18,7 @@
           viewBox="0 0 24 24"
           stroke-width="1.5"
           stroke="currentColor"
-          class="w-5 h-5"
+          class="h-5 w-5"
         >
           <path
             stroke-linecap="round"
@@ -105,7 +105,7 @@
            ═══════════════════════════════════════ --%>
 
         <%!-- Date Navigation Bar --%>
-        <div class="sticky top-0 z-20 mb-[var(--space-xs)]">
+        <div class="mb-[var(--space-xs)] sticky top-0 z-20">
           <div class="terminal-nav-bar">
             <%!-- Arrow nav buttons --%>
             <button
@@ -121,7 +121,7 @@
                 viewBox="0 0 24 24"
                 stroke-width="2"
                 stroke="currentColor"
-                class="w-3.5 h-3.5"
+                class="h-3.5 w-3.5"
                 aria-hidden="true"
               >
                 <path
@@ -145,7 +145,7 @@
                 viewBox="0 0 24 24"
                 stroke-width="2.5"
                 stroke="currentColor"
-                class="w-4 h-4"
+                class="h-4 w-4"
                 aria-hidden="true"
               >
                 <path
@@ -157,7 +157,7 @@
             </button>
 
             <%!-- Quick-jump pills --%>
-            <div class="hidden sm:flex items-center gap-[var(--space-inline)]">
+            <div class="gap-[var(--space-inline)] hidden items-center sm:flex">
               <button
                 phx-click="navigate"
                 phx-value-direction="back_year"
@@ -197,7 +197,7 @@
                   phx-hook="DatePickerSubmit"
                   id="snapshot-date-picker"
                   aria-label="Select snapshot date"
-                  class="bg-transparent border-none text-center cursor-pointer"
+                  class="cursor-pointer border-none bg-transparent text-center"
                   style="font-family: var(--font-display); font-size: 1.125rem; font-weight: 500; color: var(--terminal-text); letter-spacing: 0.02em; width: auto;"
                 />
               </form>
@@ -211,7 +211,7 @@
             </div>
 
             <%!-- Quick-jump pills (forward) --%>
-            <div class="hidden sm:flex items-center gap-[var(--space-inline)]">
+            <div class="gap-[var(--space-inline)] hidden items-center sm:flex">
               <button
                 phx-click="navigate"
                 phx-value-direction="forward_week"
@@ -254,7 +254,7 @@
                 viewBox="0 0 24 24"
                 stroke-width="2.5"
                 stroke="currentColor"
-                class="w-4 h-4"
+                class="h-4 w-4"
                 aria-hidden="true"
               >
                 <path
@@ -278,7 +278,7 @@
                 viewBox="0 0 24 24"
                 stroke-width="2"
                 stroke="currentColor"
-                class="w-3.5 h-3.5"
+                class="h-3.5 w-3.5"
                 aria-hidden="true"
               >
                 <path
@@ -292,7 +292,7 @@
 
           <%!-- Mobile quick-jump (visible on small screens) --%>
           <div
-            class="flex sm:hidden items-center justify-center gap-[var(--space-inline)] mt-[var(--space-inline)]"
+            class="gap-[var(--space-inline)] mt-[var(--space-inline)] flex items-center justify-center sm:hidden"
             style="font-size: 0.625rem;"
           >
             <button
@@ -353,11 +353,11 @@
         </div>
 
         <%!-- Snapshot Stats --%>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-[var(--space-xs)] mb-[var(--space-md)] animate-fade-in animate-delay-1">
+        <div class="gap-[var(--space-xs)] mb-[var(--space-md)] animate-fade-in animate-delay-1 grid grid-cols-2 sm:grid-cols-4">
           <%!-- Card 1: Combined P&L + Dividends --%>
-          <div class={"terminal-stat terminal-stat-accent #{if !pnl_positive?(@total_pnl), do: "negative"}"}>
+          <div class={"#{if !pnl_positive?(@total_pnl), do: "negative"} terminal-stat terminal-stat-accent"}>
             <div class="terminal-stat-label">Unrealized P&amp;L</div>
-            <div class={"terminal-stat-value #{if pnl_positive?(@total_pnl), do: "gain", else: "loss"}"}>
+            <div class={"#{if pnl_positive?(@total_pnl), do: "gain", else: "loss"} terminal-stat-value"}>
               {format_euro_signed(@total_pnl)}
             </div>
             <div
@@ -393,9 +393,9 @@
           </div>
 
           <%!-- Card 3: Realized {@dividend_year} --%>
-          <div class={"terminal-stat #{if pnl_positive?(@total_return), do: "", else: "negative"}"}>
+          <div class={"#{if pnl_positive?(@total_return), do: "", else: "negative"} terminal-stat"}>
             <div class="terminal-stat-label">Realized {@dividend_year}</div>
-            <div class={"terminal-stat-value #{if pnl_positive?(@total_return), do: "gain", else: "loss"}"}>
+            <div class={"#{if pnl_positive?(@total_return), do: "gain", else: "loss"} terminal-stat-value"}>
               {format_euro_signed(@total_return)}
             </div>
             <div class="terminal-stat-sub">
@@ -434,7 +434,7 @@
             id="tab-holdings"
             phx-click="switch_tab"
             phx-value-tab="holdings"
-            class={"tab-strip-btn #{if @active_tab == "holdings", do: "active"}"}
+            class={"#{if @active_tab == "holdings", do: "active"} tab-strip-btn"}
             role="tab"
             aria-selected={to_string(@active_tab == "holdings")}
             aria-controls="panel-holdings"
@@ -445,7 +445,7 @@
             id="tab-performance"
             phx-click="switch_tab"
             phx-value-tab="performance"
-            class={"tab-strip-btn #{if @active_tab == "performance", do: "active"}"}
+            class={"#{if @active_tab == "performance", do: "active"} tab-strip-btn"}
             role="tab"
             aria-selected={to_string(@active_tab == "performance")}
             aria-controls="panel-performance"
@@ -456,7 +456,7 @@
             id="tab-income"
             phx-click="switch_tab"
             phx-value-tab="income"
-            class={"tab-strip-btn #{if @active_tab == "income", do: "active"}"}
+            class={"#{if @active_tab == "income", do: "active"} tab-strip-btn"}
             role="tab"
             aria-selected={to_string(@active_tab == "income")}
             aria-controls="panel-income"
@@ -467,7 +467,7 @@
             id="tab-summary"
             phx-click="switch_tab"
             phx-value-tab="summary"
-            class={"tab-strip-btn #{if @active_tab == "summary", do: "active"}"}
+            class={"#{if @active_tab == "summary", do: "active"} tab-strip-btn"}
             role="tab"
             aria-selected={to_string(@active_tab == "summary")}
             aria-controls="panel-summary"
@@ -478,7 +478,7 @@
             id="tab-about"
             phx-click="switch_tab"
             phx-value-tab="about"
-            class={"tab-strip-btn #{if @active_tab == "about", do: "active"}"}
+            class={"#{if @active_tab == "about", do: "active"} tab-strip-btn"}
             role="tab"
             aria-selected={to_string(@active_tab == "about")}
             aria-controls="panel-about"
@@ -502,9 +502,9 @@
           <%= if length(@all_chart_data) > 1 do %>
             <div class="terminal-chart mb-[var(--space-xs)]">
               <div class="terminal-chart-header">
-                <div class="flex items-center gap-[var(--space-sm)]">
+                <div class="gap-[var(--space-sm)] flex items-center">
                   <%= if @growth_stats do %>
-                    <div class={"terminal-growth-badge #{if Decimal.compare(@growth_stats.absolute_change, Decimal.new("0")) == :lt, do: "negative"}"}>
+                    <div class={"#{if Decimal.compare(@growth_stats.absolute_change, Decimal.new("0")) == :lt, do: "negative"} terminal-growth-badge"}>
                       {format_euro_signed(@growth_stats.absolute_change)}
                       <span>
                         (<%= if pnl_positive?(@growth_stats.percent_change) do %>
@@ -535,11 +535,11 @@
               </div>
 
               <%!-- Year Filter --%>
-              <div class="flex items-center justify-center gap-[var(--space-inline)] flex-wrap mb-[var(--space-xs)]">
+              <div class="gap-[var(--space-inline)] mb-[var(--space-xs)] flex flex-wrap items-center justify-center">
                 <button
                   phx-click="chart_year"
                   phx-value-year="all"
-                  class={"btn btn-xs #{if @chart_year == nil, do: "btn-primary", else: "btn-ghost"}"}
+                  class={"#{if @chart_year == nil, do: "btn-primary", else: "btn-ghost"} btn btn-xs"}
                   style="font-size: 0.625rem; color: var(--terminal-dim);"
                 >
                   All
@@ -548,7 +548,7 @@
                   <button
                     phx-click="chart_year"
                     phx-value-year={to_string(y)}
-                    class={"btn btn-xs #{if @chart_year == y, do: "btn-primary", else: "btn-ghost"}"}
+                    class={"#{if @chart_year == y, do: "btn-primary", else: "btn-ghost"} btn btn-xs"}
                     style="font-size: 0.625rem; color: var(--terminal-dim);"
                   >
                     {y}
@@ -584,14 +584,14 @@
               <% end %>
             </div>
           <% else %>
-            <div class="text-center py-[var(--space-md)]" style="color: var(--terminal-dim);">
+            <div class="py-[var(--space-md)] text-center" style="color: var(--terminal-dim);">
               Need at least 2 snapshots to show performance chart.
             </div>
           <% end %>
 
           <%!-- Key Metrics + Margin Status --%>
           <div class="terminal-card p-[var(--space-sm)] mt-[var(--space-xs)]">
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-[var(--space-xs)]">
+            <div class="gap-[var(--space-xs)] grid grid-cols-2 sm:grid-cols-4">
               <div class="text-center">
                 <div class="terminal-stat-label">Positions</div>
                 <div style="font-family: var(--font-mono); font-size: 0.875rem; font-weight: 500;">
@@ -631,7 +631,7 @@
               <div class="terminal-section-label-inline" style="margin-bottom: var(--space-xs);">
                 Cost Coverage
               </div>
-              <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)]">
+              <div class="gap-[var(--space-xs)] grid grid-cols-2 sm:grid-cols-3">
                 <%= for {type, total} <- @costs_summary.by_type do %>
                   <div>
                     <div class="terminal-info-label">{format_cost_type(type)}</div>
@@ -700,7 +700,7 @@
           <.tab_panel_header title="Income" date={@current_snapshot.date} />
 
           <%!-- Stat row: Gross / Net / Withholding --%>
-          <div class="grid grid-cols-3 gap-[var(--space-xs)] mb-[var(--space-xs)]">
+          <div class="gap-[var(--space-xs)] mb-[var(--space-xs)] grid grid-cols-3">
             <div class="terminal-stat">
               <div class="terminal-stat-label">Gross Dividends</div>
               <div
@@ -758,7 +758,7 @@
               </div>
             </div>
           <% else %>
-            <div class="text-center py-[var(--space-md)]" style="color: var(--terminal-dim);">
+            <div class="py-[var(--space-md)] text-center" style="color: var(--terminal-dim);">
               No dividend data for this period.
             </div>
           <% end %>
@@ -929,7 +929,7 @@
               <div class="terminal-section-label-inline" style="margin-bottom: var(--space-xs);">
                 Costs &amp; Fees
               </div>
-              <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)]">
+              <div class="gap-[var(--space-xs)] grid grid-cols-2 sm:grid-cols-3">
                 <%= for {type, total} <- @costs_summary.by_type do %>
                   <div>
                     <div class="terminal-info-label">{format_cost_type(type)}</div>
@@ -970,7 +970,7 @@
                 Net Income
               </span>
               <span
-                class={"font-mono font-semibold #{if pnl_positive?(Decimal.sub(@dividend_total, @costs_summary.total)), do: "terminal-gain", else: "terminal-loss"}"}
+                class={"#{if pnl_positive?(Decimal.sub(@dividend_total, @costs_summary.total)), do: "terminal-gain", else: "terminal-loss"} font-mono font-semibold"}
                 style="font-family: var(--font-mono); font-size: 1rem;"
               >
                 {format_euro_signed(Decimal.sub(@dividend_total, @costs_summary.total))}
@@ -1004,7 +1004,7 @@
               </div>
               <%= for pos <- @positions do %>
                 <div
-                  class="flex items-center gap-[var(--space-sm)] mb-[var(--space-xs)]"
+                  class="gap-[var(--space-sm)] mb-[var(--space-xs)] flex items-center"
                   style="font-family: var(--font-mono); font-size: 0.75rem;"
                 >
                   <.link
@@ -1034,7 +1034,7 @@
           <%!-- Positions Table --%>
           <div class="terminal-card mb-[var(--space-xs)]">
             <div class="p-[var(--space-sm)] pb-0">
-              <div class="flex items-center justify-between mb-[var(--space-xs)]">
+              <div class="mb-[var(--space-xs)] flex items-center justify-between">
                 <div class="terminal-section-label-inline">
                   Positions
                 </div>
@@ -1312,7 +1312,7 @@
           </div>
 
           <%!-- FX Exposure + Sector Breakdown --%>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-[var(--space-xs)] mb-[var(--space-xs)]">
+          <div class="gap-[var(--space-xs)] mb-[var(--space-xs)] grid grid-cols-1 sm:grid-cols-2">
             <%!-- FX Exposure --%>
             <%= if length(@fx_exposure) > 1 do %>
               <div class="terminal-card p-[var(--space-sm)]">
@@ -1321,7 +1321,7 @@
                 </div>
                 <%= for fx <- @fx_exposure do %>
                   <div
-                    class="flex items-center gap-[var(--space-sm)] mb-[var(--space-xs)]"
+                    class="gap-[var(--space-sm)] mb-[var(--space-xs)] flex items-center"
                     style="font-family: var(--font-mono); font-size: 0.75rem;"
                   >
                     <span style="min-width: 3rem; color: var(--terminal-muted);">
@@ -1352,7 +1352,7 @@
                 </div>
                 <%= for sector <- @sector_breakdown do %>
                   <div
-                    class="flex items-center gap-[var(--space-sm)] mb-[var(--space-xs)]"
+                    class="gap-[var(--space-sm)] mb-[var(--space-xs)] flex items-center"
                     style="font-family: var(--font-mono); font-size: 0.75rem;"
                   >
                     <span style="min-width: 6rem; color: var(--terminal-muted);">
@@ -1381,7 +1381,7 @@
             <div class="terminal-section-label-inline" style="margin-bottom: var(--space-xs);">
               Concentration Risk
             </div>
-            <div class="grid grid-cols-3 gap-[var(--space-xs)]">
+            <div class="gap-[var(--space-xs)] grid grid-cols-3">
               <div class="text-center">
                 <div class="terminal-stat-label">Top 1</div>
                 <div style="font-family: var(--font-mono); font-size: 0.875rem; font-weight: 500;">
@@ -1423,7 +1423,7 @@
               data-testid="investment-summary"
             >
               <div class="terminal-section-label">Investment Summary</div>
-              <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)] mt-[var(--space-sm)]">
+              <div class="gap-[var(--space-xs)] mt-[var(--space-sm)] grid grid-cols-2 sm:grid-cols-3">
                 <div class="text-center">
                   <div class="terminal-stat-label">Net Invested</div>
                   <div class="terminal-stat-value" style="font-size: 0.8125rem;">
@@ -1433,7 +1433,7 @@
                 <div class="text-center">
                   <div class="terminal-stat-label">Realized P&amp;L</div>
                   <div
-                    class={"terminal-stat-value #{if pnl_positive?(@investment_summary.realized_pnl), do: "gain", else: "loss"}"}
+                    class={"#{if pnl_positive?(@investment_summary.realized_pnl), do: "gain", else: "loss"} terminal-stat-value"}
                     style="font-size: 0.8125rem;"
                   >
                     {format_euro_signed(@investment_summary.realized_pnl)}
@@ -1442,7 +1442,7 @@
                 <div class="text-center">
                   <div class="terminal-stat-label">Unrealized P&amp;L</div>
                   <div
-                    class={"terminal-stat-value #{if pnl_positive?(@investment_summary.unrealized_pnl), do: "gain", else: "loss"}"}
+                    class={"#{if pnl_positive?(@investment_summary.unrealized_pnl), do: "gain", else: "loss"} terminal-stat-value"}
                     style="font-size: 0.8125rem;"
                   >
                     {format_euro_signed(@investment_summary.unrealized_pnl)}
@@ -1466,7 +1466,7 @@
                 <div class="text-center">
                   <div class="terminal-stat-label" style="font-weight: 600;">Total Return</div>
                   <div
-                    class={"terminal-stat-value #{if pnl_positive?(@investment_summary.total_return), do: "gain", else: "loss"}"}
+                    class={"#{if pnl_positive?(@investment_summary.total_return), do: "gain", else: "loss"} terminal-stat-value"}
                     style="font-size: 0.875rem; font-weight: 700;"
                   >
                     {format_euro_signed(@investment_summary.total_return)}
@@ -1485,7 +1485,7 @@
               <div class="terminal-section-label">Margin &amp; Equity</div>
 
               <%= if @margin_equity.has_data do %>
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)] mt-[var(--space-sm)]">
+                <div class="gap-[var(--space-xs)] mt-[var(--space-sm)] grid grid-cols-2 sm:grid-cols-3">
                   <div class="text-center">
                     <div class="terminal-stat-label">Own Equity</div>
                     <div
@@ -1538,7 +1538,7 @@
                     class="mt-[var(--space-sm)]"
                     style="border-top: 1px solid var(--terminal-border); padding-top: var(--space-sm);"
                   >
-                    <div class="flex items-center justify-between mb-[var(--space-xs)]">
+                    <div class="mb-[var(--space-xs)] flex items-center justify-between">
                       <div class="terminal-section-label-inline">
                         Payback Progress
                       </div>
@@ -1551,7 +1551,7 @@
                       </div>
                     </div>
                     <div
-                      class="flex items-center justify-between mt-[var(--space-xs)]"
+                      class="mt-[var(--space-xs)] flex items-center justify-between"
                       style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);"
                     >
                       <span>
@@ -1588,7 +1588,7 @@
                   class="mt-[var(--space-sm)]"
                   style="border-top: 1px solid var(--terminal-border); padding-top: var(--space-sm);"
                 >
-                  <div class="flex items-center justify-between mb-[var(--space-xs)]">
+                  <div class="mb-[var(--space-xs)] flex items-center justify-between">
                     <div class="terminal-section-label-inline">
                       Margin Interest
                     </div>
@@ -1599,7 +1599,7 @@
 
                   <%= if @margin_equity[:expected_rate] do %>
                     <div
-                      class="grid grid-cols-3 gap-[var(--space-xs)]"
+                      class="gap-[var(--space-xs)] grid grid-cols-3"
                       style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);"
                     >
                       <div>
@@ -1616,7 +1616,7 @@
                   <% end %>
 
                   <%= if length(@margin_equity.actual_interest_by_month) > 0 do %>
-                    <div class="overflow-x-auto mt-[var(--space-xs)]">
+                    <div class="mt-[var(--space-xs)] overflow-x-auto">
                       <table
                         class="terminal-table"
                         aria-label="Monthly margin interest"
@@ -1654,15 +1654,15 @@
             class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]"
             data-testid="realized-pnl-card"
           >
-            <div class="flex flex-wrap items-center justify-between gap-[var(--space-xs)]">
+            <div class="gap-[var(--space-xs)] flex flex-wrap items-center justify-between">
               <div class="terminal-section-label-inline">
                 Realized P&amp;L
               </div>
-              <div class="flex items-center gap-[var(--space-inline)] flex-wrap">
+              <div class="gap-[var(--space-inline)] flex flex-wrap items-center">
                 <button
                   phx-click="pnl_year"
                   phx-value-year="all"
-                  class={"btn btn-xs #{if @pnl_year == nil, do: "btn-primary", else: "btn-outline"}"}
+                  class={"#{if @pnl_year == nil, do: "btn-primary", else: "btn-outline"} btn btn-xs"}
                 >
                   All
                 </button>
@@ -1670,15 +1670,15 @@
                   <button
                     phx-click="pnl_year"
                     phx-value-year={to_string(y)}
-                    class={"btn btn-xs #{if @pnl_year == y, do: "btn-primary", else: "btn-outline"}"}
+                    class={"#{if @pnl_year == y, do: "btn-primary", else: "btn-outline"} btn btn-xs"}
                   >
                     {y}
                   </button>
                 <% end %>
               </div>
-              <div class="flex items-center gap-[var(--space-xs)]">
+              <div class="gap-[var(--space-xs)] flex items-center">
                 <div
-                  class={"terminal-stat-value #{if pnl_positive?(@pnl.total_pnl), do: "gain", else: "loss"}"}
+                  class={"#{if pnl_positive?(@pnl.total_pnl), do: "gain", else: "loss"} terminal-stat-value"}
                   style="font-size: 0.875rem;"
                 >
                   {format_euro_signed(@pnl.total_pnl)}
@@ -1695,7 +1695,7 @@
             </div>
 
             <div
-              class="grid grid-cols-2 sm:grid-cols-4 gap-[var(--space-xs)] mt-[var(--space-sm)]"
+              class="gap-[var(--space-xs)] mt-[var(--space-sm)] grid grid-cols-2 sm:grid-cols-4"
               data-testid="pnl-summary-stats"
             >
               <div class="text-center">
@@ -1747,7 +1747,7 @@
 
             <%!-- Top Winners & Losers --%>
             <%= if @pnl.symbol_count > 0 do %>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-[var(--space-xs)] mt-[var(--space-sm)]">
+              <div class="gap-[var(--space-xs)] mt-[var(--space-sm)] grid grid-cols-1 sm:grid-cols-2">
                 <div>
                   <div style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--gain); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; font-weight: 600;">
                     Top Winners
@@ -1875,7 +1875,7 @@
               </div>
 
               <%= if @pnl_show_all do %>
-                <div class="overflow-x-auto mt-[var(--space-xs)]">
+                <div class="mt-[var(--space-xs)] overflow-x-auto">
                   <table class="terminal-table" aria-label="All realized P&L by symbol">
                     <thead>
                       <tr>
@@ -1939,7 +1939,7 @@
               data-testid="fx-exposure"
             >
               <div class="terminal-section-label">Currency Exposure</div>
-              <div class="overflow-x-auto mt-[var(--space-xs)]">
+              <div class="mt-[var(--space-xs)] overflow-x-auto">
                 <table class="terminal-table" aria-label="Currency exposure">
                   <thead>
                     <tr>
@@ -1994,7 +1994,7 @@
 
           <%!-- Branded Header + Description --%>
           <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]">
-            <div class="text-center mb-[var(--space-sm)]">
+            <div class="mb-[var(--space-sm)] text-center">
               <h2 style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--terminal-text);">
                 dividends-o-matic
               </h2>
@@ -2007,6 +2007,10 @@
               Track your holdings, monitor dividend income streams, and browse historical
               snapshots of your portfolio over time &mdash; all in a terminal-inspired interface.
             </p>
+            <p style="font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.6; color: var(--terminal-muted);">
+              This app is considered as alpha release. It works as it is planned, but have bugs and limitations. Needs further testing and improvements and rethinking.
+              If you have questions or ideas, please contact or leave a github issue.
+            </p>
           </div>
 
           <%!-- Data Sources --%>
@@ -2017,7 +2021,7 @@
             <p style="font-family: var(--font-mono); font-size: 0.75rem; line-height: 1.6; color: var(--terminal-muted); margin-bottom: var(--space-sm);">
               Portfolio data is collected from multiple sources depending on availability:
             </p>
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-[var(--space-xs)]">
+            <div class="gap-[var(--space-xs)] grid grid-cols-2 sm:grid-cols-4">
               <div class="text-center">
                 <div style="font-family: var(--font-display); font-size: 0.75rem; font-weight: 600; color: var(--terminal-text);">
                   CSV
@@ -2058,8 +2062,8 @@
             <div class="terminal-section-label-inline" style="margin-bottom: var(--space-sm);">
               Features
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-[var(--space-sm)]">
-              <div class="flex items-start gap-[var(--space-xs)]">
+            <div class="gap-[var(--space-sm)] grid grid-cols-1 sm:grid-cols-2">
+              <div class="gap-[var(--space-xs)] flex items-start">
                 <span style="color: var(--chart-dividend); font-size: 0.75rem; margin-top: 2px;">
                   &#9654;
                 </span>
@@ -2072,7 +2076,7 @@
                   </div>
                 </div>
               </div>
-              <div class="flex items-start gap-[var(--space-xs)]">
+              <div class="gap-[var(--space-xs)] flex items-start">
                 <span style="color: var(--terminal-accent); font-size: 0.75rem; margin-top: 2px;">
                   &#9654;
                 </span>
@@ -2085,7 +2089,7 @@
                   </div>
                 </div>
               </div>
-              <div class="flex items-start gap-[var(--space-xs)]">
+              <div class="gap-[var(--space-xs)] flex items-start">
                 <span style="color: var(--gain); font-size: 0.75rem; margin-top: 2px;">
                   &#9654;
                 </span>
@@ -2098,7 +2102,7 @@
                   </div>
                 </div>
               </div>
-              <div class="flex items-start gap-[var(--space-xs)]">
+              <div class="gap-[var(--space-xs)] flex items-start">
                 <span style="color: var(--loss); font-size: 0.75rem; margin-top: 2px;">
                   &#9654;
                 </span>
@@ -2111,7 +2115,7 @@
                   </div>
                 </div>
               </div>
-              <div class="flex items-start gap-[var(--space-xs)]">
+              <div class="gap-[var(--space-xs)] flex items-start">
                 <span style="color: var(--chart-cumulative); font-size: 0.75rem; margin-top: 2px;">
                   &#9654;
                 </span>
@@ -2124,7 +2128,7 @@
                   </div>
                 </div>
               </div>
-              <div class="flex items-start gap-[var(--space-xs)]">
+              <div class="gap-[var(--space-xs)] flex items-start">
                 <span style="color: var(--terminal-muted); font-size: 0.75rem; margin-top: 2px;">
                   &#9654;
                 </span>
@@ -2141,6 +2145,7 @@
           </div>
 
           <%!-- Tech & Security --%>
+
           <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)]">
             <div class="terminal-section-label-inline" style="margin-bottom: var(--space-sm);">
               Tech
@@ -2169,7 +2174,7 @@
             <div class="terminal-section-label-inline" style="margin-bottom: var(--space-sm);">
               Quality
             </div>
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)]">
+            <div class="gap-[var(--space-xs)] grid grid-cols-2 sm:grid-cols-3">
               <%!-- Tests Passing --%>
               <div
                 class="flex items-center gap-2"
@@ -2336,36 +2341,36 @@
 
           <%!-- Links --%>
           <div class="terminal-card p-[var(--space-sm)]">
-            <div class="flex items-center justify-center gap-[var(--space-md)]">
+            <div class="gap-[var(--space-md)] flex items-center justify-center">
               <a
                 href="https://github.com/jhalmu/dividendsomatic/issues"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="flex items-center gap-[var(--space-xs)] hover:opacity-80 transition-opacity"
+                class="gap-[var(--space-xs)] flex items-center transition-opacity hover:opacity-80"
                 style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--terminal-muted); text-decoration: none;"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 16 16"
                   fill="currentColor"
-                  class="w-4 h-4"
+                  class="h-4 w-4"
                 >
                   <path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z" />
                 </svg>
                 GitHub Issues
               </a>
               <a
-                href="https://bsky.app/profile/jhalmu.bsky.social"
+                href="https://bsky.app/profile/juhahalmu.fi"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="flex items-center gap-[var(--space-xs)] hover:opacity-80 transition-opacity"
+                class="gap-[var(--space-xs)] flex items-center transition-opacity hover:opacity-80"
                 style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--terminal-muted); text-decoration: none;"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 568 501"
                   fill="currentColor"
-                  class="w-4 h-4"
+                  class="h-4 w-4"
                 >
                   <path d="M123.121 33.664C188.241 82.553 258.281 181.68 284 234.873c25.719-53.192 95.759-152.32 160.879-201.21C491.866-1.611 568-28.906 568 57.947c0 17.346-9.945 145.713-15.778 166.555-20.275 72.453-94.155 90.933-159.875 79.748C507.222 323.8 536.444 388.56 473.333 453.32c-119.86 122.992-172.272-30.859-185.702-70.281-2.462-7.227-3.614-10.608-3.631-7.733-.017-2.875-1.169.506-3.631 7.733-13.43 39.422-65.842 193.273-185.702 70.281-63.111-64.76-33.89-129.52 80.986-149.071-65.72 11.185-139.6-7.295-159.875-79.748C10.945 203.659 1 75.291 1 57.946 1-28.906 76.135-1.612 123.121 33.664Z" />
                 </svg>
@@ -2390,7 +2395,7 @@
                 viewBox="0 0 24 24"
                 stroke-width="1.5"
                 stroke="currentColor"
-                class="w-7 h-7"
+                class="h-7 w-7"
                 style="color: var(--terminal-muted);"
                 aria-hidden="true"
               >

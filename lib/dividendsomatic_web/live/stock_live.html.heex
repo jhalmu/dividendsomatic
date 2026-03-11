@@ -1,5 +1,5 @@
 <main class="terminal-theme" role="main">
-  <div class="max-w-[var(--content-max-width)] mx-auto px-[var(--space-sm)] sm:px-[var(--space-md)] lg:px-[var(--space-lg)] py-[var(--space-md)]">
+  <div class="max-w-[var(--content-max-width)] px-[var(--space-sm)] py-[var(--space-md)] mx-auto sm:px-[var(--space-md)] lg:px-[var(--space-lg)]">
     <!-- Back Navigation -->
     <div class="mb-[var(--space-md)]">
       <.link navigate={~p"/"} class="terminal-back-link" aria-label="Back to portfolio">
@@ -9,7 +9,7 @@
           viewBox="0 0 24 24"
           stroke-width="2"
           stroke="currentColor"
-          class="w-3.5 h-3.5"
+          class="h-3.5 w-3.5"
           aria-hidden="true"
         >
           <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
@@ -28,7 +28,7 @@
           <% end %>
           <%= if @company_profile && (@company_profile.industry || @company_profile.country) do %>
             <div
-              class="flex flex-wrap items-center gap-[var(--space-xs)] mt-[var(--space-inline)]"
+              class="gap-[var(--space-xs)] mt-[var(--space-inline)] flex flex-wrap items-center"
               style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-muted);"
             >
               <%= if @company_profile.industry do %>
@@ -62,7 +62,7 @@
             <div class="terminal-stat-value">{format_decimal(@quote_data.current_price)}</div>
             <%= if @quote_data.change do %>
               <div
-                class={"mt-[var(--space-inline)] #{if price_change_positive?(@quote_data), do: "terminal-gain", else: "terminal-loss"}"}
+                class={"#{if price_change_positive?(@quote_data), do: "terminal-gain", else: "terminal-loss"} mt-[var(--space-inline)]"}
                 style="font-family: var(--font-mono); font-size: 0.75rem;"
               >
                 <%= if price_change_positive?(@quote_data) do %>
@@ -89,7 +89,7 @@
     
 <!-- Data Date -->
     <div
-      class="text-center mb-[var(--space-xs)]"
+      class="mb-[var(--space-xs)] text-center"
       style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-muted);"
     >
       <%= if @holding_stats do %>
@@ -115,7 +115,7 @@
             <% end %>
           </div>
         </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-[var(--space-xs)] mt-[var(--space-xs)]">
+        <div class="gap-[var(--space-xs)] mt-[var(--space-xs)] grid grid-cols-2 sm:grid-cols-3">
           <div>
             <div class="terminal-info-label">Shares</div>
             <div class="terminal-info-value" style="font-size: 1.25rem; font-weight: 600;">
@@ -145,7 +145,7 @@
           </div>
           <div>
             <div class="terminal-info-label">Unrealized P&L</div>
-            <div class={"terminal-info-value #{if pnl_positive?(@holding_stats.unrealized_pnl), do: "gain", else: "loss"}"}>
+            <div class={"#{if pnl_positive?(@holding_stats.unrealized_pnl), do: "gain", else: "loss"} terminal-info-value"}>
               {format_euro_signed(@holding_stats.unrealized_pnl)}
             </div>
           </div>
@@ -157,7 +157,7 @@
           </div>
           <div>
             <div class="terminal-info-label">Return</div>
-            <div class={"terminal-info-value #{if pnl_positive?(@holding_stats.return_pct), do: "gain", else: "loss"}"}>
+            <div class={"#{if pnl_positive?(@holding_stats.return_pct), do: "gain", else: "loss"} terminal-info-value"}>
               <%= if pnl_positive?(@holding_stats.return_pct) do %>
                 +
               <% end %>
@@ -166,7 +166,7 @@
           </div>
           <div>
             <div class="terminal-info-label">P&L/Share</div>
-            <div class={"terminal-info-value #{if pnl_positive?(@holding_stats.pnl_per_share), do: "gain", else: "loss"}"}>
+            <div class={"#{if pnl_positive?(@holding_stats.pnl_per_share), do: "gain", else: "loss"} terminal-info-value"}>
               <%= if pnl_positive?(@holding_stats.pnl_per_share) do %>
                 +
               <% end %>
@@ -194,7 +194,7 @@
 <!-- Shares Over Time -->
     <%= if length(@price_chart_data) > 1 do %>
       <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-2">
-        <div class="flex items-center justify-between mb-[var(--space-xs)]">
+        <div class="mb-[var(--space-xs)] flex items-center justify-between">
           <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
             Shares Over Time
           </div>
@@ -208,12 +208,12 @@
 <!-- Price Chart -->
     <%= if length(@price_chart_data) > 1 do %>
       <div class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-3">
-        <div class="flex items-center justify-between mb-[var(--space-xs)]">
+        <div class="mb-[var(--space-xs)] flex items-center justify-between">
           <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
             Price History
           </div>
           <div
-            class="flex items-center gap-[var(--space-sm)]"
+            class="gap-[var(--space-sm)] flex items-center"
             style="font-family: var(--font-mono); font-size: 0.5625rem; color: var(--terminal-dim);"
           >
             <span class="flex items-center gap-1">
@@ -271,7 +271,7 @@
         </div>
         <!-- Stats Row -->
         <div
-          class="flex items-center justify-between mt-[var(--space-xs)]"
+          class="mt-[var(--space-xs)] flex items-center justify-between"
           style="font-family: var(--font-mono); font-size: 0.625rem; color: var(--terminal-muted);"
         >
           <span>
@@ -297,7 +297,7 @@
           >
             <%= for {period, idx} <- Enum.with_index(@payback_data.periods) do %>
               <div
-                class="flex items-center gap-[var(--space-xs)]"
+                class="gap-[var(--space-xs)] flex items-center"
                 style="font-family: var(--font-mono); font-size: 0.5rem; color: var(--terminal-dim);"
               >
                 <span style="min-width: 60px;">
@@ -352,11 +352,11 @@
             Updated {Date.to_string(DateTime.to_date(@financial_metrics.fetched_at))}
           </div>
         </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[var(--space-xs)] mt-[var(--space-xs)]">
+        <div class="gap-[var(--space-xs)] mt-[var(--space-xs)] grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
           <%= if @financial_metrics.pe_ratio do %>
             <div>
               <div class="terminal-info-label">P/E</div>
-              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.pe_ratio, :pe_ratio)}"}>
+              <div class={"#{metric_color_class(@financial_metrics.pe_ratio, :pe_ratio)} terminal-info-value"}>
                 {format_decimal(@financial_metrics.pe_ratio)}
               </div>
             </div>
@@ -380,7 +380,7 @@
           <%= if @financial_metrics.roe do %>
             <div>
               <div class="terminal-info-label">ROE</div>
-              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.roe, :roe)}"}>
+              <div class={"#{metric_color_class(@financial_metrics.roe, :roe)} terminal-info-value"}>
                 {format_decimal(@financial_metrics.roe)}%
               </div>
             </div>
@@ -388,7 +388,7 @@
           <%= if @financial_metrics.roa do %>
             <div>
               <div class="terminal-info-label">ROA</div>
-              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.roa, :roa)}"}>
+              <div class={"#{metric_color_class(@financial_metrics.roa, :roa)} terminal-info-value"}>
                 {format_decimal(@financial_metrics.roa)}%
               </div>
             </div>
@@ -396,7 +396,7 @@
           <%= if @financial_metrics.net_margin do %>
             <div>
               <div class="terminal-info-label">Net Margin</div>
-              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.net_margin, :net_margin)}"}>
+              <div class={"#{metric_color_class(@financial_metrics.net_margin, :net_margin)} terminal-info-value"}>
                 {format_decimal(@financial_metrics.net_margin)}%
               </div>
             </div>
@@ -404,7 +404,7 @@
           <%= if @financial_metrics.operating_margin do %>
             <div>
               <div class="terminal-info-label">Op. Margin</div>
-              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.operating_margin, :operating_margin)}"}>
+              <div class={"#{metric_color_class(@financial_metrics.operating_margin, :operating_margin)} terminal-info-value"}>
                 {format_decimal(@financial_metrics.operating_margin)}%
               </div>
             </div>
@@ -412,7 +412,7 @@
           <%= if @financial_metrics.debt_to_equity do %>
             <div>
               <div class="terminal-info-label">D/E</div>
-              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.debt_to_equity, :debt_to_equity)}"}>
+              <div class={"#{metric_color_class(@financial_metrics.debt_to_equity, :debt_to_equity)} terminal-info-value"}>
                 {format_decimal(@financial_metrics.debt_to_equity)}
               </div>
             </div>
@@ -420,7 +420,7 @@
           <%= if @financial_metrics.current_ratio do %>
             <div>
               <div class="terminal-info-label">Current Ratio</div>
-              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.current_ratio, :current_ratio)}"}>
+              <div class={"#{metric_color_class(@financial_metrics.current_ratio, :current_ratio)} terminal-info-value"}>
                 {format_decimal(@financial_metrics.current_ratio)}
               </div>
             </div>
@@ -428,7 +428,7 @@
           <%= if @financial_metrics.fcf_margin do %>
             <div>
               <div class="terminal-info-label">FCF Margin</div>
-              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.fcf_margin, :fcf_margin)}"}>
+              <div class={"#{metric_color_class(@financial_metrics.fcf_margin, :fcf_margin)} terminal-info-value"}>
                 {format_decimal(@financial_metrics.fcf_margin)}%
               </div>
             </div>
@@ -444,7 +444,7 @@
           <%= if @financial_metrics.payout_ratio do %>
             <div>
               <div class="terminal-info-label">Payout Ratio</div>
-              <div class={"terminal-info-value #{metric_color_class(@financial_metrics.payout_ratio, :payout_ratio)}"}>
+              <div class={"#{metric_color_class(@financial_metrics.payout_ratio, :payout_ratio)} terminal-info-value"}>
                 {format_decimal(@financial_metrics.payout_ratio)}%
               </div>
             </div>
@@ -464,7 +464,7 @@
             {@dividend_analytics.frequency}
           </div>
         </div>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-[var(--space-xs)] mt-[var(--space-xs)]">
+        <div class="gap-[var(--space-xs)] mt-[var(--space-xs)] grid grid-cols-2 sm:grid-cols-4">
           <div>
             <div class="terminal-info-label">TTM Per Share</div>
             <div class="terminal-info-value">
@@ -490,7 +490,7 @@
           <%= if @dividend_analytics.growth_rate do %>
             <div>
               <div class="terminal-info-label">YoY Growth</div>
-              <div class={"terminal-info-value #{if Decimal.compare(@dividend_analytics.growth_rate, Decimal.new("0")) != :lt, do: "gain", else: "loss"}"}>
+              <div class={"#{if Decimal.compare(@dividend_analytics.growth_rate, Decimal.new("0")) != :lt, do: "gain", else: "loss"} terminal-info-value"}>
                 <%= if Decimal.compare(@dividend_analytics.growth_rate, Decimal.new("0")) != :lt do %>
                   +
                 <% end %>
@@ -501,7 +501,7 @@
         </div>
         <!-- Dividend Chart -->
         <%= if length(@dividends_with_income) > 1 do %>
-          <div class="overflow-x-auto mt-[var(--space-xs)]">
+          <div class="mt-[var(--space-xs)] overflow-x-auto">
             {render_dividend_chart(@dividends_with_income)}
           </div>
         <% end %>
@@ -518,7 +518,7 @@
           <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
             Dividends Received ({length(@dividends_with_income)})
           </div>
-          <div class="flex items-center gap-[var(--space-xs)]">
+          <div class="gap-[var(--space-xs)] flex items-center">
             <span style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: 500; color: var(--gain);">
               {format_euro_decimal(@total_dividend_income)}
             </span>
@@ -622,7 +622,7 @@
           <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
             Previous Positions ({length(@sold_for_symbol)} sold)
           </div>
-          <div class="flex items-center gap-[var(--space-xs)]">
+          <div class="gap-[var(--space-xs)] flex items-center">
             <% total_realized =
               Enum.reduce(@sold_for_symbol, Decimal.new("0"), fn sp, acc ->
                 Decimal.add(acc, sp.realized_pnl || Decimal.new("0"))
@@ -705,7 +705,7 @@
         class="terminal-card p-[var(--space-sm)] mb-[var(--space-xs)] animate-fade-in animate-delay-5"
         style="opacity: 0.5;"
       >
-        <div class="flex items-center justify-between mb-[var(--space-xs)]">
+        <div class="mb-[var(--space-xs)] flex items-center justify-between">
           <div class="terminal-section-label" style="border: none; padding: 0; margin: 0;">
             Investment Notes
           </div>
@@ -750,7 +750,7 @@
     <%= if length(@external_links) > 0 do %>
       <div class="terminal-card p-[var(--space-sm)] animate-fade-in animate-delay-5">
         <div class="terminal-section-label">External Links</div>
-        <div class="flex flex-wrap gap-[var(--space-xs)] mt-[var(--space-xs)]">
+        <div class="gap-[var(--space-xs)] mt-[var(--space-xs)] flex flex-wrap">
           <%= for link <- @external_links do %>
             <a
               href={link.url}
@@ -766,7 +766,7 @@
                 viewBox="0 0 24 24"
                 stroke-width="2"
                 stroke="currentColor"
-                class="w-3 h-3"
+                class="h-3 w-3"
                 aria-hidden="true"
               >
                 <path
